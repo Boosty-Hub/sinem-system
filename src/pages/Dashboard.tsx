@@ -1,11 +1,12 @@
-import { DollarSign, Users, FolderKanban, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { DollarSign, Users, FolderKanban, TrendingUp, ArrowUpRight, ArrowDownRight, Building2, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const stats = [
-  { label: "Cotizaciones Activas", value: "24", change: "+12%", up: true, icon: DollarSign },
-  { label: "Prospectos", value: "47", change: "+8%", up: true, icon: Users },
-  { label: "Proyectos en Curso", value: "9", change: "+3", up: true, icon: FolderKanban },
-  { label: "Revenue Pipeline", value: "$1.2M", change: "-5%", up: false, icon: TrendingUp },
+  { label: "Prospectos", value: "8", change: "+8%", up: true, icon: Users },
+  { label: "Cotizaciones", value: "7", change: "+12%", up: true, icon: FileText },
+  { label: "Clientes", value: "5", change: "+2", up: true, icon: Building2 },
+  { label: "Proyectos en Curso", value: "3", change: "+1", up: true, icon: FolderKanban },
+  { label: "Revenue Pipeline", value: "$610K", change: "+15%", up: true, icon: TrendingUp },
 ];
 
 const recentDeals = [
@@ -24,7 +25,7 @@ const Dashboard = () => {
         <p className="text-muted-foreground text-sm mt-1">Resumen general de operaciones SINEM</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {stats.map((stat) => (
           <div key={stat.label} className="stat-card">
             <div className="flex items-center justify-between mb-3">
@@ -46,7 +47,7 @@ const Dashboard = () => {
         <div className="stat-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Cotizaciones Recientes</h2>
-            <Link to="/crm" className="text-xs text-primary hover:underline">Ver todo →</Link>
+            <Link to="/cotizaciones" className="text-xs text-primary hover:underline">Ver todo →</Link>
           </div>
           <div className="space-y-3">
             {recentDeals.map((deal, i) => (
@@ -93,6 +94,37 @@ const Dashboard = () => {
                   <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                     Paso {proj.step}/{proj.total}
                   </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">Clientes Principales</h2>
+            <Link to="/clientes" className="text-xs text-primary hover:underline">Ver todo →</Link>
+          </div>
+          <div className="space-y-3">
+            {[
+              { name: "CEMEX RD", industry: "Construcción", revenue: "$245,000", offers: 2 },
+              { name: "Grupo Rica", industry: "Alimentos y Bebidas", revenue: "$15,800", offers: 2 },
+              { name: "Cervecería Nacional", industry: "Manufactura", revenue: "$28,500", offers: 1 },
+              { name: "AES Dominicana", industry: "Energía", revenue: "$120,000", offers: 1 },
+            ].map((client, i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+                    <Building2 className="h-4 w-4 text-accent-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{client.name}</p>
+                    <p className="text-xs text-muted-foreground">{client.industry}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold">{client.revenue}</p>
+                  <p className="text-[10px] text-muted-foreground">{client.offers} ofertas activas</p>
                 </div>
               </div>
             ))}

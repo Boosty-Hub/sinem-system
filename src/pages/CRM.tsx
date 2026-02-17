@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import CRMKanban from "@/components/crm/CRMKanban";
 import CRMTable from "@/components/crm/CRMTable";
 import ProspectDialog from "@/components/crm/ProspectDialog";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const CRM = () => {
-  const [view, setView] = useState<"kanban" | "table">("kanban");
+  const [view, setView] = useLocalStorage<"kanban" | "table">("sinem:crm:view", "kanban");
   const [search, setSearch] = useState("");
-  const [prospects, setProspects] = useState<Prospect[]>(mockProspects);
+  const [prospects, setProspects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
 
@@ -30,6 +31,16 @@ const CRM = () => {
     setDialogOpen(true);
   };
 
+  const handleStageChange = (prospectId: string, newStage: string) => {
+    setProspects((prev) =>
+      prev.map((p) => (p.id === prospectId ? { ...p, status: newStage as Prospect["status"] } : p))
+    );
+  };
+
+  const handleDelete = (id: string) => {
+    setProspects((prev) => prev.filter((p) => p.id !== id));
+  };
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -44,7 +55,7 @@ const CRM = () => {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar cotización..."
+              placeholder="Buscar oportunidad..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 w-[240px]"
@@ -65,13 +76,13 @@ const CRM = () => {
             </button>
           </div>
           <Button onClick={() => { setSelectedProspect(null); setDialogOpen(true); }} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Nueva Cotización
+            <Plus className="h-4 w-4 mr-1" /> Nueva Oportunidad
           </Button>
         </div>
       </div>
 
       {view === "kanban" ? (
-        <CRMKanban prospects={filtered} onEdit={handleEdit} />
+        <CRMKanban prospects={filtered} onEdit={handleEdit} onStageChange={handleStageChange} />
       ) : (
         <CRMTable prospects={filtered} onEdit={handleEdit} />
       )}
@@ -80,6 +91,7 @@ const CRM = () => {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         prospect={selectedProspect}
+        onDelete={handleDelete}
       />
     </div>
   );

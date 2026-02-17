@@ -1,9 +1,11 @@
-import { LayoutDashboard, Users, FolderKanban } from "lucide-react";
+import { LayoutDashboard, Users, FolderKanban, FileText, Building2, UserCircle, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -15,11 +17,21 @@ import {
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "CRM", url: "/crm", icon: Users },
+  { title: "Cotizaciones", url: "/cotizaciones", icon: FileText },
+  { title: "Clientes", url: "/clientes", icon: Building2 },
+  { title: "Contactos", url: "/contactos", icon: UserCircle },
   { title: "Proyectos", url: "/projects", icon: FolderKanban },
 ];
 
 const AppSidebar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login");
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -58,6 +70,32 @@ const AppSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location.pathname.startsWith("/configuracion")}
+            >
+              <NavLink to="/configuracion" activeClassName="bg-sidebar-accent text-sidebar-primary">
+                <Settings className="h-4 w-4" />
+                <span>Configuración</span>
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleSignOut} className="text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10">
+              <LogOut className="h-4 w-4" />
+              <span>Cerrar Sesión</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        {user && (
+          <div className="px-3 pb-1 group-data-[collapsible=icon]:hidden">
+            <p className="text-[10px] text-sidebar-foreground/40 truncate">{user.email}</p>
+          </div>
+        )}
+      </SidebarFooter>
     </Sidebar>
   );
 };
