@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FolderKanban, FileText, Building2, UserCircle, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, FolderKanban, FileText, Building2, UserCircle, Settings, LogOut, ListTodo, TrendingUp, BarChart3 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
@@ -16,11 +16,14 @@ import {
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Contactos", url: "/contactos", icon: UserCircle },
+  { title: "Tareas", url: "/tareas", icon: ListTodo },
   { title: "CRM", url: "/crm", icon: Users },
   { title: "Cotizaciones", url: "/cotizaciones", icon: FileText },
   { title: "Clientes", url: "/clientes", icon: Building2 },
-  { title: "Contactos", url: "/contactos", icon: UserCircle },
   { title: "Proyectos", url: "/projects", icon: FolderKanban },
+  { title: "Forecast", url: "/forecast", icon: TrendingUp },
+  { title: "Analítica", url: "/analitica", icon: BarChart3 },
 ];
 
 const AppSidebar = () => {

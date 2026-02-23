@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect } from "@/lib/types";
+import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect, type Product } from "@/lib/types";
 import { mockClients, mockContacts, mockQuotations } from "@/lib/mockData";
 import { FileText, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -14,9 +14,11 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   prospect: Prospect | null;
   onDelete?: (id: string) => void;
+  products: Product[];
+  onOpenProducts?: () => void;
 }
 
-const ProspectDialog = ({ open, onOpenChange, prospect, onDelete }: Props) => {
+const ProspectDialog = ({ open, onOpenChange, prospect, onDelete, products, onOpenProducts }: Props) => {
   const isEdit = !!prospect;
   const navigate = useNavigate();
 
@@ -112,7 +114,25 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onDelete }: Props) => {
           </div>
           <div>
             <Label>Producto</Label>
-            <Input defaultValue={prospect?.product ?? ""} />
+            <Select defaultValue={prospect?.product ?? ""}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar producto" /></SelectTrigger>
+              <SelectContent>
+                {products.map((p) => (
+                  <SelectItem key={p.id} value={p.name}>{p.name} <span className="text-muted-foreground text-[10px] ml-1">({p.category})</span></SelectItem>
+                ))}
+                {onOpenProducts && (
+                  <div className="border-t border-border/60 mt-1 pt-1 px-2 pb-1">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenProducts(); }}
+                      className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-primary hover:bg-primary/5 rounded transition-colors"
+                    >
+                      <Plus className="h-3 w-3" /> Crear nuevo producto
+                    </button>
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Status</Label>

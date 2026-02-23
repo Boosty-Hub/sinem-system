@@ -1,4 +1,4 @@
-import type { Prospect, Project, Client, Contact, Quotation, ClientOffer, ProposalSettings } from "./types";
+import type { Prospect, Project, Client, Contact, Quotation, ClientOffer, ProposalSettings, Task, Product, ForecastYear } from "./types";
 
 export const mockProspects: Prospect[] = [
   {
@@ -279,3 +279,89 @@ export const mockClientOffers: ClientOffer[] = [
     createdAt: "2025-12-20", validUntil: "2026-01-20", notes: "Cliente optó por proveedor local"
   },
 ];
+
+export const mockTasks: Task[] = [
+  {
+    id: "t1", title: "Enviar cotización transformadores a Cliente AA", description: "Preparar y enviar la cotización formal para los 3 transformadores 500kVA.",
+    status: "pendiente", priority: "alta", assignee: "Gabriel Méndez", clientId: "c4", projectId: "p1",
+    dueDate: "2026-02-28", createdAt: "2026-02-20",
+    comments: [{ id: "tc1", author: "Carlos Rodríguez", text: "Ya tengo los precios de Siemens actualizados", createdAt: "2026-02-21T10:30:00" }],
+  },
+  {
+    id: "t2", title: "Seguimiento pago Cervecería Nacional", description: "Verificar estado del pago pendiente de la factura FV-2026-003.",
+    status: "en_progreso", priority: "alta", assignee: "Ana Martínez", clientId: "c2",
+    dueDate: "2026-02-25", createdAt: "2026-02-18",
+    comments: [],
+  },
+  {
+    id: "t3", title: "Revisar planos de ingeniería Subestación CEMEX", description: "Validar los planos eléctricos antes de enviar al cliente.",
+    status: "en_progreso", priority: "media", assignee: "Luis Pérez", clientId: "c5", projectId: "p1",
+    dueDate: "2026-03-01", createdAt: "2026-02-19",
+    comments: [
+      { id: "tc2", author: "Luis Pérez", text: "Revisando diagrama unifilar, hay una discrepancia en la protección", createdAt: "2026-02-22T14:00:00" },
+      { id: "tc3", author: "Gabriel Méndez", text: "Coordina con Siemens para confirmar el relay correcto", createdAt: "2026-02-22T15:20:00" },
+    ],
+  },
+  {
+    id: "t4", title: "Coordinar entrega switchgear AES", description: "Confirmar fecha de entrega y logística del switchgear 13.8kV.",
+    status: "pendiente", priority: "media", assignee: "Carlos Rodríguez", clientId: "c3", projectId: "p3",
+    dueDate: "2026-03-10", createdAt: "2026-02-20",
+    comments: [],
+  },
+  {
+    id: "t5", title: "Actualizar diagrama de Gantt proyecto Grupo Rica", description: "Agregar las nuevas fechas de entrega de los variadores.",
+    status: "completada", priority: "baja", assignee: "María Santos", clientId: "c4", projectId: "p4",
+    dueDate: "2026-02-22", createdAt: "2026-02-15",
+    comments: [{ id: "tc4", author: "María Santos", text: "Listo, actualizado con las fechas confirmadas por Siemens", createdAt: "2026-02-22T09:00:00" }],
+  },
+  {
+    id: "t6", title: "Preparar oferta automatización línea 3 Cervecería", description: "Armar la propuesta técnica y comercial para la automatización.",
+    status: "pendiente", priority: "alta", assignee: "Gabriel Méndez", clientId: "c2",
+    dueDate: "2026-03-05", createdAt: "2026-02-23",
+    comments: [],
+  },
+  {
+    id: "t7", title: "Registrar factura proveedor Siemens - Motores", description: "Cargar la factura de Siemens por el motor 250HP al sistema.",
+    status: "completada", priority: "media", assignee: "Ana Martínez", clientId: "c2", projectId: "p2",
+    dueDate: "2026-02-20", createdAt: "2026-02-16",
+    comments: [],
+  },
+  {
+    id: "t8", title: "Llamar a CEMEX para confirmar OC", description: "Confirmar la orden de compra del proyecto de subestación.",
+    status: "pendiente", priority: "media", assignee: "Gabriel Méndez", clientId: "c5", projectId: "p1",
+    dueDate: "2026-02-26", createdAt: "2026-02-23",
+    comments: [],
+  },
+];
+
+export const mockProducts: Product[] = [
+  { id: "prod1", name: "Transformadores", category: "SE" },
+  { id: "prod2", name: "Motores", category: "DI" },
+  { id: "prod3", name: "Switchgear", category: "SE" },
+  { id: "prod4", name: "Drives", category: "DI" },
+  { id: "prod5", name: "Variadores de Frecuencia", category: "DI" },
+  { id: "prod6", name: "Arrancadores Suaves", category: "DI" },
+  { id: "prod7", name: "Tableros de Distribución", category: "SE" },
+  { id: "prod8", name: "Protección y Control", category: "SE" },
+  { id: "prod9", name: "Automatización", category: "DI" },
+  { id: "prod10", name: "Banco de Capacitores", category: "SE" },
+];
+
+export const mockForecast: ForecastYear = {
+  year: 2026,
+  annualTarget: 1200000,
+  months: [
+    { month: "Ene", target: 100000, actual: 115800, projected: 115800 },
+    { month: "Feb", target: 100000, actual: 78500, projected: 78500 },
+    { month: "Mar", target: 100000, actual: 0, projected: 95000 },
+    { month: "Abr", target: 100000, actual: 0, projected: 110000 },
+    { month: "May", target: 100000, actual: 0, projected: 88000 },
+    { month: "Jun", target: 100000, actual: 0, projected: 125000 },
+    { month: "Jul", target: 100000, actual: 0, projected: 92000 },
+    { month: "Ago", target: 100000, actual: 0, projected: 105000 },
+    { month: "Sep", target: 100000, actual: 0, projected: 98000 },
+    { month: "Oct", target: 100000, actual: 0, projected: 115000 },
+    { month: "Nov", target: 100000, actual: 0, projected: 130000 },
+    { month: "Dic", target: 100000, actual: 0, projected: 85000 },
+  ],
+};

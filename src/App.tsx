@@ -21,6 +21,9 @@ import ConfigUsuarios from "./pages/configuracion/ConfigUsuarios";
 import ConfigRoles from "./pages/configuracion/ConfigRoles";
 import ConfigPermisos from "./pages/configuracion/ConfigPermisos";
 import OfertaPublica from "./pages/OfertaPublica";
+import Tareas from "./pages/Tareas";
+import Forecast from "./pages/Forecast";
+import Analitica from "./pages/Analitica";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +51,9 @@ const App = () => (
                 <Route path="/contactos" element={<Contactos />} />
                 <Route path="/projects" element={<Projects />} />
                 <Route path="/projects/:id" element={<ProjectDetail />} />
+                <Route path="/tareas" element={<Tareas />} />
+                <Route path="/forecast" element={<Forecast />} />
+                <Route path="/analitica" element={<Analitica />} />
                 <Route path="/configuracion" element={<Configuracion />}>
                   <Route index element={<Navigate to="propuestas" replace />} />
                   <Route path="propuestas" element={<ConfigPropuestas />} />

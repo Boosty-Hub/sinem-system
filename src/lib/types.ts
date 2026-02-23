@@ -195,3 +195,66 @@ export const OFFER_STATUSES: { key: OfferStatus; label: string; color: string }[
   { key: "ganada", label: "Ganada", color: "bg-sinem-success" },
   { key: "perdida", label: "Perdida", color: "bg-destructive" },
 ];
+
+export type TaskStatus = "pendiente" | "en_progreso" | "completada";
+export type TaskPriority = "alta" | "media" | "baja";
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignee: string;
+  clientId?: string;
+  projectId?: string;
+  dueDate: string;
+  createdAt: string;
+  comments: TaskComment[];
+}
+
+export interface TaskComment {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
+}
+
+export const TASK_STATUSES: { key: TaskStatus; label: string; color: string }[] = [
+  { key: "pendiente", label: "Pendiente", color: "bg-sinem-warning" },
+  { key: "en_progreso", label: "En Progreso", color: "bg-sinem-info" },
+  { key: "completada", label: "Completada", color: "bg-sinem-success" },
+];
+
+export const TASK_PRIORITIES: { key: TaskPriority; label: string; color: string }[] = [
+  { key: "alta", label: "Alta", color: "text-destructive" },
+  { key: "media", label: "Media", color: "text-sinem-warning" },
+  { key: "baja", label: "Baja", color: "text-muted-foreground" },
+];
+
+export const TEAM_MEMBERS = [
+  "Gabriel Méndez",
+  "Carlos Rodríguez",
+  "Ana Martínez",
+  "Luis Pérez",
+  "María Santos",
+];
+
+export interface Product {
+  id: string;
+  name: string;
+  category: string;
+}
+
+export interface ForecastMonth {
+  month: string;
+  target: number;
+  actual: number;
+  projected: number;
+}
+
+export interface ForecastYear {
+  year: number;
+  annualTarget: number;
+  months: ForecastMonth[];
+}

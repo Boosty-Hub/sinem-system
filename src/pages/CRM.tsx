@@ -1,19 +1,22 @@
 import { useState } from "react";
-import { mockProspects } from "@/lib/mockData";
-import { PIPELINE_STAGES, type Prospect } from "@/lib/types";
-import { Search, LayoutGrid, Table as TableIcon, Plus, Filter } from "lucide-react";
+import { mockProspects, mockProducts } from "@/lib/mockData";
+import { PIPELINE_STAGES, type Prospect, type Product } from "@/lib/types";
+import { Search, LayoutGrid, Table as TableIcon, Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CRMKanban from "@/components/crm/CRMKanban";
 import CRMTable from "@/components/crm/CRMTable";
 import ProspectDialog from "@/components/crm/ProspectDialog";
+import ProductsDialog from "@/components/crm/ProductsDialog";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const CRM = () => {
   const [view, setView] = useLocalStorage<"kanban" | "table">("sinem:crm:view", "kanban");
   const [search, setSearch] = useState("");
   const [prospects, setProspects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
+  const [products, setProducts] = useLocalStorage<Product[]>("sinem:products", mockProducts);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [productsDialogOpen, setProductsDialogOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
 
   const filtered = prospects.filter(
@@ -75,6 +78,9 @@ const CRM = () => {
               <TableIcon className="h-4 w-4" />
             </button>
           </div>
+          <Button variant="outline" size="sm" onClick={() => setProductsDialogOpen(true)}>
+            <Package className="h-4 w-4 mr-1" /> Productos
+          </Button>
           <Button onClick={() => { setSelectedProspect(null); setDialogOpen(true); }} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Nueva Oportunidad
           </Button>
@@ -92,6 +98,15 @@ const CRM = () => {
         onOpenChange={setDialogOpen}
         prospect={selectedProspect}
         onDelete={handleDelete}
+        products={products}
+        onOpenProducts={() => { setDialogOpen(false); setProductsDialogOpen(true); }}
+      />
+
+      <ProductsDialog
+        open={productsDialogOpen}
+        onOpenChange={setProductsDialogOpen}
+        products={products}
+        setProducts={setProducts}
       />
     </div>
   );
