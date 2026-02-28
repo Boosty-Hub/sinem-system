@@ -4,7 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./lib/AuthContext";
+import { PermissionsProvider } from "./hooks/usePermissions";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedModule from "./components/ProtectedModule";
 import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -20,10 +22,12 @@ import ConfigPropuestas from "./pages/configuracion/ConfigPropuestas";
 import ConfigUsuarios from "./pages/configuracion/ConfigUsuarios";
 import ConfigRoles from "./pages/configuracion/ConfigRoles";
 import ConfigPermisos from "./pages/configuracion/ConfigPermisos";
+import ConfigGeneral from "./pages/configuracion/ConfigGeneral";
 import OfertaPublica from "./pages/OfertaPublica";
 import Tareas from "./pages/Tareas";
-import Forecast from "./pages/Forecast";
 import Analitica from "./pages/Analitica";
+import Perfil from "./pages/Perfil";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,37 +39,42 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+        <PermissionsProvider>
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/oferta/:id" element={<OfertaPublica />} />
 
             {/* Protected routes */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/crm" element={<CRM />} />
-                <Route path="/cotizaciones" element={<Cotizaciones />} />
-                <Route path="/clientes" element={<Clientes />} />
-                <Route path="/clientes/:id" element={<ClienteDetail />} />
-                <Route path="/contactos" element={<Contactos />} />
-                <Route path="/projects" element={<Projects />} />
-                <Route path="/projects/:id" element={<ProjectDetail />} />
+                <Route path="/" element={<ProtectedModule module="Dashboard"><Dashboard /></ProtectedModule>} />
+                <Route path="/crm" element={<ProtectedModule module="CRM"><CRM /></ProtectedModule>} />
+                <Route path="/cotizaciones" element={<ProtectedModule module="Cotizaciones"><Cotizaciones /></ProtectedModule>} />
+                <Route path="/clientes" element={<ProtectedModule module="Clientes"><Clientes /></ProtectedModule>} />
+                <Route path="/clientes/:id" element={<ProtectedModule module="Clientes"><ClienteDetail /></ProtectedModule>} />
+                <Route path="/contactos" element={<ProtectedModule module="Contactos"><Contactos /></ProtectedModule>} />
+                <Route path="/projects" element={<ProtectedModule module="Proyectos"><Projects /></ProtectedModule>} />
+                <Route path="/projects/:id" element={<ProtectedModule module="Proyectos"><ProjectDetail /></ProtectedModule>} />
                 <Route path="/tareas" element={<Tareas />} />
-                <Route path="/forecast" element={<Forecast />} />
+                <Route path="/forecast" element={<Navigate to="/analitica" replace />} />
                 <Route path="/analitica" element={<Analitica />} />
-                <Route path="/configuracion" element={<Configuracion />}>
+                <Route path="/perfil" element={<Perfil />} />
+                <Route path="/configuracion" element={<ProtectedModule module="Configuración"><Configuracion /></ProtectedModule>}>
                   <Route index element={<Navigate to="propuestas" replace />} />
                   <Route path="propuestas" element={<ConfigPropuestas />} />
                   <Route path="usuarios" element={<ConfigUsuarios />} />
                   <Route path="roles" element={<ConfigRoles />} />
                   <Route path="permisos" element={<ConfigPermisos />} />
+                  <Route path="general" element={<ConfigGeneral />} />
                 </Route>
               </Route>
             </Route>
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+        </PermissionsProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

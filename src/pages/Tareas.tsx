@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { mockTasks, mockClients, mockProjects } from "@/lib/mockData";
-import { TASK_STATUSES, TASK_PRIORITIES, TEAM_MEMBERS, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
+import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment, type Client, type Project } from "@/lib/types";
 import {
   Search, Plus, ListTodo, LayoutGrid, Calendar, AlertCircle, Clock, CheckCircle2,
   MessageSquare, Trash2, ChevronDown, Send, User2, Building2, FolderKanban,
@@ -13,6 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/AuthContext";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const priorityIcon = { alta: AlertCircle, media: Clock, baja: CheckCircle2 };
 const priorityColor = { alta: "text-destructive", media: "text-sinem-warning", baja: "text-muted-foreground" };
@@ -22,20 +25,42 @@ const emptyForm = {
   title: "",
   description: "",
   priority: "media" as Task["priority"],
-  assignee: TEAM_MEMBERS[0],
+  assignee: "",
   clientId: "",
   projectId: "",
   dueDate: "",
 };
 
+interface SystemUser { id: string; name: string; email: string; status: string; }
+
 const Tareas = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [tasks, setTasks] = useLocalStorage<Task[]>("sinem:tasks", mockTasks);
+  const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
+  const [projects] = useLocalStorage<Project[]>("sinem:projects", mockProjects);
+  const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [search, setSearch] = useState("");
   const [view, setView] = useLocalStorage<"board" | "list">("sinem:tasks:view", "board");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const { data } = await supabase
+        .from("app_users")
+        .select("id, name, email, status")
+        .eq("status", "activo")
+        .order("name");
+      if (data) setSystemUsers(data);
+    };
+    fetchUsers();
+  }, []);
+
+  const currentUserName = systemUsers.find((u) => u.id === (user as any)?.id)?.name
+    ?? systemUsers[0]?.name ?? "Usuario";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -92,11 +117,14 @@ const Tareas = () => {
     setDialogOpen(false);
   };
 
-  const handleDelete = (task: Task) => {
-    if (!confirm(`¿Eliminar "${task.title}"?`)) return;
-    setTasks((prev) => prev.filter((t) => t.id !== task.id));
-    if (detailTask?.id === task.id) setDetailTask(null);
+  const handleDelete = (task: Task) => setDeleteTarget(task);
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    setTasks((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+    if (detailTask?.id === deleteTarget.id) setDetailTask(null);
     toast({ title: "Tarea eliminada" });
+    setDeleteTarget(null);
   };
 
   const handleStatusChange = (taskId: string, status: TaskStatus) => {
@@ -107,7 +135,7 @@ const Tareas = () => {
   const handleAddComment = () => {
     if (!newComment.trim() || !detailTask) return;
     const comment: TaskComment = {
-      id: crypto.randomUUID(), author: "Gabriel Méndez",
+      id: crypto.randomUUID(), author: currentUserName,
       text: newComment.trim(), createdAt: new Date().toISOString(),
     };
     setTasks((prev) => prev.map((t) => t.id === detailTask.id ? { ...t, comments: [...t.comments, comment] } : t));
@@ -116,8 +144,8 @@ const Tareas = () => {
     toast({ title: "Comentario agregado" });
   };
 
-  const getClientName = (clientId?: string) => clientId ? mockClients.find((c) => c.id === clientId)?.name : undefined;
-  const getProjectName = (projectId?: string) => projectId ? mockProjects.find((p) => p.id === projectId)?.name : undefined;
+  const getClientName = (clientId?: string) => clientId ? clients.find((c) => c.id === clientId)?.name : undefined;
+  const getProjectName = (projectId?: string) => projectId ? projects.find((p) => p.id === projectId)?.name : undefined;
 
   const isOverdue = (task: Task) => task.status !== "completada" && task.dueDate && new Date(task.dueDate) < new Date();
 
@@ -200,7 +228,7 @@ const Tareas = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
-              {TEAM_MEMBERS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              {systemUsers.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterClient} onValueChange={setFilterClient}>
@@ -209,7 +237,7 @@ const Tareas = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
-              {mockClients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <div className="flex border rounded-lg overflow-hidden">
@@ -348,9 +376,9 @@ const Tareas = () => {
               <div>
                 <Label>Responsable</Label>
                 <Select value={form.assignee} onValueChange={(v) => u("assignee", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>
-                    {TEAM_MEMBERS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    {systemUsers.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -360,7 +388,7 @@ const Tareas = () => {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sin cliente</SelectItem>
-                    {mockClients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -511,6 +539,14 @@ const Tareas = () => {
           })()}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar Tarea"
+        description={`¿Estás seguro de eliminar "${deleteTarget?.title}"? Esta acción no se puede deshacer.`}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 };

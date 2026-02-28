@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const statusConfig = {
   activo: { label: "Activo", icon: FolderOpen, className: "text-sinem-teal bg-accent" },
@@ -27,6 +28,10 @@ const emptyForm = {
 
 const Projects = () => {
   const { toast } = useToast();
+  const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
+  const canCreateProj = canCreateFn("Proyectos");
+  const canEditProj = canEditFn("Proyectos");
+  const canDeleteProj = canDeleteFn("Proyectos");
   const [search, setSearch] = useState("");
   const [allProjects, setAllProjects] = useLocalStorage<Project[]>("sinem:projects", mockProjects);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -104,9 +109,11 @@ const Projects = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar proyecto..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-[240px]" />
           </div>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" /> Nuevo Proyecto
-          </Button>
+          {canCreateProj && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" /> Nuevo Proyecto
+            </Button>
+          )}
         </div>
       </div>
 
@@ -133,22 +140,26 @@ const Projects = () => {
                     <StatusIcon className="h-3 w-3" />
                     {cfg.label}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(project); }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project); }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {canEditProj && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(project); }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {canDeleteProj && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
 

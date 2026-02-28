@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 import { mockQuotations } from "@/lib/mockData";
-import type { ProposalSettings } from "@/lib/types";
+import { CURRENCIES, type ProposalSettings } from "@/lib/types";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import html2pdf from "html2pdf.js";
@@ -60,8 +60,23 @@ const dbToSettings = (row: any): ProposalSettings => ({
 
 const OfertaPublica = () => {
   const { id } = useParams();
-  const quotation = mockQuotations.find((q) => q.id === id);
+  const allQuotations = JSON.parse(localStorage.getItem("sinem:quotations") ?? "null") ?? mockQuotations;
+  const quotation = allQuotations.find((q: any) => q.id === id);
   const contentRef = useRef<HTMLDivElement>(null);
+  const isApproved = quotation?.approvalStatus === "approved";
+  const qCurrency = quotation?.currency ?? "USD";
+  const qRate = quotation?.exchangeRate ?? 1;
+  const currCfg = CURRENCIES.find((c) => c.key === qCurrency) ?? CURRENCIES[0];
+  const fmt = (usd: number) => {
+    if (qCurrency === "USD") return `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currCfg.symbol}${(usd * qRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+  const qPartner = quotation?.partner ?? "Siemens";
+  const replacePartner = (text: string) => text.replace(/SIEMENS|Siemens|siemens/g, qPartner);
+  // Company logo from general settings (overrides proposal_settings logo if present)
+  const companyLogoFromSettings = (() => {
+    try { const gs = JSON.parse(localStorage.getItem("sinem:general-settings") || "{}"); return gs.companyLogoUrl || null; } catch { return null; }
+  })();
   const [s, setS] = useState<ProposalSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
@@ -130,7 +145,7 @@ const OfertaPublica = () => {
 
   const PageHeader = () => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-      <img src={s.logoUrl} alt="SINEM" style={{ height: "55px" }} />
+      <img src={companyLogoFromSettings || s.logoUrl} alt="SINEM" style={{ height: "55px" }} />
       <div style={{ textAlign: "right", fontSize: "11px", color: "#555", lineHeight: "1.4" }}>
         <p style={{ margin: 0, fontWeight: 500 }}>{quotation.code}</p>
         <p style={{ margin: "2px 0 0 0" }}>{formatDateShort(quotation.createdAt)}</p>
@@ -178,10 +193,10 @@ const OfertaPublica = () => {
 
           {/* Body paragraphs */}
           <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
-            {s.coverIntroText}
+            {replacePartner(s.coverIntroText)}
           </p>
           <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
-            {s.coverPartnerText}
+            {replacePartner(s.coverPartnerText)}
           </p>
           <p style={{ margin: "0 0 30px 0", fontSize: "13px", textAlign: "justify" }}>
             {s.coverClosingText}
@@ -190,25 +205,33 @@ const OfertaPublica = () => {
           {/* Atentamente */}
           <p style={{ margin: "0 0 15px 0", fontSize: "13px" }}>Atentamente,</p>
 
-          {/* Signature image */}
-          {s.signatureImageUrl && (
-            <img src={s.signatureImageUrl} alt="Firma" style={{ display: "block", height: "55px", maxWidth: "200px", marginBottom: "4px", objectFit: "contain", objectPosition: "left" }} />
-          )}
-          {!s.signatureImageUrl && <div style={{ height: "30px" }} />}
+          {isApproved ? (
+            <>
+              {/* Signature image */}
+              {s.signatureImageUrl && (
+                <img src={s.signatureImageUrl} alt="Firma" style={{ display: "block", height: "55px", maxWidth: "200px", marginBottom: "4px", objectFit: "contain", objectPosition: "left" }} />
+              )}
+              {!s.signatureImageUrl && <div style={{ height: "30px" }} />}
 
-          {/* Signature block: two columns */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0" }}>
-            <div>
-              <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{s.signatureName}</p>
-              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signatureTitle}</p>
-              <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
+              {/* Signature block: two columns */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0" }}>
+                <div>
+                  <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{s.signatureName}</p>
+                  <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signatureTitle}</p>
+                  <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signaturePhone}</p>
+                  <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#0097A7" }}>{s.signatureEmail}</p>
+                  <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyWebsite}</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: "15px 0", color: "#999", fontSize: "12px", fontStyle: "italic" }}>
+              Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
             </div>
-            <div style={{ textAlign: "left" }}>
-              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signaturePhone}</p>
-              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#0097A7" }}>{s.signatureEmail}</p>
-              <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyWebsite}</p>
-            </div>
-          </div>
+          )}
 
           {/* Page 1 Footer */}
           <PageFooter pageNum={1} totalPages={2} />
@@ -230,8 +253,8 @@ const OfertaPublica = () => {
                 <th style={{ padding: "10px 12px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "36px" }}>No.</th>
                 <th style={{ padding: "10px 12px", textAlign: "left", fontSize: "11px", fontWeight: 600 }}>Descripción</th>
                 <th style={{ padding: "10px 12px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "55px" }}>Cant.</th>
-                <th style={{ padding: "10px 12px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "105px" }}>P. Unit. USD</th>
-                <th style={{ padding: "10px 12px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "105px" }}>Total USD</th>
+                <th style={{ padding: "10px 12px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "105px" }}>P. Unit. {qCurrency}</th>
+                <th style={{ padding: "10px 12px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "105px" }}>Total {qCurrency}</th>
               </tr>
             </thead>
             <tbody>
@@ -240,8 +263,8 @@ const OfertaPublica = () => {
                   <td style={{ padding: "9px 12px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
                   <td style={{ padding: "9px 12px", fontSize: "12px" }}>{item.description}</td>
                   <td style={{ padding: "9px 12px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px" }}>${item.unitPriceUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>${item.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
+                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
                 </tr>
               ))}
             </tbody>
@@ -253,21 +276,26 @@ const OfertaPublica = () => {
               <tbody>
                 <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
                   <td style={{ padding: "7px 14px", fontWeight: 600, fontSize: "12px" }}>Subtotal:</td>
-                  <td style={{ padding: "7px 14px", textAlign: "right", fontSize: "12px" }}>${quotation.subtotalUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding: "7px 14px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.subtotalUSD)}</td>
                 </tr>
                 {quotation.applyItbis && (
                   <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
                     <td style={{ padding: "7px 14px", fontWeight: 600, fontSize: "12px" }}>ITBIS ({quotation.itbisPercent}%):</td>
-                    <td style={{ padding: "7px 14px", textAlign: "right", fontSize: "12px" }}>${quotation.itbisUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: "7px 14px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.itbisUSD)}</td>
                   </tr>
                 )}
                 <tr style={{ backgroundColor: "#0097A7" }}>
                   <td style={{ padding: "9px 14px", fontWeight: 700, fontSize: "13px", color: "white" }}>Total General:</td>
-                  <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 700, fontSize: "13px", color: "white" }}>${quotation.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 700, fontSize: "13px", color: "white" }}>{fmt(quotation.totalUSD)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          {qCurrency !== "USD" && (
+            <p style={{ fontSize: "10px", color: "#888", margin: "-10px 0 15px 0", textAlign: "right" }}>
+              Tasa de cambio aplicada: 1 USD = {qRate} {qCurrency}
+            </p>
+          )}
 
           {quotation.notes && (
             <div style={{ marginBottom: "20px", padding: "10px 14px", backgroundColor: "#f8f9fa", borderLeft: "3px solid #0097A7", borderRadius: "4px" }}>
@@ -292,8 +320,12 @@ const OfertaPublica = () => {
                   <td style={{ padding: "6px 0" }}>{quotation.paymentTerms}</td>
                 </tr>
                 <tr style={{ borderBottom: "1px solid #eee" }}>
+                  <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Condiciones de Entrega:</td>
+                  <td style={{ padding: "6px 0" }}>{quotation.deliveryTerms ?? "—"}</td>
+                </tr>
+                <tr style={{ borderBottom: "1px solid #eee" }}>
                   <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Tiempo de Entrega:</td>
-                  <td style={{ padding: "6px 0" }}>{quotation.deliveryTime}</td>
+                  <td style={{ padding: "6px 0" }}>{quotation.deliveryWeeksMin}-{quotation.deliveryWeeksMax} semanas</td>
                 </tr>
                 <tr style={{ borderBottom: "1px solid #eee" }}>
                   <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Validez de la Oferta:</td>
@@ -334,7 +366,10 @@ const OfertaPublica = () => {
           {/* Vigencia de la propuesta */}
           <div style={{ marginBottom: "16px" }}>
             <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px" }}>Vigencia de la propuesta</h3>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.validityText}</div>
+            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>
+              La presente oferta tiene una vigencia de <strong>{quotation.validityDays} días</strong> a partir de la fecha de emisión.
+              {s.validityText ? ` ${s.validityText}` : ""}
+            </div>
           </div>
 
           {/* Devoluciones y/o cancelaciones */}
@@ -369,15 +404,23 @@ const OfertaPublica = () => {
 
           {/* Atentamente + Signature */}
           <p style={{ margin: "0 0 12px 0", fontSize: "13px" }}>Atentamente,</p>
-          {s.signatureImageUrl && (
-            <img src={s.signatureImageUrl} alt="Firma" style={{ display: "block", height: "55px", maxWidth: "200px", marginBottom: "4px", objectFit: "contain", objectPosition: "left" }} />
+          {isApproved ? (
+            <>
+              {s.signatureImageUrl && (
+                <img src={s.signatureImageUrl} alt="Firma" style={{ display: "block", height: "55px", maxWidth: "200px", marginBottom: "4px", objectFit: "contain", objectPosition: "left" }} />
+              )}
+              {!s.signatureImageUrl && <div style={{ height: "30px" }} />}
+              <div>
+                <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{s.signatureName}</p>
+                <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signatureTitle}</p>
+                <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: "15px 0", color: "#999", fontSize: "12px", fontStyle: "italic" }}>
+              Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
+            </div>
           )}
-          {!s.signatureImageUrl && <div style={{ height: "30px" }} />}
-          <div>
-            <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{s.signatureName}</p>
-            <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signatureTitle}</p>
-            <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
-          </div>
 
           {/* Page Footer */}
           <PageFooter pageNum={2} totalPages={2} />

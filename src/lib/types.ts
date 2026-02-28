@@ -1,7 +1,19 @@
+export interface AppUser {
+  id: string;
+  authUserId?: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+  phone: string;
+  roleId?: string;
+  status: "activo" | "inactivo";
+}
+
 export interface Prospect {
   id: string;
   cotorta: number;
   projectName: string;
+  createdBy?: string;
   clientId?: string;
   contactId?: string;
   directCustomer: string;
@@ -19,9 +31,9 @@ export interface Prospect {
   marginPercent: number;
   marginUSD: number;
   estimatedOE: string;
-  revenue: number;
+  revenue: string;
   comments: string;
-  status: "prospecto" | "propuesta" | "negociacion" | "ganado" | "perdido";
+  status: string;
 }
 
 export interface Project {
@@ -32,6 +44,8 @@ export interface Project {
   currentStep: number;
   createdAt: string;
   status: "activo" | "completado" | "pausado";
+  prospectId?: string;
+  quotationId?: string;
 }
 
 export const PROJECT_STEPS = [
@@ -48,13 +62,23 @@ export const PROJECT_STEPS = [
   { number: 11, name: "Informaciones", description: "Información general del proyecto" },
 ] as const;
 
-export const PIPELINE_STAGES = [
-  { key: "prospecto" as const, label: "Prospectos", color: "bg-sinem-info" },
-  { key: "propuesta" as const, label: "Propuesta", color: "bg-sinem-teal" },
-  { key: "negociacion" as const, label: "Negociación", color: "bg-sinem-warning" },
-  { key: "ganado" as const, label: "Ganado", color: "bg-sinem-success" },
-  { key: "perdido" as const, label: "Perdido", color: "bg-destructive" },
+export interface PipelineStage {
+  key: string;
+  label: string;
+  color: string;
+}
+
+export const DEFAULT_PIPELINE_STAGES: PipelineStage[] = [
+  { key: "prospecto", label: "Prospectos", color: "bg-sinem-info" },
+  { key: "propuesta", label: "Propuesta", color: "bg-sinem-teal" },
+  { key: "negociacion", label: "Negociación", color: "bg-sinem-warning" },
+  { key: "on_hold", label: "On Hold", color: "bg-sinem-orange" },
+  { key: "ganado", label: "Ganado", color: "bg-sinem-success" },
+  { key: "perdido", label: "Perdido", color: "bg-destructive" },
 ];
+
+/** @deprecated Use dynamic stages from localStorage instead */
+export const PIPELINE_STAGES = DEFAULT_PIPELINE_STAGES;
 
 export interface Client {
   id: string;
@@ -87,6 +111,33 @@ export interface Contact {
 
 export type QuotationStatus = "borrador" | "enviada" | "aprobada" | "rechazada" | "vencida";
 
+export type QuotationCurrency = "USD" | "DOP" | "EUR";
+
+export type QuotationPartner = "Siemens" | "NEM Energy" | "Innomotics" | "Trench Group";
+
+export const PARTNERS: QuotationPartner[] = ["Siemens", "NEM Energy", "Innomotics", "Trench Group"];
+
+export const CURRENCIES: { key: QuotationCurrency; label: string; symbol: string }[] = [
+  { key: "USD", label: "Dólar Americano", symbol: "$" },
+  { key: "DOP", label: "Peso Dominicano", symbol: "RD$" },
+  { key: "EUR", label: "Euro", symbol: "€" },
+];
+
+export type DeliveryTerm = "CIF" | "FOB" | "EXW" | "FCA" | "CFR" | "CPT" | "CIP" | "DAP" | "DPU" | "DDP";
+
+export const DELIVERY_TERMS: { key: DeliveryTerm; label: string; description: string }[] = [
+  { key: "EXW", label: "EXW", description: "Ex Works — En fábrica" },
+  { key: "FCA", label: "FCA", description: "Free Carrier — Libre transportista" },
+  { key: "FOB", label: "FOB", description: "Free On Board — Libre a bordo" },
+  { key: "CFR", label: "CFR", description: "Cost and Freight — Costo y flete" },
+  { key: "CIF", label: "CIF", description: "Cost, Insurance and Freight — Costo, seguro y flete" },
+  { key: "CPT", label: "CPT", description: "Carriage Paid To — Transporte pagado hasta" },
+  { key: "CIP", label: "CIP", description: "Carriage and Insurance Paid To — Transporte y seguro pagados hasta" },
+  { key: "DAP", label: "DAP", description: "Delivered at Place — Entregado en lugar" },
+  { key: "DPU", label: "DPU", description: "Delivered at Place Unloaded — Entregado en lugar descargado" },
+  { key: "DDP", label: "DDP", description: "Delivered Duty Paid — Entregado con derechos pagados" },
+];
+
 export interface QuotationLineItem {
   id: string;
   description: string;
@@ -110,6 +161,7 @@ export interface Quotation {
   prospectId?: string;
   clientId?: string;
   contactId?: string;
+  createdBy?: string;
   subject: string;
   client: QuotationClient;
   lineItems: QuotationLineItem[];
@@ -118,16 +170,54 @@ export interface Quotation {
   itbisPercent: number;
   itbisUSD: number;
   totalUSD: number;
+  currency: QuotationCurrency;
+  exchangeRate: number;
+  partner: QuotationPartner;
   costUSD: number;
   marginPercent: number;
   marginUSD: number;
   paymentTerms: string;
-  deliveryTime: string;
+  deliveryTerms: DeliveryTerm;
+  deliveryWeeksMin: number;
+  deliveryWeeksMax: number;
   validityDays: number;
   deliveryLocation: string;
   notes: string;
   status: QuotationStatus;
   createdAt: string;
+  version: number;
+  history: QuotationSnapshot[];
+  approvalStatus: "pending" | "approved" | "rejected";
+  approvedBy?: string;
+  approvedAt?: string;
+  approvalNote?: string;
+}
+
+export interface GeneralSettings {
+  managerApprovalLimit: number;
+  companyLogoUrl?: string;
+}
+
+export interface QuotationSnapshot {
+  version: number;
+  savedAt: string;
+  modifiedBy?: string;
+  code: string;
+  subject: string;
+  lineItems: QuotationLineItem[];
+  subtotalUSD: number;
+  totalUSD: number;
+  costUSD: number;
+  marginPercent: number;
+  marginUSD: number;
+  paymentTerms: string;
+  deliveryTerms: DeliveryTerm;
+  deliveryWeeksMin: number;
+  deliveryWeeksMax: number;
+  validityDays: number;
+  deliveryLocation: string;
+  notes: string;
+  status: QuotationStatus;
 }
 
 export const QUOTATION_STATUSES: { key: QuotationStatus; label: string; color: string }[] = [
@@ -256,5 +346,6 @@ export interface ForecastMonth {
 export interface ForecastYear {
   year: number;
   annualTarget: number;
+  previousYearWon: number;
   months: ForecastMonth[];
 }

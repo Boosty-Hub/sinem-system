@@ -67,6 +67,7 @@ export default {
           "teal-glow": "hsl(var(--sinem-teal-glow))",
           success: "hsl(var(--sinem-success))",
           warning: "hsl(var(--sinem-warning))",
+          orange: "hsl(var(--sinem-orange))",
           info: "hsl(var(--sinem-info))",
         },
       },

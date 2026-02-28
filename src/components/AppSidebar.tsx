@@ -1,7 +1,9 @@
-import { LayoutDashboard, Users, FolderKanban, FileText, Building2, UserCircle, Settings, LogOut, ListTodo, TrendingUp, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Users, FolderKanban, FileText, Building2, UserCircle, Settings, LogOut, ListTodo, BarChart3, User2 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import {
   Sidebar,
   SidebarContent,
@@ -15,21 +17,24 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Contactos", url: "/contactos", icon: UserCircle },
-  { title: "Tareas", url: "/tareas", icon: ListTodo },
-  { title: "CRM", url: "/crm", icon: Users },
-  { title: "Cotizaciones", url: "/cotizaciones", icon: FileText },
-  { title: "Clientes", url: "/clientes", icon: Building2 },
-  { title: "Proyectos", url: "/projects", icon: FolderKanban },
-  { title: "Forecast", url: "/forecast", icon: TrendingUp },
-  { title: "Analítica", url: "/analitica", icon: BarChart3 },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, module: "Dashboard" },
+  { title: "Contactos", url: "/contactos", icon: UserCircle, module: "Contactos" },
+  { title: "Tareas", url: "/tareas", icon: ListTodo, module: null },
+  { title: "CRM", url: "/crm", icon: Users, module: "CRM" },
+  { title: "Cotizaciones", url: "/cotizaciones", icon: FileText, module: "Cotizaciones" },
+  { title: "Clientes", url: "/clientes", icon: Building2, module: "Clientes" },
+  { title: "Proyectos", url: "/projects", icon: FolderKanban, module: "Proyectos" },
+  { title: "Analítica", url: "/analitica", icon: BarChart3, module: null },
 ];
 
 const AppSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { canView } = usePermissions();
+  const companyLogo = useCompanyLogo();
+
+  const visibleItems = navItems.filter((item) => !item.module || canView(item.module));
 
   const handleSignOut = async () => {
     await signOut();
@@ -40,9 +45,13 @@ const AppSidebar = () => {
     <Sidebar collapsible="icon">
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-lg">
-            S
-          </div>
+          {companyLogo ? (
+            <img src={companyLogo} alt="Logo" className="w-9 h-9 rounded-lg object-contain" />
+          ) : (
+            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-lg">
+              S
+            </div>
+          )}
           <div className="group-data-[collapsible=icon]:hidden">
             <h1 className="font-bold text-sidebar-foreground text-lg tracking-tight">SINEM</h1>
             <p className="text-[11px] text-sidebar-foreground/50">Siemens Partner RD</p>
@@ -56,7 +65,7 @@ const AppSidebar = () => {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -78,14 +87,27 @@ const AppSidebar = () => {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              isActive={location.pathname.startsWith("/configuracion")}
+              isActive={location.pathname === "/perfil"}
             >
-              <NavLink to="/configuracion" activeClassName="bg-sidebar-accent text-sidebar-primary">
-                <Settings className="h-4 w-4" />
-                <span>Configuración</span>
+              <NavLink to="/perfil" activeClassName="bg-sidebar-accent text-sidebar-primary">
+                <User2 className="h-4 w-4" />
+                <span>Mi Perfil</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {canView("Configuración") && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={location.pathname.startsWith("/configuracion")}
+              >
+                <NavLink to="/configuracion" activeClassName="bg-sidebar-accent text-sidebar-primary">
+                  <Settings className="h-4 w-4" />
+                  <span>Configuración</span>
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleSignOut} className="text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10">
               <LogOut className="h-4 w-4" />

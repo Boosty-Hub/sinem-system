@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { PIPELINE_STAGES, type Prospect } from "@/lib/types";
+import { PIPELINE_STAGES, type Prospect, type PipelineStage } from "@/lib/types";
 import { mockQuotations } from "@/lib/mockData";
-import { DollarSign, FileText, GripVertical } from "lucide-react";
+import { DollarSign, FileText, GripVertical, MessageSquareText } from "lucide-react";
+import UserAvatar from "@/components/UserAvatar";
 import {
   DndContext,
   DragOverlay,
@@ -21,15 +22,19 @@ interface Props {
   prospects: Prospect[];
   onEdit: (p: Prospect) => void;
   onStageChange?: (prospectId: string, newStage: string) => void;
+  onActivity?: (p: Prospect) => void;
+  stages?: PipelineStage[];
 }
 
 /* ── Draggable Card ── */
 const DraggableCard = ({
   prospect,
   onEdit,
+  onActivity,
 }: {
   prospect: Prospect;
   onEdit: (p: Prospect) => void;
+  onActivity?: (p: Prospect) => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: prospect.id,
@@ -52,13 +57,13 @@ const DraggableCard = ({
       >
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
-      <CardContent prospect={prospect} />
+      <CardContent prospect={prospect} onActivity={onActivity} />
     </div>
   );
 };
 
 /* ── Card Content (shared between real card and overlay) ── */
-const CardContent = ({ prospect }: { prospect: Prospect }) => {
+const CardContent = ({ prospect, onActivity }: { prospect: Prospect; onActivity?: (p: Prospect) => void }) => {
   const quotationCount = mockQuotations.filter((q) => q.prospectId === prospect.id).length;
   return (
     <>
@@ -83,6 +88,16 @@ const CardContent = ({ prospect }: { prospect: Prospect }) => {
             {quotationCount} cot.
           </span>
         )}
+        {onActivity && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onActivity(prospect); }}
+            className="text-muted-foreground hover:text-primary transition-colors p-0.5"
+            title="Actividad"
+          >
+            <MessageSquareText className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <span className="ml-auto"><UserAvatar userId={prospect.createdBy} size="xs" /></span>
       </div>
     </>
   );
@@ -119,7 +134,8 @@ const DroppableColumn = ({
 };
 
 /* ── Main Kanban ── */
-const CRMKanban = ({ prospects, onEdit, onStageChange }: Props) => {
+const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stagesProp }: Props) => {
+  const stageList = stagesProp ?? PIPELINE_STAGES;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
@@ -137,7 +153,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange }: Props) => {
     const overId = event.over?.id as string | undefined;
     if (!overId) { setOverColumnId(null); return; }
     // Check if hovering over a column (stage key)
-    const isColumn = PIPELINE_STAGES.some((s) => s.key === overId);
+    const isColumn = stageList.some((s) => s.key === overId);
     if (isColumn) {
       setOverColumnId(overId);
     } else {
@@ -159,7 +175,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange }: Props) => {
     if (!prospect) return;
 
     let targetStage: string | null = null;
-    const isColumn = PIPELINE_STAGES.some((s) => s.key === over.id);
+    const isColumn = stageList.some((s) => s.key === over.id);
     if (isColumn) {
       targetStage = over.id as string;
     } else {
@@ -187,7 +203,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange }: Props) => {
       onDragCancel={handleDragCancel}
     >
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {PIPELINE_STAGES.map((stage) => {
+        {stageList.map((stage) => {
           const items = prospects.filter((p) => p.status === stage.key);
           const total = items.reduce((s, p) => s + p.priceUSD, 0);
 
@@ -209,7 +225,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange }: Props) => {
 
               <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null}>
                 {items.map((prospect) => (
-                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} />
+                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} />
                 ))}
                 {items.length === 0 && !activeId && (
                   <p className="text-xs text-muted-foreground text-center py-6">Sin oportunidades</p>
@@ -223,7 +239,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange }: Props) => {
       <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
         {activeProspect ? (
           <div className="deal-card shadow-xl ring-2 ring-primary/30 rotate-[2deg] w-[280px]">
-            <CardContent prospect={activeProspect} />
+            <CardContent prospect={activeProspect} onActivity={undefined} />
           </div>
         ) : null}
       </DragOverlay>

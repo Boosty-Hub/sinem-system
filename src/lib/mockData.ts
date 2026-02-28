@@ -1,4 +1,12 @@
-import type { Prospect, Project, Client, Contact, Quotation, ClientOffer, ProposalSettings, Task, Product, ForecastYear } from "./types";
+import type { AppUser, Prospect, Project, Client, Contact, Quotation, ClientOffer, ProposalSettings, Task, Product, ForecastYear } from "./types";
+
+export const mockAppUsers: AppUser[] = [
+  { id: "u1", authUserId: "auth-1", name: "Gabriel Méndez", email: "gabriel@sinem.energy", avatarUrl: "", phone: "+1 809 555-0001", status: "activo" },
+  { id: "u2", authUserId: "auth-2", name: "Carlos Rodríguez", email: "carlos@sinem.energy", avatarUrl: "", phone: "+1 809 555-0002", status: "activo" },
+  { id: "u3", authUserId: "auth-3", name: "Ana Martínez", email: "ana@sinem.energy", avatarUrl: "", phone: "+1 809 555-0003", status: "activo" },
+  { id: "u4", authUserId: "auth-4", name: "Luis Pérez", email: "luis@sinem.energy", avatarUrl: "", phone: "+1 809 555-0004", status: "activo" },
+  { id: "u5", authUserId: "auth-5", name: "María Santos", email: "maria@sinem.energy", avatarUrl: "", phone: "+1 809 555-0005", status: "activo" },
+];
 
 export const mockProspects: Prospect[] = [
   {
@@ -6,56 +14,64 @@ export const mockProspects: Prospect[] = [
     endCustomer: "Cliente AA", proveedor: "SIEMENS", bu: "SE", product: "Transformadores",
     scope: "3x Transformadores 500kVA 12.47/0.48kV", costUSD: 51750, priceUSD: 63150,
     go: 80, get: 60, probability: 48, weighted: 30312, marginPercent: 18, marginUSD: 11400,
-    estimatedOE: "Mar 26", revenue: 63150, comments: "Pendiente aprobación del presupuesto", status: "propuesta"
+    estimatedOE: "2026-03-15", revenue: "2026-05-15", comments: "Pendiente aprobación del presupuesto", status: "propuesta",
+    createdBy: "u1"
   },
   {
     id: "2", cotorta: 2, projectName: "Motor Siemens 250HP", directCustomer: "Cervecería Nacional",
     endCustomer: "Cervecería Nacional", proveedor: "SIEMENS", bu: "DI", product: "Motores",
     scope: "1x Motor Simatic 250HP 460V", costUSD: 18500, priceUSD: 28500,
     go: 90, get: 70, probability: 63, weighted: 17955, marginPercent: 35, marginUSD: 10000,
-    estimatedOE: "Feb 26", revenue: 28500, comments: "Negociación avanzada", status: "negociacion"
+    estimatedOE: "2026-02-20", revenue: "2026-03-20", comments: "Negociación avanzada", status: "negociacion",
+    createdBy: "u2"
   },
   {
     id: "3", cotorta: 3, projectName: "Switchgear 13.8kV", directCustomer: "AES Dominicana",
     endCustomer: "AES Dominicana", proveedor: "SIEMENS", bu: "SE", product: "Switchgear",
     scope: "Switchgear tipo Posto 13.8kV con 4 celdas", costUSD: 85000, priceUSD: 120000,
     go: 60, get: 40, probability: 24, weighted: 28800, marginPercent: 29, marginUSD: 35000,
-    estimatedOE: "Jun 26", revenue: 120000, comments: "", status: "prospecto"
+    estimatedOE: "2026-06-01", revenue: "2026-10-01", comments: "", status: "prospecto",
+    createdBy: "u1"
   },
   {
     id: "4", cotorta: 4, projectName: "Variadores de Frecuencia", directCustomer: "Grupo Rica",
     endCustomer: "Grupo Rica", proveedor: "SIEMENS", bu: "DI", product: "Drives",
     scope: "5x Variadores Sinamics G120 15kW", costUSD: 9800, priceUSD: 15800,
     go: 100, get: 90, probability: 90, weighted: 14220, marginPercent: 38, marginUSD: 6000,
-    estimatedOE: "Ene 26", revenue: 15800, comments: "OC recibida", status: "ganado"
+    estimatedOE: "2026-01-15", revenue: "2026-02-15", comments: "OC recibida", status: "ganado",
+    createdBy: "u3"
   },
   {
     id: "5", cotorta: 5, projectName: "PLC Simatic S7-1500", directCustomer: "Barrick Gold",
     endCustomer: "Barrick Gold", proveedor: "SIEMENS", bu: "DI", product: "Automatización",
     scope: "Sistema PLC S7-1500 con HMI", costUSD: 22000, priceUSD: 32000,
     go: 30, get: 20, probability: 6, weighted: 1920, marginPercent: 31, marginUSD: 10000,
-    estimatedOE: "Abr 26", revenue: 32000, comments: "Competencia fuerte con ABB", status: "perdido"
+    estimatedOE: "2026-04-10", revenue: "2026-06-10", comments: "Competencia fuerte con ABB", status: "perdido",
+    createdBy: "u4"
   },
   {
     id: "6", cotorta: 6, projectName: "Subestación Compacta", directCustomer: "CEMEX RD",
     endCustomer: "CEMEX RD", proveedor: "SIEMENS", bu: "SE", product: "Subestaciones",
     scope: "Subestación compacta 34.5/4.16kV 5MVA", costUSD: 180000, priceUSD: 245000,
     go: 70, get: 50, probability: 35, weighted: 85750, marginPercent: 27, marginUSD: 65000,
-    estimatedOE: "Jul 26", revenue: 245000, comments: "Esperando especificación final", status: "propuesta"
+    estimatedOE: "2026-07-01", revenue: "2026-11-01", comments: "Esperando especificación final", status: "propuesta",
+    createdBy: "u2"
   },
   {
     id: "7", cotorta: 7, projectName: "Centro de Control de Motores", directCustomer: "Falcondo",
     endCustomer: "Falcondo", proveedor: "SIEMENS", bu: "DI", product: "MCC",
     scope: "MCC con 12 salidas de motor", costUSD: 42000, priceUSD: 58000,
     go: 85, get: 65, probability: 55, weighted: 31900, marginPercent: 28, marginUSD: 16000,
-    estimatedOE: "May 26", revenue: 58000, comments: "Revisión técnica en proceso", status: "negociacion"
+    estimatedOE: "2026-05-15", revenue: "2026-07-15", comments: "Revisión técnica en proceso", status: "negociacion",
+    createdBy: "u1"
   },
   {
     id: "8", cotorta: 8, projectName: "Protecciones SIPROTEC", directCustomer: "EDEESTE",
     endCustomer: "EDEESTE", proveedor: "SIEMENS", bu: "SE", product: "Protecciones",
     scope: "6x Relés SIPROTEC 7SJ85", costUSD: 36000, priceUSD: 48000,
     go: 50, get: 30, probability: 15, weighted: 7200, marginPercent: 25, marginUSD: 12000,
-    estimatedOE: "Ago 26", revenue: 48000, comments: "", status: "prospecto"
+    estimatedOE: "2026-08-01", revenue: "2026-10-01", comments: "", status: "prospecto",
+    createdBy: "u5"
   },
 ];
 
@@ -183,12 +199,44 @@ export const mockQuotations: Quotation[] = [
       { id: "li3", description: "Transporte e inspección en fábrica", quantity: 1, unitPriceUSD: 3000, totalUSD: 3000 },
     ],
     subtotalUSD: 63150, applyItbis: true, itbisPercent: 18, itbisUSD: 11367, totalUSD: 74517,
+    currency: "USD", exchangeRate: 1, partner: "Siemens",
     costUSD: 51750, marginPercent: 18, marginUSD: 11400,
     paymentTerms: "50% con la orden de compra, 50% contra entrega",
-    deliveryTime: "8-10 semanas después de confirmada la orden",
+    deliveryTerms: "CIF",
+    deliveryWeeksMin: 8, deliveryWeeksMax: 10,
     validityDays: 30, deliveryLocation: "Santiago, República Dominicana",
     notes: "Pendiente aprobación del presupuesto del cliente",
-    status: "enviada", createdAt: "2026-01-10"
+    status: "enviada", createdAt: "2026-01-10", version: 3, createdBy: "u1", approvalStatus: "pending", history: [
+      {
+        version: 1, savedAt: "2026-01-10", modifiedBy: "u1", code: "COT-2026-001",
+        subject: "Suministro de Transformadores de Distribución 500kVA",
+        lineItems: [
+          { id: "li1", description: "Transformador de distribución 500kVA 12.47/0.48kV, tipo pad-mounted, ONAN", quantity: 3, unitPriceUSD: 17000, totalUSD: 51000 },
+          { id: "li2", description: "Accesorios de conexión y protección", quantity: 3, unitPriceUSD: 1200, totalUSD: 3600 },
+        ],
+        subtotalUSD: 54600, totalUSD: 64428, costUSD: 45000, marginPercent: 18, marginUSD: 9600,
+        paymentTerms: "100% con la orden de compra",
+        deliveryTerms: "FOB",
+        deliveryWeeksMin: 10, deliveryWeeksMax: 12,
+        validityDays: 30, deliveryLocation: "Santiago, República Dominicana",
+        notes: "Primera versión - precios estimados", status: "borrador",
+      },
+      {
+        version: 2, savedAt: "2026-01-18", modifiedBy: "u2", code: "COT-2026-001",
+        subject: "Suministro de Transformadores de Distribución 500kVA",
+        lineItems: [
+          { id: "li1", description: "Transformador de distribución 500kVA 12.47/0.48kV, tipo pad-mounted, ONAN", quantity: 3, unitPriceUSD: 18000, totalUSD: 54000 },
+          { id: "li2", description: "Accesorios de conexión y protección (pararrayos, fusibles, conectores)", quantity: 3, unitPriceUSD: 1400, totalUSD: 4200 },
+          { id: "li3", description: "Transporte e inspección en fábrica", quantity: 1, unitPriceUSD: 2800, totalUSD: 2800 },
+        ],
+        subtotalUSD: 61000, totalUSD: 71980, costUSD: 49500, marginPercent: 19, marginUSD: 11500,
+        paymentTerms: "50% con la orden de compra, 50% contra entrega",
+        deliveryTerms: "CIF",
+        deliveryWeeksMin: 8, deliveryWeeksMax: 10,
+        validityDays: 30, deliveryLocation: "Santiago, República Dominicana",
+        notes: "Ajuste de precios con Siemens, se agregó transporte", status: "enviada",
+      },
+    ]
   },
   {
     id: "q2", code: "COT-2026-002", prospectId: "2",
@@ -200,12 +248,14 @@ export const mockQuotations: Quotation[] = [
       { id: "li6", description: "Sensores de vibración y temperatura PT100", quantity: 1, unitPriceUSD: 1500, totalUSD: 1500 },
     ],
     subtotalUSD: 28500, applyItbis: true, itbisPercent: 18, itbisUSD: 5130, totalUSD: 33630,
+    currency: "USD", exchangeRate: 1, partner: "Innomotics",
     costUSD: 18500, marginPercent: 35, marginUSD: 10000,
     paymentTerms: "100% con la orden de compra",
-    deliveryTime: "4-6 semanas",
+    deliveryTerms: "FOB",
+    deliveryWeeksMin: 4, deliveryWeeksMax: 6,
     validityDays: 30, deliveryLocation: "Santo Domingo, República Dominicana",
     notes: "Negociación avanzada con el cliente",
-    status: "enviada", createdAt: "2026-01-15"
+    status: "enviada", createdAt: "2026-01-15", version: 1, createdBy: "u2", approvalStatus: "pending", history: []
   },
   {
     id: "q3", code: "COT-2026-003", prospectId: "3",
@@ -216,12 +266,14 @@ export const mockQuotations: Quotation[] = [
       { id: "li8", description: "Celda de protección 13.8kV con interruptor de vacío y relé SIPROTEC", quantity: 2, unitPriceUSD: 32000, totalUSD: 64000 },
     ],
     subtotalUSD: 120000, applyItbis: false, itbisPercent: 18, itbisUSD: 0, totalUSD: 120000,
+    currency: "DOP", exchangeRate: 58.50, partner: "Siemens",
     costUSD: 85000, marginPercent: 29, marginUSD: 35000,
     paymentTerms: "30% anticipo, 40% contra embarque, 30% contra entrega",
-    deliveryTime: "14-16 semanas",
+    deliveryTerms: "CIF",
+    deliveryWeeksMin: 14, deliveryWeeksMax: 16,
     validityDays: 45, deliveryLocation: "Santiago, República Dominicana",
     notes: "",
-    status: "borrador", createdAt: "2026-01-20"
+    status: "borrador", createdAt: "2026-01-20", version: 1, createdBy: "u1", approvalStatus: "pending", history: []
   },
   {
     id: "q4", code: "COT-2026-004", prospectId: "4",
@@ -232,12 +284,14 @@ export const mockQuotations: Quotation[] = [
       { id: "li10", description: "Filtro de armónicos y reactancia de línea", quantity: 5, unitPriceUSD: 360, totalUSD: 1800 },
     ],
     subtotalUSD: 15800, applyItbis: true, itbisPercent: 18, itbisUSD: 2844, totalUSD: 18644,
+    currency: "USD", exchangeRate: 1, partner: "Siemens",
     costUSD: 9800, marginPercent: 38, marginUSD: 6000,
     paymentTerms: "100% con la orden de compra",
-    deliveryTime: "3-4 semanas",
+    deliveryTerms: "EXW",
+    deliveryWeeksMin: 3, deliveryWeeksMax: 4,
     validityDays: 30, deliveryLocation: "Santo Domingo, República Dominicana",
     notes: "OC recibida",
-    status: "aprobada", createdAt: "2025-12-20"
+    status: "aprobada", createdAt: "2025-12-20", version: 1, createdBy: "u3", approvalStatus: "approved", approvedBy: "u1", approvedAt: "2025-12-22", history: []
   },
 ];
 
@@ -350,6 +404,7 @@ export const mockProducts: Product[] = [
 export const mockForecast: ForecastYear = {
   year: 2026,
   annualTarget: 1200000,
+  previousYearWon: 850000,
   months: [
     { month: "Ene", target: 100000, actual: 115800, projected: 115800 },
     { month: "Feb", target: 100000, actual: 78500, projected: 78500 },

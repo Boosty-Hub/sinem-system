@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { mockQuotations } from "@/lib/mockData";
-import { QUOTATION_STATUSES, type Quotation } from "@/lib/types";
-import { Search, Plus, FileText, ExternalLink } from "lucide-react";
+import { QUOTATION_STATUSES, CURRENCIES, type Quotation } from "@/lib/types";
+import { Search, Plus, FileText, ExternalLink, ShieldCheck, Clock, XCircle, Trash2 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import QuotationDialog from "@/components/cotizaciones/QuotationDialog";
+import UserAvatar from "@/components/UserAvatar";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { usePermissions } from "@/hooks/usePermissions";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export interface QuotationPrefill {
   prospectId?: string;
@@ -16,9 +19,29 @@ export interface QuotationPrefill {
   customer?: string;
 }
 
+/** Ensure cached quotations have the version/history fields (migration from old schema) */
+const migrateQuotations = (cached: Quotation[]): Quotation[] => {
+  let needsMigration = false;
+  const migrated = cached.map((q) => {
+    if (q.version === undefined || q.history === undefined || (q as any).deliveryTerms === undefined || (q as any).approvalStatus === undefined || (q as any).currency === undefined || (q as any).partner === undefined) {
+      needsMigration = true;
+      return { ...q, version: q.version ?? 1, history: q.history ?? [], deliveryTerms: (q as any).deliveryTerms ?? "CIF", approvalStatus: (q as any).approvalStatus ?? "pending", currency: (q as any).currency ?? "USD", exchangeRate: (q as any).exchangeRate ?? 1, partner: (q as any).partner ?? "Siemens" };
+    }
+    return q;
+  });
+  // If schema changed (e.g. new mock history data), reset to mock
+  if (needsMigration || cached.length === 0) return mockQuotations;
+  return migrated;
+};
+
 const Cotizaciones = () => {
+  const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
+  const canCreateCot = canCreateFn("Cotizaciones");
+  const canEditCot = canEditFn("Cotizaciones");
+  const canDeleteCot = canDeleteFn("Cotizaciones");
+  const [deleteTarget, setDeleteTarget] = useState<Quotation | null>(null);
   const [search, setSearch] = useState("");
-  const [quotations, setQuotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations);
+  const [quotations, setQuotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations, migrateQuotations);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -60,10 +83,29 @@ const Cotizaciones = () => {
     setDialogOpen(true);
   };
 
+  const handleSave = (updated: Quotation) => {
+    setQuotations((prev) => {
+      const exists = prev.find((q) => q.id === updated.id);
+      if (exists) {
+        return prev.map((q) => (q.id === updated.id ? updated : q));
+      }
+      return [...prev, updated];
+    });
+    setSelectedQuotation(updated);
+  };
+
   const handleStatusChange = (quotationId: string, newStatus: string) => {
     setQuotations((prev) =>
       prev.map((q) => (q.id === quotationId ? { ...q, status: newStatus as Quotation["status"] } : q))
     );
+  };
+
+  const handleDelete = (quotation: Quotation) => setDeleteTarget(quotation);
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    setQuotations((prev) => prev.filter((q) => q.id !== deleteTarget.id));
+    setDeleteTarget(null);
   };
 
   const getStatusConfig = (status: string) => {
@@ -100,9 +142,11 @@ const Cotizaciones = () => {
               <option key={s.key} value={s.key}>{s.label}</option>
             ))}
           </select>
-          <Button onClick={() => { setSelectedQuotation(null); setDialogOpen(true); }} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Nueva Cotización
-          </Button>
+          {canCreateCot && (
+            <Button onClick={() => { setSelectedQuotation(null); setDialogOpen(true); }} size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Nueva Cotización
+            </Button>
+          )}
         </div>
       </div>
 
@@ -111,6 +155,7 @@ const Cotizaciones = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/60">
+                <th className="text-center py-3 px-4 font-medium text-muted-foreground w-10"></th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Código</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Asunto</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Cliente</th>
@@ -118,6 +163,7 @@ const Cotizaciones = () => {
                 <th className="text-right py-3 px-4 font-medium text-muted-foreground">Total</th>
                 <th className="text-right py-3 px-4 font-medium text-muted-foreground">Margen</th>
                 <th className="text-center py-3 px-4 font-medium text-muted-foreground">Estado</th>
+                <th className="text-center py-3 px-4 font-medium text-muted-foreground">Aprobación</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Fecha</th>
                 <th className="text-center py-3 px-4 font-medium text-muted-foreground">Acciones</th>
               </tr>
@@ -131,6 +177,9 @@ const Cotizaciones = () => {
                     className="border-b border-border/30 hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => handleEdit(q)}
                   >
+                    <td className="py-3 px-4 text-center">
+                      <UserAvatar userId={q.createdBy} size="sm" />
+                    </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
@@ -140,7 +189,14 @@ const Cotizaciones = () => {
                     <td className="py-3 px-4 font-medium max-w-[250px] truncate">{q.subject}</td>
                     <td className="py-3 px-4 text-muted-foreground">{q.client.company}</td>
                     <td className="py-3 px-4 text-right">${q.subtotalUSD.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-primary">${q.totalUSD.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-primary">
+                      ${q.totalUSD.toLocaleString()}
+                      {q.currency && q.currency !== "USD" && (
+                        <span className="block text-[10px] font-normal text-muted-foreground">
+                          {CURRENCIES.find((c) => c.key === q.currency)?.symbol}{(q.totalUSD * q.exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {q.currency}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-right">
                       <span className="text-sinem-success font-medium">{q.marginPercent}%</span>
                       <span className="text-muted-foreground text-xs ml-1">(${q.marginUSD.toLocaleString()})</span>
@@ -159,20 +215,44 @@ const Cotizaciones = () => {
                         ))}
                       </select>
                     </td>
+                    <td className="py-3 px-4 text-center">
+                      {q.approvalStatus === "approved" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                          <ShieldCheck className="h-3 w-3" /> Aprobada
+                        </span>
+                      )}
+                      {q.approvalStatus === "rejected" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          <XCircle className="h-3 w-3" /> Rechazada
+                        </span>
+                      )}
+                      {(q.approvalStatus === "pending" || !q.approvalStatus) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                          <Clock className="h-3 w-3" /> Pendiente
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-muted-foreground text-xs">{q.createdAt}</td>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                      <Link to={`/oferta/${q.id}`} target="_blank">
-                        <Button variant="ghost" size="sm">
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </Link>
+                      <div className="flex items-center justify-center gap-0.5">
+                        <Link to={`/oferta/${q.id}`} target="_blank">
+                          <Button variant="ghost" size="sm">
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        {canDeleteCot && (
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(q)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={11} className="py-12 text-center text-muted-foreground">
                     No se encontraron cotizaciones
                   </td>
                 </tr>
@@ -187,6 +267,15 @@ const Cotizaciones = () => {
         onOpenChange={(open) => { setDialogOpen(open); if (!open) setPrefill(undefined); }}
         quotation={selectedQuotation}
         prefill={prefill}
+        onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar Cotización"
+        description={`¿Estás seguro de eliminar la cotización "${deleteTarget?.code}"? Esta acción no se puede deshacer.`}
+        onConfirm={confirmDelete}
       />
     </div>
   );

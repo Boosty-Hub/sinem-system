@@ -1,11 +1,12 @@
 import { useParams, Link } from "react-router-dom";
-import { mockProjects } from "@/lib/mockData";
-import { PROJECT_STEPS, type Project } from "@/lib/types";
-import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet } from "lucide-react";
+import { mockProjects, mockQuotations } from "@/lib/mockData";
+import { PROJECT_STEPS, CURRENCIES, type Project, type Quotation } from "@/lib/types";
+import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet, ExternalLink, Receipt, MessageSquareText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useRef, useCallback } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useToast } from "@/hooks/use-toast";
+import ActivitySidebar from "@/components/crm/ActivitySidebar";
 
 interface ProjectDocument {
   id: string;
@@ -33,10 +34,13 @@ const ProjectDetail = () => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useLocalStorage<Project[]>("sinem:projects", mockProjects);
+  const [quotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations);
   const project = projects.find((p) => p.id === id);
+  const linkedQuotation = project?.quotationId ? quotations.find((q) => q.id === project.quotationId) : undefined;
   const [activeStep, setActiveStep] = useState(project?.currentStep ?? 1);
   const [documents, setDocuments] = useLocalStorage<ProjectDocument[]>(`sinem:project-docs:${id}`, []);
   const [dragging, setDragging] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   if (!project) {
     return (
@@ -115,13 +119,49 @@ const ProjectDetail = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
           <p className="text-muted-foreground text-sm">
             {project.client} · ${project.value.toLocaleString()}
           </p>
         </div>
+        {project.prospectId && (
+          <Button variant="outline" size="sm" onClick={() => setActivityOpen(true)}>
+            <MessageSquareText className="h-4 w-4 mr-1" /> Actividad
+          </Button>
+        )}
       </div>
+
+      {/* Linked Quotation Card */}
+      {linkedQuotation && (
+        <div className="stat-card flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Receipt className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Cotización Ganada</p>
+              <p className="font-semibold text-sm">{linkedQuotation.code} — {linkedQuotation.subject}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {linkedQuotation.client.company} · Total: <strong className="text-foreground">
+                  {linkedQuotation.currency !== "USD"
+                    ? `${CURRENCIES.find((c) => c.key === linkedQuotation.currency)?.symbol}${(linkedQuotation.totalUSD * linkedQuotation.exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${linkedQuotation.currency}`
+                    : `$${linkedQuotation.totalUSD.toLocaleString()}`
+                  }
+                </strong>
+                {linkedQuotation.currency !== "USD" && (
+                  <span className="text-muted-foreground"> (${linkedQuotation.totalUSD.toLocaleString()} USD)</span>
+                )}
+              </p>
+            </div>
+          </div>
+          <Link to={`/oferta/${linkedQuotation.id}`} target="_blank">
+            <Button variant="outline" size="sm">
+              <ExternalLink className="h-4 w-4 mr-1" /> Ver Oferta
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
         {/* Steps sidebar */}
@@ -251,6 +291,15 @@ const ProjectDetail = () => {
           </div>
         </div>
       </div>
+
+      {project.prospectId && (
+        <ActivitySidebar
+          prospectId={project.prospectId}
+          prospectName={project.name}
+          open={activityOpen}
+          onClose={() => setActivityOpen(false)}
+        />
+      )}
     </div>
   );
 };

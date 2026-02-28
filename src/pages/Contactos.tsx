@@ -6,8 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ContactDialog from "@/components/contactos/ContactDialog";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { usePermissions } from "@/hooks/usePermissions";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const Contactos = () => {
+  const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
+  const canCreateCtc = canCreateFn("Contactos");
+  const canEditCtc = canEditFn("Contactos");
+  const canDeleteCtc = canDeleteFn("Contactos");
+  const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [search, setSearch] = useState("");
   const [contacts, setContacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -38,9 +45,20 @@ const Contactos = () => {
     setDialogOpen(true);
   };
 
-  const handleDelete = (contact: Contact) => {
-    if (!confirm(`¿Eliminar el contacto "${contact.firstName} ${contact.lastName}"? Esta acción no se puede deshacer.`)) return;
-    setContacts((prev) => prev.filter((c) => c.id !== contact.id));
+  const handleDelete = (contact: Contact) => setDeleteTarget(contact);
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    setContacts((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  };
+
+  const handleSave = (saved: Contact) => {
+    setContacts((prev) => {
+      const exists = prev.find((c) => c.id === saved.id);
+      if (exists) return prev.map((c) => (c.id === saved.id ? saved : c));
+      return [saved, ...prev];
+    });
   };
 
   return (
@@ -52,9 +70,11 @@ const Contactos = () => {
             {filtered.length} contacto{filtered.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button onClick={() => { setSelectedContact(null); setDialogOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Nuevo Contacto
-        </Button>
+        {canCreateCtc && (
+          <Button onClick={() => { setSelectedContact(null); setDialogOpen(true); }}>
+            <Plus className="h-4 w-4 mr-2" /> Nuevo Contacto
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -162,6 +182,15 @@ const Contactos = () => {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         contact={selectedContact}
+        onSave={handleSave}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar Contacto"
+        description={`¿Estás seguro de eliminar "${deleteTarget?.firstName} ${deleteTarget?.lastName}"? Esta acción no se puede deshacer.`}
+        onConfirm={confirmDelete}
       />
     </div>
   );

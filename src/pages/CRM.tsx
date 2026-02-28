@@ -1,30 +1,75 @@
-import { useState } from "react";
-import { mockProspects, mockProducts } from "@/lib/mockData";
-import { PIPELINE_STAGES, type Prospect, type Product } from "@/lib/types";
-import { Search, LayoutGrid, Table as TableIcon, Plus, Package } from "lucide-react";
+import { useState, useMemo } from "react";
+import { mockProspects, mockProducts, mockProjects, mockQuotations } from "@/lib/mockData";
+import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project, type Quotation } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
+import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CRMKanban from "@/components/crm/CRMKanban";
 import CRMTable from "@/components/crm/CRMTable";
 import ProspectDialog from "@/components/crm/ProspectDialog";
 import ProductsDialog from "@/components/crm/ProductsDialog";
+import StagesDialog from "@/components/crm/StagesDialog";
+import ActivitySidebar from "@/components/crm/ActivitySidebar";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const CRM = () => {
+  const { toast } = useToast();
+  const { canCreate, canEdit, canDelete } = usePermissions();
+  const canCreateCRM = canCreate("CRM");
+  const canEditCRM = canEdit("CRM");
+  const canDeleteCRM = canDelete("CRM");
   const [view, setView] = useLocalStorage<"kanban" | "table">("sinem:crm:view", "kanban");
   const [search, setSearch] = useState("");
   const [prospects, setProspects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
   const [products, setProducts] = useLocalStorage<Product[]>("sinem:products", mockProducts);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [productsDialogOpen, setProductsDialogOpen] = useState(false);
+  const [stagesDialogOpen, setStagesDialogOpen] = useState(false);
+  const [stages, setStages] = useLocalStorage<PipelineStage[]>("sinem:pipeline:stages", DEFAULT_PIPELINE_STAGES);
+  const [allProjects, setAllProjects] = useLocalStorage<Project[]>("sinem:projects", mockProjects);
+  const [quotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
+  const [activityProspect, setActivityProspect] = useState<Prospect | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterStage, setFilterStage] = useState("all");
+  const [filterProduct, setFilterProduct] = useState("all");
+  const [filterCustomer, setFilterCustomer] = useState("all");
+  const [filterBU, setFilterBU] = useState("all");
+  const [filterProbMin, setFilterProbMin] = useState("");
+  const [filterProbMax, setFilterProbMax] = useState("");
+  const [filterPriceMin, setFilterPriceMin] = useState("");
+  const [filterPriceMax, setFilterPriceMax] = useState("");
 
-  const filtered = prospects.filter(
-    (p) =>
+  // Unique values for selects
+  const uniqueProducts = useMemo(() => [...new Set(prospects.map((p) => p.product).filter(Boolean))].sort(), [prospects]);
+  const uniqueCustomers = useMemo(() => [...new Set(prospects.map((p) => p.directCustomer).filter(Boolean))].sort(), [prospects]);
+  const uniqueBUs = useMemo(() => [...new Set(prospects.map((p) => p.bu).filter(Boolean))].sort(), [prospects]);
+
+  const activeFilterCount = [filterStage !== "all", filterProduct !== "all", filterCustomer !== "all", filterBU !== "all", filterProbMin !== "", filterProbMax !== "", filterPriceMin !== "", filterPriceMax !== ""].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setFilterStage("all"); setFilterProduct("all"); setFilterCustomer("all"); setFilterBU("all");
+    setFilterProbMin(""); setFilterProbMax(""); setFilterPriceMin(""); setFilterPriceMax("");
+  };
+
+  const filtered = prospects.filter((p) => {
+    const matchSearch = !search ||
       p.projectName.toLowerCase().includes(search.toLowerCase()) ||
       p.directCustomer.toLowerCase().includes(search.toLowerCase()) ||
-      p.product.toLowerCase().includes(search.toLowerCase())
-  );
+      p.product.toLowerCase().includes(search.toLowerCase());
+    const matchStage = filterStage === "all" || p.status === filterStage;
+    const matchProduct = filterProduct === "all" || p.product === filterProduct;
+    const matchCustomer = filterCustomer === "all" || p.directCustomer === filterCustomer;
+    const matchBU = filterBU === "all" || p.bu === filterBU;
+    const matchProbMin = !filterProbMin || p.probability >= Number(filterProbMin);
+    const matchProbMax = !filterProbMax || p.probability <= Number(filterProbMax);
+    const matchPriceMin = !filterPriceMin || p.priceUSD >= Number(filterPriceMin);
+    const matchPriceMax = !filterPriceMax || p.priceUSD <= Number(filterPriceMax);
+    return matchSearch && matchStage && matchProduct && matchCustomer && matchBU && matchProbMin && matchProbMax && matchPriceMin && matchPriceMax;
+  });
 
   const totalPipeline = filtered.reduce((sum, p) => sum + p.priceUSD, 0);
   const totalWeighted = filtered.reduce((sum, p) => sum + p.weighted, 0);
@@ -38,10 +83,43 @@ const CRM = () => {
     setProspects((prev) =>
       prev.map((p) => (p.id === prospectId ? { ...p, status: newStage as Prospect["status"] } : p))
     );
+
+    // Auto-create project when opportunity is won
+    if (newStage === "ganado") {
+      const prospect = prospects.find((p) => p.id === prospectId);
+      if (!prospect) return;
+      const alreadyExists = allProjects.some((p) => p.prospectId === prospectId);
+      if (alreadyExists) return;
+
+      // Find the quotation linked to this prospect
+      const linkedQuotation = quotations.find((q) => q.prospectId === prospectId);
+
+      const newProject: Project = {
+        id: crypto.randomUUID(),
+        name: prospect.projectName,
+        client: prospect.directCustomer,
+        value: prospect.priceUSD,
+        currentStep: 1,
+        createdAt: new Date().toISOString().split("T")[0],
+        status: "activo",
+        prospectId: prospectId,
+        quotationId: linkedQuotation?.id,
+      };
+      setAllProjects((prev) => [newProject, ...prev]);
+      toast({ title: "Proyecto creado", description: `Se creó el proyecto "${prospect.projectName}" automáticamente.` });
+    }
   };
 
   const handleDelete = (id: string) => {
     setProspects((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleSaveProspect = (saved: Prospect) => {
+    setProspects((prev) => {
+      const exists = prev.find((p) => p.id === saved.id);
+      if (exists) return prev.map((p) => (p.id === saved.id ? saved : p));
+      return [saved, ...prev];
+    });
   };
 
   return (
@@ -50,7 +128,7 @@ const CRM = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">CRM Pipeline</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Pipeline: <span className="font-semibold text-foreground">${totalPipeline.toLocaleString()}</span>
+            {filtered.length} oportunidades · Pipeline: <span className="font-semibold text-foreground">${totalPipeline.toLocaleString()}</span>
             {" · "}Ponderado: <span className="font-semibold text-foreground">${totalWeighted.toLocaleString()}</span>
           </p>
         </div>
@@ -64,6 +142,19 @@ const CRM = () => {
               className="pl-9 w-[240px]"
             />
           </div>
+          <Button
+            variant={filtersOpen || activeFilterCount > 0 ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="relative"
+          >
+            <Filter className="h-4 w-4 mr-1" /> Filtros
+            {activeFilterCount > 0 && (
+              <span className="ml-1 bg-white text-primary rounded-full w-4 h-4 text-[10px] font-bold flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
           <div className="flex items-center border rounded-lg overflow-hidden">
             <button
               onClick={() => setView("kanban")}
@@ -78,27 +169,123 @@ const CRM = () => {
               <TableIcon className="h-4 w-4" />
             </button>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setProductsDialogOpen(true)}>
-            <Package className="h-4 w-4 mr-1" /> Productos
-          </Button>
-          <Button onClick={() => { setSelectedProspect(null); setDialogOpen(true); }} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Nueva Oportunidad
-          </Button>
+          {canEditCRM && (
+            <Button variant="outline" size="sm" onClick={() => setStagesDialogOpen(true)}>
+              <Settings2 className="h-4 w-4 mr-1" /> Etapas
+            </Button>
+          )}
+          {canEditCRM && (
+            <Button variant="outline" size="sm" onClick={() => setProductsDialogOpen(true)}>
+              <Package className="h-4 w-4 mr-1" /> Productos
+            </Button>
+          )}
+          {canCreateCRM && (
+            <Button onClick={() => { setSelectedProspect(null); setDialogOpen(true); }} size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Nueva Oportunidad
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* ── Filter Bar ── */}
+      {filtersOpen && (
+        <div className="stat-card p-4 space-y-3 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtros Avanzados</h3>
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 text-xs text-muted-foreground">
+                <X className="h-3 w-3 mr-1" /> Limpiar filtros
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Etapa</label>
+              <Select value={filterStage} onValueChange={setFilterStage}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {stages.map((s) => (
+                    <SelectItem key={s.key} value={s.key}>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-2 h-2 rounded-full ${s.color}`} />
+                        {s.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Producto</label>
+              <Select value={filterProduct} onValueChange={setFilterProduct}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {uniqueProducts.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Cliente</label>
+              <Select value={filterCustomer} onValueChange={setFilterCustomer}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {uniqueCustomers.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">BU</label>
+              <Select value={filterBU} onValueChange={setFilterBU}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {uniqueBUs.map((b) => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Probabilidad %</label>
+              <div className="flex items-center gap-1">
+                <Input type="number" placeholder="Min" value={filterProbMin} onChange={(e) => setFilterProbMin(e.target.value)} className="h-8 text-xs" min={0} max={100} />
+                <span className="text-muted-foreground text-xs">-</span>
+                <Input type="number" placeholder="Max" value={filterProbMax} onChange={(e) => setFilterProbMax(e.target.value)} className="h-8 text-xs" min={0} max={100} />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Precio USD</label>
+              <div className="flex items-center gap-1">
+                <Input type="number" placeholder="Min" value={filterPriceMin} onChange={(e) => setFilterPriceMin(e.target.value)} className="h-8 text-xs" min={0} />
+                <span className="text-muted-foreground text-xs">-</span>
+                <Input type="number" placeholder="Max" value={filterPriceMax} onChange={(e) => setFilterPriceMax(e.target.value)} className="h-8 text-xs" min={0} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {view === "kanban" ? (
-        <CRMKanban prospects={filtered} onEdit={handleEdit} onStageChange={handleStageChange} />
+        <CRMKanban prospects={filtered} onEdit={handleEdit} onStageChange={handleStageChange} onActivity={setActivityProspect} stages={stages} />
       ) : (
-        <CRMTable prospects={filtered} onEdit={handleEdit} />
+        <CRMTable prospects={filtered} onEdit={handleEdit} onActivity={setActivityProspect} stages={stages} />
       )}
 
       <ProspectDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         prospect={selectedProspect}
+        onSave={handleSaveProspect}
         onDelete={handleDelete}
         products={products}
+        stages={stages}
         onOpenProducts={() => { setDialogOpen(false); setProductsDialogOpen(true); }}
       />
 
@@ -107,6 +294,20 @@ const CRM = () => {
         onOpenChange={setProductsDialogOpen}
         products={products}
         setProducts={setProducts}
+      />
+
+      <StagesDialog
+        open={stagesDialogOpen}
+        onOpenChange={setStagesDialogOpen}
+        stages={stages}
+        setStages={setStages}
+      />
+
+      <ActivitySidebar
+        prospectId={activityProspect?.id ?? ""}
+        prospectName={activityProspect?.projectName ?? ""}
+        open={!!activityProspect}
+        onClose={() => setActivityProspect(null)}
       />
     </div>
   );

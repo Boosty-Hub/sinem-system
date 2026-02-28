@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { usePermissions } from "@/hooks/usePermissions";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Link } from "react-router-dom";
 
 const emptyForm = {
@@ -23,6 +25,11 @@ const emptyForm = {
 
 const Clientes = () => {
   const { toast } = useToast();
+  const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
+  const canCreateCli = canCreateFn("Clientes");
+  const canEditCli = canEditFn("Clientes");
+  const canDeleteCli = canDeleteFn("Clientes");
+  const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [search, setSearch] = useState("");
   const [clients, setClients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -97,10 +104,13 @@ const Clientes = () => {
     setDialogOpen(false);
   };
 
-  const handleDelete = (client: Client) => {
-    if (!confirm(`¿Eliminar el cliente "${client.name}"? Esta acción no se puede deshacer.`)) return;
-    setClients((prev) => prev.filter((c) => c.id !== client.id));
+  const handleDelete = (client: Client) => setDeleteTarget(client);
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
     toast({ title: "Cliente eliminado" });
+    setDeleteTarget(null);
   };
 
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
@@ -124,9 +134,11 @@ const Clientes = () => {
               className="pl-9 w-[240px]"
             />
           </div>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
-          </Button>
+          {canCreateCli && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
+            </Button>
+          )}
         </div>
       </div>
 
@@ -155,22 +167,26 @@ const Clientes = () => {
                   }`}>
                     {client.status === "activo" ? "Activo" : "Inactivo"}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(client); }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(client); }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {canEditCli && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(client); }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {canDeleteCli && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(client); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -262,6 +278,14 @@ const Clientes = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar Cliente"
+        description={`¿Estás seguro de eliminar "${deleteTarget?.name}"? Esta acción no se puede deshacer.`}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 };
