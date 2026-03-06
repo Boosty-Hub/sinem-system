@@ -367,7 +367,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               <Select value={partner} onValueChange={(v) => setPartner(v as QuotationPartner)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {PARTNERS.map((p) => (
+                  {partners.map((p) => (
                     <SelectItem key={p} value={p}>{p}</SelectItem>
                   ))}
                 </SelectContent>

@@ -245,7 +245,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Select value={proveedor} onValueChange={setProveedor}>
               <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
-                {PARTNERS.map((p) => (
+                {partners.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
               </SelectContent>
