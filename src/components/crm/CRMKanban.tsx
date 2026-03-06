@@ -104,6 +104,16 @@ const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prosp
         )}
         <span className="ml-auto"><UserAvatar userId={prospect.createdBy} size="xs" /></span>
       </div>
+      {prospect.status === "ganado" && onMarkInvoiced && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-2 w-full h-7 text-xs gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+          onClick={(e) => { e.stopPropagation(); onMarkInvoiced(prospect.id); }}
+        >
+          <Receipt className="h-3 w-3" /> Marcar Facturada
+        </Button>
+      )}
     </>
   );
 };
