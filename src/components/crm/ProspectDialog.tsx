@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { PIPELINE_STAGES, QUOTATION_STATUSES, PARTNERS, type Prospect, type Product, type PipelineStage } from "@/lib/types";
+import { PIPELINE_STAGES, QUOTATION_STATUSES, DEFAULT_PARTNERS, type Prospect, type Product, type PipelineStage } from "@/lib/types";
 import { mockClients, mockContacts, mockQuotations } from "@/lib/mockData";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import type { Client, Contact, Quotation } from "@/lib/types";
@@ -39,6 +39,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const navigate = useNavigate();
   const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
   const [contacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
+  const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
   const [allQuotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations);
 
   // ── Controlled fields ──
@@ -244,7 +245,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Select value={proveedor} onValueChange={setProveedor}>
               <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
-                {PARTNERS.map((p) => (
+                {partners.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
               </SelectContent>

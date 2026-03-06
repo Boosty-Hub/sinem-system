@@ -114,9 +114,12 @@ export type QuotationStatus = "borrador" | "enviada" | "aprobada" | "rechazada" 
 
 export type QuotationCurrency = "USD" | "DOP" | "EUR";
 
-export type QuotationPartner = "Siemens" | "NEM Energy" | "Innomotics" | "Trench Group";
+export type QuotationPartner = string;
 
-export const PARTNERS: QuotationPartner[] = ["Siemens", "NEM Energy", "Innomotics", "Trench Group"];
+export const DEFAULT_PARTNERS: string[] = ["Siemens", "NEM Energy", "Innomotics", "Trench Group"];
+
+/** @deprecated Use dynamic partners from localStorage instead */
+export const PARTNERS = DEFAULT_PARTNERS;
 
 export const CURRENCIES: { key: QuotationCurrency; label: string; symbol: string }[] = [
   { key: "USD", label: "Dólar Americano", symbol: "$" },

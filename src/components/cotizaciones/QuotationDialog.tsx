@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, PARTNERS, type Quotation, type QuotationSnapshot, type QuotationLineItem, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
+import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, DEFAULT_PARTNERS, type Quotation, type QuotationSnapshot, type QuotationLineItem, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
 import { mockClients, mockContacts, mockProspects, mockAppUsers } from "@/lib/mockData";
 import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -56,6 +56,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
   const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
   const [contacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
+  const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [selectedProspectId, setSelectedProspectId] = useState<string>("none");
   const [clientData, setClientData] = useState<ClientData>(emptyClientData);
@@ -366,7 +367,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               <Select value={partner} onValueChange={(v) => setPartner(v as QuotationPartner)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {PARTNERS.map((p) => (
+                  {partners.map((p) => (
                     <SelectItem key={p} value={p}>{p}</SelectItem>
                   ))}
                 </SelectContent>
