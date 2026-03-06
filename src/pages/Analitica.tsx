@@ -442,14 +442,26 @@ const Analitica = () => {
             <DialogTitle>Editar Budget y Metas {currentYear}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Order Entry</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Budget Anual (Meta {currentYear})</Label>
+                <Label>Budget Order Entry {currentYear}</Label>
                 <Input type="number" value={editAnnual} onChange={(e) => setEditAnnual(Number(e.target.value))} />
               </div>
               <div>
                 <Label>Order Entry {previousYear} (Año Anterior)</Label>
                 <Input type="number" value={editPrevYear} onChange={(e) => setEditPrevYear(Number(e.target.value))} />
+              </div>
+            </div>
+            <h3 className="text-sm font-semibold text-muted-foreground pt-2">Revenue</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Budget Revenue {currentYear}</Label>
+                <Input type="number" value={editRevenueBudget} onChange={(e) => setEditRevenueBudget(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>Revenue {previousYear} (Año Anterior)</Label>
+                <Input type="number" value={editPrevYearRevenue} onChange={(e) => setEditPrevYearRevenue(Number(e.target.value))} />
               </div>
             </div>
           </div>
