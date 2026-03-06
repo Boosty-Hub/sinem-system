@@ -104,9 +104,9 @@ const Analitica = () => {
   const previousYear = currentYear - 1;
 
   // ── Order Entry data ──
-  const wonDeals = prospects.filter((p) => p.status === "ganado");
+  const wonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
   const wonTotal = wonDeals.reduce((s, p) => s + p.priceUSD, 0);
-  const openProspects = prospects.filter((p) => !["ganado", "perdido"].includes(p.status));
+  const openProspects = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
   const forecastWeighted = openProspects.reduce((s, p) => s + p.weighted, 0);
 
   const orderEntryData = [
@@ -148,6 +148,52 @@ const Analitica = () => {
   ];
 
   const maxBarValue = Math.max(...orderEntryData.map((d) => d.value));
+
+  // ── Revenue data ──
+  const invoicedDeals = prospects.filter((p) => p.status === "facturada");
+  const invoicedTotal = invoicedDeals.reduce((s, p) => s + p.priceUSD, 0);
+  const revenueForecastDeals = prospects.filter((p) => p.revenue && p.status !== "facturada" && p.status !== "perdido");
+  const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.priceUSD, 0);
+
+  const revenueData = [
+    {
+      name: `${previousYear}`,
+      label: `${previousYear}`,
+      value: forecast.previousYearRevenue,
+      fill: "#67e8f9",  // cyan-300
+      description: "Revenue facturado del año anterior.",
+      details: [],
+    },
+    {
+      name: "Current",
+      label: "Current",
+      value: invoicedTotal,
+      fill: "#06b6d4",  // cyan-500
+      description: "Total de oportunidades marcadas como facturadas en el año en curso.",
+      details: invoicedDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })),
+    },
+    {
+      name: "Forecast",
+      label: "Forecast",
+      value: revenueForecastTotal,
+      fill: "#0891b2",  // cyan-600
+      description: "Oportunidades con fecha de revenue que aún no han sido facturadas.",
+      details: revenueForecastDeals
+        .sort((a, b) => b.priceUSD - a.priceUSD)
+        .slice(0, 6)
+        .map((p) => ({ name: p.projectName, amount: p.priceUSD })),
+    },
+    {
+      name: `Budget ${currentYear}`,
+      label: `Budget ${currentYear}`,
+      value: forecast.revenueBudget,
+      fill: "#6d28d9",  // violet-700
+      description: "Meta de revenue estipulada para el año.",
+      details: [],
+    },
+  ];
+
+  const maxRevenueValue = Math.max(...revenueData.map((d) => d.value));
 
   // ── Pipeline KPIs ──
   const totalPipeline = prospects.reduce((s, p) => s + p.priceUSD, 0);
