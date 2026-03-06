@@ -27,16 +27,20 @@ interface Props {
   stages?: PipelineStage[];
 }
 
+interface CardProps {
+  prospect: Prospect;
+  onEdit: (p: Prospect) => void;
+  onActivity?: (p: Prospect) => void;
+  onMarkInvoiced?: (prospectId: string) => void;
+}
+
 /* ── Draggable Card ── */
 const DraggableCard = ({
   prospect,
   onEdit,
   onActivity,
-}: {
-  prospect: Prospect;
-  onEdit: (p: Prospect) => void;
-  onActivity?: (p: Prospect) => void;
-}) => {
+  onMarkInvoiced,
+}: CardProps) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: prospect.id,
     data: { prospect },
@@ -58,7 +62,7 @@ const DraggableCard = ({
       >
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
-      <CardContent prospect={prospect} onActivity={onActivity} />
+      <CardContent prospect={prospect} onActivity={onActivity} onMarkInvoiced={onMarkInvoiced} />
     </div>
   );
 };
