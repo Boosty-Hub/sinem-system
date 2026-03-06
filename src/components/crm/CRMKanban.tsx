@@ -68,7 +68,7 @@ const DraggableCard = ({
 };
 
 /* ── Card Content (shared between real card and overlay) ── */
-const CardContent = ({ prospect, onActivity }: { prospect: Prospect; onActivity?: (p: Prospect) => void }) => {
+const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prospect; onActivity?: (p: Prospect) => void; onMarkInvoiced?: (prospectId: string) => void }) => {
   const quotationCount = mockQuotations.filter((q) => q.prospectId === prospect.id).length;
   return (
     <>
