@@ -407,6 +407,8 @@ export const mockForecast: ForecastYear = {
   previousYearWon: 850000,
   revenueBudget: 1000000,
   previousYearRevenue: 780000,
+  marginBudget: 900000,
+  previousYearMargin: 703600,
   months: [
     { month: "Ene", target: 100000, actual: 115800, projected: 115800 },
     { month: "Feb", target: 100000, actual: 78500, projected: 78500 },
