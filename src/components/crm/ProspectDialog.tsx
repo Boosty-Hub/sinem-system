@@ -6,7 +6,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { PIPELINE_STAGES, QUOTATION_STATUSES, DEFAULT_PARTNERS, type Prospect, type Product, type PipelineStage } from "@/lib/types";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { mockClients, mockContacts, mockQuotations } from "@/lib/mockData";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import type { Client, Contact, Quotation } from "@/lib/types";
