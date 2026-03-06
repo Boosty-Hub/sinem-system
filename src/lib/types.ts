@@ -353,5 +353,7 @@ export interface ForecastYear {
   previousYearWon: number;
   revenueBudget: number;
   previousYearRevenue: number;
+  marginBudget: number;
+  previousYearMargin: number;
   months: ForecastMonth[];
 }

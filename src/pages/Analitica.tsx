@@ -92,6 +92,7 @@ const Analitica = () => {
   const [forecast, setForecast] = useLocalStorage<ForecastYear>("sinem:forecast", mockForecast, (cached) => {
     if (cached.previousYearWon === undefined) return { ...cached, previousYearWon: mockForecast.previousYearWon };
     if (cached.revenueBudget === undefined) return { ...cached, revenueBudget: mockForecast.revenueBudget, previousYearRevenue: mockForecast.previousYearRevenue };
+    if (cached.marginBudget === undefined) return { ...cached, marginBudget: mockForecast.marginBudget, previousYearMargin: mockForecast.previousYearMargin };
     return cached;
   });
   const [editOpen, setEditOpen] = useState(false);
@@ -99,6 +100,8 @@ const Analitica = () => {
   const [editPrevYear, setEditPrevYear] = useState(0);
   const [editRevenueBudget, setEditRevenueBudget] = useState(0);
   const [editPrevYearRevenue, setEditPrevYearRevenue] = useState(0);
+  const [editMarginBudget, setEditMarginBudget] = useState(0);
+  const [editPrevYearMargin, setEditPrevYearMargin] = useState(0);
 
   const currentYear = forecast.year;
   const previousYear = currentYear - 1;
