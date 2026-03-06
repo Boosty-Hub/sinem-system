@@ -20,7 +20,7 @@ interface Props {
   stages?: PipelineStage[];
 }
 
-const CRMTable = ({ prospects, onEdit, onActivity, stages: stagesProp }: Props) => {
+const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stagesProp }: Props) => {
   const stageList = stagesProp ?? PIPELINE_STAGES;
 
   const statusBadge = (status: string) => {
@@ -86,7 +86,12 @@ const CRMTable = ({ prospects, onEdit, onActivity, stages: stagesProp }: Props) 
                 <TableCell className="text-sm text-muted-foreground">{p.estimatedOE}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{p.revenue || "—"}</TableCell>
                 <TableCell>{statusBadge(p.status)}</TableCell>
-                <TableCell>
+                <TableCell className="flex items-center gap-1">
+                  {p.status === "ganado" && onStageChange && (
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50" onClick={(e) => { e.stopPropagation(); onStageChange(p.id, "facturada"); }}>
+                      <Receipt className="h-3 w-3" /> Facturar
+                    </Button>
+                  )}
                   {onActivity && (
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); onActivity(p); }}>
                       <MessageSquareText className="h-4 w-4 text-muted-foreground" />
