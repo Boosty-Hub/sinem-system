@@ -91,19 +91,22 @@ const Analitica = () => {
   const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
   const [forecast, setForecast] = useLocalStorage<ForecastYear>("sinem:forecast", mockForecast, (cached) => {
     if (cached.previousYearWon === undefined) return { ...cached, previousYearWon: mockForecast.previousYearWon };
+    if (cached.revenueBudget === undefined) return { ...cached, revenueBudget: mockForecast.revenueBudget, previousYearRevenue: mockForecast.previousYearRevenue };
     return cached;
   });
   const [editOpen, setEditOpen] = useState(false);
   const [editAnnual, setEditAnnual] = useState(0);
   const [editPrevYear, setEditPrevYear] = useState(0);
+  const [editRevenueBudget, setEditRevenueBudget] = useState(0);
+  const [editPrevYearRevenue, setEditPrevYearRevenue] = useState(0);
 
   const currentYear = forecast.year;
   const previousYear = currentYear - 1;
 
   // ── Order Entry data ──
-  const wonDeals = prospects.filter((p) => p.status === "ganado");
+  const wonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
   const wonTotal = wonDeals.reduce((s, p) => s + p.priceUSD, 0);
-  const openProspects = prospects.filter((p) => !["ganado", "perdido"].includes(p.status));
+  const openProspects = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
   const forecastWeighted = openProspects.reduce((s, p) => s + p.weighted, 0);
 
   const orderEntryData = [
@@ -145,6 +148,52 @@ const Analitica = () => {
   ];
 
   const maxBarValue = Math.max(...orderEntryData.map((d) => d.value));
+
+  // ── Revenue data ──
+  const invoicedDeals = prospects.filter((p) => p.status === "facturada");
+  const invoicedTotal = invoicedDeals.reduce((s, p) => s + p.priceUSD, 0);
+  const revenueForecastDeals = prospects.filter((p) => p.revenue && p.status !== "facturada" && p.status !== "perdido");
+  const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.priceUSD, 0);
+
+  const revenueData = [
+    {
+      name: `${previousYear}`,
+      label: `${previousYear}`,
+      value: forecast.previousYearRevenue,
+      fill: "#67e8f9",  // cyan-300
+      description: "Revenue facturado del año anterior.",
+      details: [],
+    },
+    {
+      name: "Current",
+      label: "Current",
+      value: invoicedTotal,
+      fill: "#06b6d4",  // cyan-500
+      description: "Total de oportunidades marcadas como facturadas en el año en curso.",
+      details: invoicedDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })),
+    },
+    {
+      name: "Forecast",
+      label: "Forecast",
+      value: revenueForecastTotal,
+      fill: "#0891b2",  // cyan-600
+      description: "Oportunidades con fecha de revenue que aún no han sido facturadas.",
+      details: revenueForecastDeals
+        .sort((a, b) => b.priceUSD - a.priceUSD)
+        .slice(0, 6)
+        .map((p) => ({ name: p.projectName, amount: p.priceUSD })),
+    },
+    {
+      name: `Budget ${currentYear}`,
+      label: `Budget ${currentYear}`,
+      value: forecast.revenueBudget,
+      fill: "#6d28d9",  // violet-700
+      description: "Meta de revenue estipulada para el año.",
+      details: [],
+    },
+  ];
+
+  const maxRevenueValue = Math.max(...revenueData.map((d) => d.value));
 
   // ── Pipeline KPIs ──
   const totalPipeline = prospects.reduce((s, p) => s + p.priceUSD, 0);
@@ -199,10 +248,12 @@ const Analitica = () => {
   const openEdit = () => {
     setEditAnnual(forecast.annualTarget);
     setEditPrevYear(forecast.previousYearWon);
+    setEditRevenueBudget(forecast.revenueBudget);
+    setEditPrevYearRevenue(forecast.previousYearRevenue);
     setEditOpen(true);
   };
   const handleSave = () => {
-    setForecast({ ...forecast, annualTarget: editAnnual, previousYearWon: editPrevYear });
+    setForecast({ ...forecast, annualTarget: editAnnual, previousYearWon: editPrevYear, revenueBudget: editRevenueBudget, previousYearRevenue: editPrevYearRevenue });
     setEditOpen(false);
     toast({ title: "Budget actualizado" });
   };
@@ -274,6 +325,50 @@ const Analitica = () => {
             <RechartsTooltip content={<OrderEntryTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
             <Bar dataKey="value" radius={[6, 6, 0, 0]} label={<BarTopLabel />}>
               {orderEntryData.map((entry, i) => (
+                <Cell key={i} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════
+          REVENUE CHART
+          ══════════════════════════════════════════════════════ */}
+      <div className="stat-card p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-lg font-bold">Revenue</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Info className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-[340px] p-3 space-y-2 text-xs leading-relaxed">
+              <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
+              <div><strong>{previousYear}:</strong> Revenue facturado del año anterior.</div>
+              <div><strong>Current:</strong> Oportunidades marcadas como facturadas en el año en curso.</div>
+              <div><strong>Forecast:</strong> Oportunidades con fecha de revenue que aún no han sido facturadas.</div>
+              <div><strong>Budget {currentYear}:</strong> Meta de revenue estipulada para el año.</div>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <p className="text-xs text-muted-foreground mb-5">Datos en USD$</p>
+
+        <ResponsiveContainer width="100%" height={360}>
+          <BarChart data={revenueData} barCategoryGap="25%">
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+              axisLine={false}
+              tickLine={false}
+              domain={[0, Math.ceil(maxRevenueValue * 1.15 / 100000) * 100000]}
+            />
+            <RechartsTooltip content={<OrderEntryTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
+            <Bar dataKey="value" radius={[6, 6, 0, 0]} label={<BarTopLabel />}>
+              {revenueData.map((entry, i) => (
                 <Cell key={i} fill={entry.fill} />
               ))}
             </Bar>
@@ -391,14 +486,26 @@ const Analitica = () => {
             <DialogTitle>Editar Budget y Metas {currentYear}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Order Entry</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Budget Anual (Meta {currentYear})</Label>
+                <Label>Budget Order Entry {currentYear}</Label>
                 <Input type="number" value={editAnnual} onChange={(e) => setEditAnnual(Number(e.target.value))} />
               </div>
               <div>
                 <Label>Order Entry {previousYear} (Año Anterior)</Label>
                 <Input type="number" value={editPrevYear} onChange={(e) => setEditPrevYear(Number(e.target.value))} />
+              </div>
+            </div>
+            <h3 className="text-sm font-semibold text-muted-foreground pt-2">Revenue</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Budget Revenue {currentYear}</Label>
+                <Input type="number" value={editRevenueBudget} onChange={(e) => setEditRevenueBudget(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>Revenue {previousYear} (Año Anterior)</Label>
+                <Input type="number" value={editPrevYearRevenue} onChange={(e) => setEditPrevYearRevenue(Number(e.target.value))} />
               </div>
             </div>
           </div>

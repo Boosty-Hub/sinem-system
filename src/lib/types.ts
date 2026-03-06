@@ -348,5 +348,7 @@ export interface ForecastYear {
   year: number;
   annualTarget: number;
   previousYearWon: number;
+  revenueBudget: number;
+  previousYearRevenue: number;
   months: ForecastMonth[];
 }
