@@ -7,6 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 
+const SUPABASE_URL = "https://fxsshhrxzjyjvfszaorq.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4c3NoaHJ4emp5anZmc3phb3JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyOTEwODQsImV4cCI6MjA4Njg2NzA4NH0.qJl7Dle-5iqFnNXir4mDPKR2c3-s8Og4e_6h6ZgquIE";
+
 interface AppUser {
   id: string;
   name: string;
@@ -69,13 +72,13 @@ const ConfigUsuarios = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+        `${SUPABASE_URL}/functions/v1/create-user`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session?.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            apikey: SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
             name: form.name,
