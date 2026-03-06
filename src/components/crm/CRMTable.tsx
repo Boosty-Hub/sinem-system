@@ -16,6 +16,7 @@ interface Props {
   prospects: Prospect[];
   onEdit: (p: Prospect) => void;
   onActivity?: (p: Prospect) => void;
+  onStageChange?: (prospectId: string, newStage: string) => void;
   stages?: PipelineStage[];
 }
 

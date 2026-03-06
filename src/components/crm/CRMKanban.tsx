@@ -240,7 +240,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
 
               <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null}>
                 {items.map((prospect) => (
-                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} />
+                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} onMarkInvoiced={onStageChange ? (id) => onStageChange(id, "facturada") : undefined} />
                 ))}
                 {items.length === 0 && !activeId && (
                   <p className="text-xs text-muted-foreground text-center py-6">Sin oportunidades</p>
