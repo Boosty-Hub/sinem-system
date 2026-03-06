@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { PIPELINE_STAGES, type Prospect, type PipelineStage } from "@/lib/types";
 import { mockQuotations } from "@/lib/mockData";
-import { DollarSign, FileText, GripVertical, MessageSquareText } from "lucide-react";
+import { DollarSign, FileText, GripVertical, MessageSquareText, Receipt } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/UserAvatar";
 import {
   DndContext,
@@ -26,16 +27,20 @@ interface Props {
   stages?: PipelineStage[];
 }
 
+interface CardProps {
+  prospect: Prospect;
+  onEdit: (p: Prospect) => void;
+  onActivity?: (p: Prospect) => void;
+  onMarkInvoiced?: (prospectId: string) => void;
+}
+
 /* ── Draggable Card ── */
 const DraggableCard = ({
   prospect,
   onEdit,
   onActivity,
-}: {
-  prospect: Prospect;
-  onEdit: (p: Prospect) => void;
-  onActivity?: (p: Prospect) => void;
-}) => {
+  onMarkInvoiced,
+}: CardProps) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: prospect.id,
     data: { prospect },
@@ -57,13 +62,13 @@ const DraggableCard = ({
       >
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
-      <CardContent prospect={prospect} onActivity={onActivity} />
+      <CardContent prospect={prospect} onActivity={onActivity} onMarkInvoiced={onMarkInvoiced} />
     </div>
   );
 };
 
 /* ── Card Content (shared between real card and overlay) ── */
-const CardContent = ({ prospect, onActivity }: { prospect: Prospect; onActivity?: (p: Prospect) => void }) => {
+const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prospect; onActivity?: (p: Prospect) => void; onMarkInvoiced?: (prospectId: string) => void }) => {
   const quotationCount = mockQuotations.filter((q) => q.prospectId === prospect.id).length;
   return (
     <>
@@ -99,6 +104,16 @@ const CardContent = ({ prospect, onActivity }: { prospect: Prospect; onActivity?
         )}
         <span className="ml-auto"><UserAvatar userId={prospect.createdBy} size="xs" /></span>
       </div>
+      {prospect.status === "ganado" && onMarkInvoiced && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-2 w-full h-7 text-xs gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+          onClick={(e) => { e.stopPropagation(); onMarkInvoiced(prospect.id); }}
+        >
+          <Receipt className="h-3 w-3" /> Marcar Facturada
+        </Button>
+      )}
     </>
   );
 };
@@ -225,7 +240,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
 
               <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null}>
                 {items.map((prospect) => (
-                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} />
+                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} onMarkInvoiced={onStageChange ? (id) => onStageChange(id, "facturada") : undefined} />
                 ))}
                 {items.length === 0 && !activeId && (
                   <p className="text-xs text-muted-foreground text-center py-6">Sin oportunidades</p>

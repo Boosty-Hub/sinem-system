@@ -17,33 +17,39 @@ export type Database = {
       app_users: {
         Row: {
           auth_user_id: string | null
+          avatar_url: string
           created_at: string
           email: string
           id: string
           last_login: string | null
           name: string
+          phone: string
           role_id: string | null
           status: string
           updated_at: string
         }
         Insert: {
           auth_user_id?: string | null
+          avatar_url?: string
           created_at?: string
           email: string
           id?: string
           last_login?: string | null
           name: string
+          phone?: string
           role_id?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           auth_user_id?: string | null
+          avatar_url?: string
           created_at?: string
           email?: string
           id?: string
           last_login?: string | null
           name?: string
+          phone?: string
           role_id?: string | null
           status?: string
           updated_at?: string
@@ -246,6 +252,95 @@ export type Database = {
           },
         ]
       }
+      forecast_months: {
+        Row: {
+          actual: number
+          created_at: string
+          forecast_year_id: string
+          id: string
+          month: string
+          projected: number
+          target: number
+        }
+        Insert: {
+          actual?: number
+          created_at?: string
+          forecast_year_id: string
+          id?: string
+          month: string
+          projected?: number
+          target?: number
+        }
+        Update: {
+          actual?: number
+          created_at?: string
+          forecast_year_id?: string
+          id?: string
+          month?: string
+          projected?: number
+          target?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forecast_months_forecast_year_id_fkey"
+            columns: ["forecast_year_id"]
+            isOneToOne: false
+            referencedRelation: "forecast_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forecast_years: {
+        Row: {
+          annual_target: number
+          created_at: string
+          id: string
+          previous_year_won: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          annual_target?: number
+          created_at?: string
+          id?: string
+          previous_year_won?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          annual_target?: number
+          created_at?: string
+          id?: string
+          previous_year_won?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      general_settings: {
+        Row: {
+          description: string | null
+          id: number
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          description?: string | null
+          id?: never
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          description?: string | null
+          id?: never
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       permissions: {
         Row: {
           can_create: boolean
@@ -286,6 +381,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pipeline_stages: {
+        Row: {
+          color: string
+          created_at: string
+          id: number
+          key: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: never
+          key: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: never
+          key?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       projects: {
         Row: {
@@ -449,6 +595,7 @@ export type Database = {
           cost_usd: number
           cotorta: number
           created_at: string
+          created_by: string | null
           direct_customer: string
           end_customer: string
           estimated_oe: string
@@ -462,7 +609,7 @@ export type Database = {
           product: string
           project_name: string
           proveedor: string
-          revenue: number
+          revenue: string
           scope: string
           status: string
           updated_at: string
@@ -476,6 +623,7 @@ export type Database = {
           cost_usd?: number
           cotorta?: number
           created_at?: string
+          created_by?: string | null
           direct_customer?: string
           end_customer?: string
           estimated_oe?: string
@@ -489,7 +637,7 @@ export type Database = {
           product?: string
           project_name: string
           proveedor?: string
-          revenue?: number
+          revenue?: string
           scope?: string
           status?: string
           updated_at?: string
@@ -503,6 +651,7 @@ export type Database = {
           cost_usd?: number
           cotorta?: number
           created_at?: string
+          created_by?: string | null
           direct_customer?: string
           end_customer?: string
           estimated_oe?: string
@@ -516,7 +665,7 @@ export type Database = {
           product?: string
           project_name?: string
           proveedor?: string
-          revenue?: number
+          revenue?: string
           scope?: string
           status?: string
           updated_at?: string
@@ -535,6 +684,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
         ]
@@ -580,9 +736,100 @@ export type Database = {
           },
         ]
       }
+      quotation_snapshots: {
+        Row: {
+          code: string
+          cost_usd: number
+          delivery_location: string
+          delivery_terms: string
+          delivery_weeks_max: number
+          delivery_weeks_min: number
+          id: string
+          line_items: Json
+          margin_percent: number
+          margin_usd: number
+          modified_by: string | null
+          notes: string
+          payment_terms: string
+          quotation_id: string
+          saved_at: string
+          status: string
+          subject: string
+          subtotal_usd: number
+          total_usd: number
+          validity_days: number
+          version: number
+        }
+        Insert: {
+          code?: string
+          cost_usd?: number
+          delivery_location?: string
+          delivery_terms?: string
+          delivery_weeks_max?: number
+          delivery_weeks_min?: number
+          id?: string
+          line_items?: Json
+          margin_percent?: number
+          margin_usd?: number
+          modified_by?: string | null
+          notes?: string
+          payment_terms?: string
+          quotation_id: string
+          saved_at?: string
+          status?: string
+          subject?: string
+          subtotal_usd?: number
+          total_usd?: number
+          validity_days?: number
+          version: number
+        }
+        Update: {
+          code?: string
+          cost_usd?: number
+          delivery_location?: string
+          delivery_terms?: string
+          delivery_weeks_max?: number
+          delivery_weeks_min?: number
+          id?: string
+          line_items?: Json
+          margin_percent?: number
+          margin_usd?: number
+          modified_by?: string | null
+          notes?: string
+          payment_terms?: string
+          quotation_id?: string
+          saved_at?: string
+          status?: string
+          subject?: string
+          subtotal_usd?: number
+          total_usd?: number
+          validity_days?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotation_snapshots_modified_by_fkey"
+            columns: ["modified_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_snapshots_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "quotations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotations: {
         Row: {
           apply_itbis: boolean
+          approval_note: string | null
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
           client_address: string
           client_attention: string
           client_company: string
@@ -594,8 +841,13 @@ export type Database = {
           contact_id: string | null
           cost_usd: number
           created_at: string
+          created_by: string | null
+          currency: string
           delivery_location: string
-          delivery_time: string
+          delivery_terms: string
+          delivery_weeks_max: number
+          delivery_weeks_min: number
+          exchange_rate: number
           id: string
           itbis_percent: number
           itbis_usd: number
@@ -610,9 +862,14 @@ export type Database = {
           total_usd: number
           updated_at: string
           validity_days: number
+          version: number
         }
         Insert: {
           apply_itbis?: boolean
+          approval_note?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           client_address?: string
           client_attention?: string
           client_company?: string
@@ -624,8 +881,13 @@ export type Database = {
           contact_id?: string | null
           cost_usd?: number
           created_at?: string
+          created_by?: string | null
+          currency?: string
           delivery_location?: string
-          delivery_time?: string
+          delivery_terms?: string
+          delivery_weeks_max?: number
+          delivery_weeks_min?: number
+          exchange_rate?: number
           id?: string
           itbis_percent?: number
           itbis_usd?: number
@@ -640,9 +902,14 @@ export type Database = {
           total_usd?: number
           updated_at?: string
           validity_days?: number
+          version?: number
         }
         Update: {
           apply_itbis?: boolean
+          approval_note?: string | null
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
           client_address?: string
           client_attention?: string
           client_company?: string
@@ -654,8 +921,13 @@ export type Database = {
           contact_id?: string | null
           cost_usd?: number
           created_at?: string
+          created_by?: string | null
+          currency?: string
           delivery_location?: string
-          delivery_time?: string
+          delivery_terms?: string
+          delivery_weeks_max?: number
+          delivery_weeks_min?: number
+          exchange_rate?: number
           id?: string
           itbis_percent?: number
           itbis_usd?: number
@@ -670,6 +942,7 @@ export type Database = {
           total_usd?: number
           updated_at?: string
           validity_days?: number
+          version?: number
         }
         Relationships: [
           {
@@ -684,6 +957,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
           {
@@ -718,6 +998,95 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      task_comments: {
+        Row: {
+          author: string
+          created_at: string
+          id: string
+          task_id: string
+          text: string
+        }
+        Insert: {
+          author?: string
+          created_at?: string
+          id?: string
+          task_id: string
+          text?: string
+        }
+        Update: {
+          author?: string
+          created_at?: string
+          id?: string
+          task_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assignee: string
+          client_id: string | null
+          created_at: string
+          description: string
+          due_date: string | null
+          id: string
+          priority: string
+          project_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee?: string
+          client_id?: string | null
+          created_at?: string
+          description?: string
+          due_date?: string | null
+          id?: string
+          priority?: string
+          project_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee?: string
+          client_id?: string | null
+          created_at?: string
+          description?: string
+          due_date?: string | null
+          id?: string
+          priority?: string
+          project_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

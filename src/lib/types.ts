@@ -74,6 +74,7 @@ export const DEFAULT_PIPELINE_STAGES: PipelineStage[] = [
   { key: "negociacion", label: "Negociación", color: "bg-sinem-warning" },
   { key: "on_hold", label: "On Hold", color: "bg-sinem-orange" },
   { key: "ganado", label: "Ganado", color: "bg-sinem-success" },
+  { key: "facturada", label: "Facturada", color: "bg-emerald-700" },
   { key: "perdido", label: "Perdido", color: "bg-destructive" },
 ];
 
