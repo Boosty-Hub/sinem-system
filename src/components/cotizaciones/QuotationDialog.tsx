@@ -56,6 +56,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
   const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
   const [contacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
+  const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [selectedProspectId, setSelectedProspectId] = useState<string>("none");
   const [clientData, setClientData] = useState<ClientData>(emptyClientData);

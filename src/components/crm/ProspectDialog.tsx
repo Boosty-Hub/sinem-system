@@ -39,6 +39,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const navigate = useNavigate();
   const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
   const [contacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
+  const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
   const [allQuotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations);
 
   // ── Controlled fields ──
