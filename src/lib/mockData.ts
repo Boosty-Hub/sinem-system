@@ -405,6 +405,8 @@ export const mockForecast: ForecastYear = {
   year: 2026,
   annualTarget: 1200000,
   previousYearWon: 850000,
+  revenueBudget: 1000000,
+  previousYearRevenue: 780000,
   months: [
     { month: "Ene", target: 100000, actual: 115800, projected: 115800 },
     { month: "Feb", target: 100000, actual: 78500, projected: 78500 },
