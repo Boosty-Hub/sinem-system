@@ -91,11 +91,14 @@ const Analitica = () => {
   const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
   const [forecast, setForecast] = useLocalStorage<ForecastYear>("sinem:forecast", mockForecast, (cached) => {
     if (cached.previousYearWon === undefined) return { ...cached, previousYearWon: mockForecast.previousYearWon };
+    if (cached.revenueBudget === undefined) return { ...cached, revenueBudget: mockForecast.revenueBudget, previousYearRevenue: mockForecast.previousYearRevenue };
     return cached;
   });
   const [editOpen, setEditOpen] = useState(false);
   const [editAnnual, setEditAnnual] = useState(0);
   const [editPrevYear, setEditPrevYear] = useState(0);
+  const [editRevenueBudget, setEditRevenueBudget] = useState(0);
+  const [editPrevYearRevenue, setEditPrevYearRevenue] = useState(0);
 
   const currentYear = forecast.year;
   const previousYear = currentYear - 1;
