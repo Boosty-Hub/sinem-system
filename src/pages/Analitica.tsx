@@ -427,6 +427,50 @@ const Analitica = () => {
         </ResponsiveContainer>
       </div>
 
+      {/* ══════════════════════════════════════════════════════
+          OPERATIVE MARGIN CHART
+          ══════════════════════════════════════════════════════ */}
+      <div className="stat-card p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-lg font-bold">Operative Margin</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Info className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-[340px] p-3 space-y-2 text-xs leading-relaxed">
+              <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
+              <div><strong>{previousYear}:</strong> Margen USD total de oportunidades ganadas del año anterior.</div>
+              <div><strong>Current:</strong> Margen USD de oportunidades ganadas/facturadas en el año en curso.</div>
+              <div><strong>Forecast:</strong> Margen USD de oportunidades abiertas (aún no ganadas).</div>
+              <div><strong>Budget {currentYear}:</strong> Meta de margen operativo para el año.</div>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <p className="text-xs text-muted-foreground mb-5">Datos en USD$</p>
+
+        <ResponsiveContainer width="100%" height={360}>
+          <BarChart data={marginData} barCategoryGap="25%">
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+              axisLine={false}
+              tickLine={false}
+              domain={[0, Math.ceil(maxMarginValue * 1.15 / 100000) * 100000]}
+            />
+            <RechartsTooltip content={<OrderEntryTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
+            <Bar dataKey="value" radius={[6, 6, 0, 0]} label={<BarTopLabel />}>
+              {marginData.map((entry, i) => (
+                <Cell key={i} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard icon={DollarSign} label="Pipeline Total" value={fmt(totalPipeline)} sub={`${prospects.length} oportunidades`} color="bg-primary" />
@@ -557,6 +601,17 @@ const Analitica = () => {
               <div>
                 <Label>Revenue {previousYear} (Año Anterior)</Label>
                 <Input type="number" value={editPrevYearRevenue} onChange={(e) => setEditPrevYearRevenue(Number(e.target.value))} />
+              </div>
+            </div>
+            <h3 className="text-sm font-semibold text-muted-foreground pt-2">Operative Margin</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Budget Margen {currentYear}</Label>
+                <Input type="number" value={editMarginBudget} onChange={(e) => setEditMarginBudget(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>Margen {previousYear} (Año Anterior)</Label>
+                <Input type="number" value={editPrevYearMargin} onChange={(e) => setEditPrevYearMargin(Number(e.target.value))} />
               </div>
             </div>
           </div>
