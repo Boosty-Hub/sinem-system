@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PIPELINE_STAGES } from "@/lib/types";
-import { MessageSquareText } from "lucide-react";
+import { MessageSquareText, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/UserAvatar";
 

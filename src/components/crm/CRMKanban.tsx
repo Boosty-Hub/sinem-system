@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { PIPELINE_STAGES, type Prospect, type PipelineStage } from "@/lib/types";
 import { mockQuotations } from "@/lib/mockData";
-import { DollarSign, FileText, GripVertical, MessageSquareText } from "lucide-react";
+import { DollarSign, FileText, GripVertical, MessageSquareText, Receipt } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/UserAvatar";
 import {
   DndContext,
