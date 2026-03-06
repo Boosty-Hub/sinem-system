@@ -248,10 +248,12 @@ const Analitica = () => {
   const openEdit = () => {
     setEditAnnual(forecast.annualTarget);
     setEditPrevYear(forecast.previousYearWon);
+    setEditRevenueBudget(forecast.revenueBudget);
+    setEditPrevYearRevenue(forecast.previousYearRevenue);
     setEditOpen(true);
   };
   const handleSave = () => {
-    setForecast({ ...forecast, annualTarget: editAnnual, previousYearWon: editPrevYear });
+    setForecast({ ...forecast, annualTarget: editAnnual, previousYearWon: editPrevYear, revenueBudget: editRevenueBudget, previousYearRevenue: editPrevYearRevenue });
     setEditOpen(false);
     toast({ title: "Budget actualizado" });
   };
