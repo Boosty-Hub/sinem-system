@@ -198,6 +198,52 @@ const Analitica = () => {
 
   const maxRevenueValue = Math.max(...revenueData.map((d) => d.value));
 
+  // ── Operative Margin data ──
+  const marginWonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
+  const marginWonTotal = marginWonDeals.reduce((s, p) => s + p.marginUSD, 0);
+  const marginOpenDeals = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
+  const marginForecastTotal = marginOpenDeals.reduce((s, p) => s + p.marginUSD, 0);
+
+  const marginData = [
+    {
+      name: `${previousYear}`,
+      label: `${previousYear}`,
+      value: forecast.previousYearMargin,
+      fill: "#67e8f9",
+      description: "Margen operativo total de oportunidades ganadas del año anterior.",
+      details: [],
+    },
+    {
+      name: "Current",
+      label: "Current",
+      value: marginWonTotal,
+      fill: "#06b6d4",
+      description: "Suma del margen USD de todas las oportunidades ganadas/facturadas en el año en curso.",
+      details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })),
+    },
+    {
+      name: "Forecast",
+      label: "Forecast",
+      value: marginForecastTotal,
+      fill: "#0891b2",
+      description: "Suma del margen USD de oportunidades abiertas (no ganadas ni perdidas).",
+      details: marginOpenDeals
+        .sort((a, b) => b.marginUSD - a.marginUSD)
+        .slice(0, 6)
+        .map((p) => ({ name: p.projectName, amount: p.marginUSD })),
+    },
+    {
+      name: `Budget ${currentYear}`,
+      label: `Budget ${currentYear}`,
+      value: forecast.marginBudget,
+      fill: "#6d28d9",
+      description: "Meta de margen operativo estipulada para el año.",
+      details: [],
+    },
+  ];
+
+  const maxMarginValue = Math.max(...marginData.map((d) => d.value));
+
   // ── Pipeline KPIs ──
   const totalPipeline = prospects.reduce((s, p) => s + p.priceUSD, 0);
   const totalWeighted = prospects.reduce((s, p) => s + p.weighted, 0);
