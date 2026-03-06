@@ -299,10 +299,12 @@ const Analitica = () => {
     setEditPrevYear(forecast.previousYearWon);
     setEditRevenueBudget(forecast.revenueBudget);
     setEditPrevYearRevenue(forecast.previousYearRevenue);
+    setEditMarginBudget(forecast.marginBudget);
+    setEditPrevYearMargin(forecast.previousYearMargin);
     setEditOpen(true);
   };
   const handleSave = () => {
-    setForecast({ ...forecast, annualTarget: editAnnual, previousYearWon: editPrevYear, revenueBudget: editRevenueBudget, previousYearRevenue: editPrevYearRevenue });
+    setForecast({ ...forecast, annualTarget: editAnnual, previousYearWon: editPrevYear, revenueBudget: editRevenueBudget, previousYearRevenue: editPrevYearRevenue, marginBudget: editMarginBudget, previousYearMargin: editPrevYearMargin });
     setEditOpen(false);
     toast({ title: "Budget actualizado" });
   };
