@@ -69,7 +69,7 @@ const Cotizaciones = () => {
       },
       lineItems: (itemsByQuotation.get(q.id) ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
       subtotalUSD: Number(q.subtotal_usd),
-      applyITBIS: q.apply_itbis,
+      applyItbis: q.apply_itbis,
       itbisPercent: Number(q.itbis_percent),
       itbisUSD: Number(q.itbis_usd),
       totalUSD: Number(q.total_usd),
