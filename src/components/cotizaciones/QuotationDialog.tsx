@@ -89,6 +89,47 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [selectedClientId, setSelectedClientId] = useState("none");
   const [selectedContactId, setSelectedContactId] = useState("none");
 
+  // Fetch prospects, clients, contacts from Supabase
+  useEffect(() => {
+    if (!open) return;
+    const fetchData = async () => {
+      const [{ data: dbP }, { data: dbCl }, { data: dbCt }] = await Promise.all([
+        supabase.from("prospects").select("*").order("project_name"),
+        supabase.from("clients").select("*").order("name"),
+        supabase.from("contacts").select("*").order("first_name"),
+      ]);
+      if (dbP) setProspects(dbP.map(dbToProspect));
+      if (dbCl) setClients(dbCl.map(dbToClient));
+      if (dbCt) setContacts(dbCt.map(dbToContact));
+    };
+    fetchData();
+  }, [open]);
+
+  /** Generate code: SINEM-{BU}-{Client}-{consecutive}-V{version} */
+  const generateCode = async (bu: string, clientName: string, version: number) => {
+    const buPart = bu || "XX";
+    const clientPart = clientName
+      ? clientName.replace(/\s+/g, "").substring(0, 15)
+      : "SinCliente";
+    const prefix = `SINEM-${buPart}-${clientPart}-`;
+
+    // Get consecutive from existing quotations in DB
+    const { data: existing } = await supabase
+      .from("quotations")
+      .select("code")
+      .ilike("code", `${prefix}%`);
+
+    const nums = (existing ?? [])
+      .map((q) => {
+        const match = q.code.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`));
+        return match ? parseInt(match[1], 10) : NaN;
+      })
+      .filter((n) => !isNaN(n));
+
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return `${prefix}${next}-V${version}`;
+  };
+
   useEffect(() => {
     if (open) {
       setLineItems(quotation?.lineItems ?? []);
@@ -98,24 +139,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       setClientData(quotation?.client ?? emptyClientData);
       setHistoryOpen(false);
       setExpandedVersion(null);
+      setCodeManuallyEdited(false);
       if (quotation) {
         setCode(quotation.code);
       } else {
-        // Auto-generate next code: COT-YYYY-NNN
-        const year = new Date().getFullYear();
-        const prefix = `COT-${year}-`;
-        try {
-          const stored = JSON.parse(localStorage.getItem("sinem:quotations") || "[]") as { code?: string }[];
-          const nums = stored
-            .map((q) => q.code ?? "")
-            .filter((c) => c.startsWith(prefix))
-            .map((c) => parseInt(c.replace(prefix, ""), 10))
-            .filter((n) => !isNaN(n));
-          const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-          setCode(`${prefix}${String(next).padStart(3, "0")}`);
-        } catch {
-          setCode(`${prefix}001`);
-        }
+        setCode(""); // Will be generated after prospect/client selection
       }
       setStatus(quotation?.status ?? "borrador");
       setCreatedAt(quotation?.createdAt ?? "");
@@ -141,7 +169,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         fillFromProspect(prefill.prospectId);
       }
     }
-  }, [open, quotation, prefill, prospects]);
+  }, [open, quotation, prefill]);
 
   const fillFromProspect = (prospectId: string) => {
     const prospect = prospects.find((p) => p.id === prospectId);
