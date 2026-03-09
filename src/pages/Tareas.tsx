@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { mockTasks, mockClients, mockProjects } from "@/lib/mockData";
-import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment, type Client, type Project } from "@/lib/types";
+import { supabase } from "@/integrations/supabase/client";
+import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
 import {
   Search, Plus, ListTodo, LayoutGrid, Calendar, AlertCircle, Clock, CheckCircle2,
-  MessageSquare, Trash2, ChevronDown, Send, User2, Building2, FolderKanban,
+  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -32,13 +31,16 @@ const emptyForm = {
 };
 
 interface SystemUser { id: string; name: string; email: string; status: string; }
+interface ClientRow { id: string; name: string; }
+interface ProjectRow { id: string; name: string; }
 
 const Tareas = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [tasks, setTasks] = useLocalStorage<Task[]>("sinem:tasks", mockTasks);
-  const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
-  const [projects] = useLocalStorage<Project[]>("sinem:projects", mockProjects);
+  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [clients, setClients] = useState<ClientRow[]>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [search, setSearch] = useState("");
   const [view, setView] = useLocalStorage<"board" | "list">("sinem:tasks:view", "board");
@@ -47,20 +49,45 @@ const Tareas = () => {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const { data } = await supabase
-        .from("app_users")
-        .select("id, name, email, status")
-        .eq("status", "activo")
-        .order("name");
-      if (data) setSystemUsers(data);
-    };
-    fetchUsers();
-  }, []);
+  const fetchData = async () => {
+    setLoading(true);
+    const [{ data: tasksData }, { data: commentsData }, { data: clientsData }, { data: projectsData }, { data: usersData }] = await Promise.all([
+      supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+      supabase.from("task_comments").select("*").order("created_at"),
+      supabase.from("clients").select("id, name").order("name"),
+      supabase.from("projects").select("id, name").order("name"),
+      supabase.from("app_users").select("id, name, email, status").eq("status", "activo").order("name"),
+    ]);
 
-  const currentUserName = systemUsers.find((u) => u.id === (user as any)?.id)?.name
-    ?? systemUsers[0]?.name ?? "Usuario";
+    const commentsByTask = new Map<string, TaskComment[]>();
+    (commentsData ?? []).forEach((c) => {
+      const list = commentsByTask.get(c.task_id) ?? [];
+      list.push({ id: c.id, author: c.author, text: c.text, createdAt: c.created_at });
+      commentsByTask.set(c.task_id, list);
+    });
+
+    setTasks((tasksData ?? []).map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status as TaskStatus,
+      priority: t.priority as Task["priority"],
+      assignee: t.assignee,
+      clientId: t.client_id ?? undefined,
+      projectId: t.project_id ?? undefined,
+      dueDate: t.due_date ?? "",
+      createdAt: t.created_at,
+      comments: commentsByTask.get(t.id) ?? [],
+    })));
+    setClients(clientsData ?? []);
+    setProjects(projectsData ?? []);
+    setSystemUsers(usersData ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const currentUserName = systemUsers.find((u) => u.id === (user as any)?.id)?.name ?? systemUsers[0]?.name ?? "Usuario";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -69,8 +96,7 @@ const Tareas = () => {
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   const filtered = tasks.filter((t) => {
-    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase()) ||
-      t.description.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.description.toLowerCase().includes(search.toLowerCase());
     const matchAssignee = filterAssignee === "all" || t.assignee === filterAssignee;
     const matchClient = filterClient === "all" || t.clientId === filterClient;
     const matchPriority = filterPriority === "all" || t.priority === filterPriority;
@@ -79,74 +105,70 @@ const Tareas = () => {
 
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
-  const openCreate = () => {
-    setEditId(null);
-    setForm(emptyForm);
-    setDialogOpen(true);
-  };
+  const openCreate = () => { setEditId(null); setForm(emptyForm); setDialogOpen(true); };
 
   const openEdit = (task: Task) => {
     setEditId(task.id);
-    setForm({
-      title: task.title, description: task.description, priority: task.priority,
-      assignee: task.assignee, clientId: task.clientId || "", projectId: task.projectId || "",
-      dueDate: task.dueDate,
-    });
+    setForm({ title: task.title, description: task.description, priority: task.priority, assignee: task.assignee, clientId: task.clientId || "", projectId: task.projectId || "", dueDate: task.dueDate });
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title.trim()) return;
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      priority: form.priority,
+      assignee: form.assignee,
+      client_id: form.clientId || null,
+      project_id: form.projectId || null,
+      due_date: form.dueDate || null,
+    };
     if (editId) {
-      setTasks((prev) => prev.map((t) => t.id === editId ? {
-        ...t, title: form.title.trim(), description: form.description.trim(), priority: form.priority,
-        assignee: form.assignee, clientId: form.clientId || undefined, projectId: form.projectId || undefined,
-        dueDate: form.dueDate,
-      } : t));
+      await supabase.from("tasks").update(payload).eq("id", editId);
       toast({ title: "Tarea actualizada" });
     } else {
-      const newTask: Task = {
-        id: crypto.randomUUID(), title: form.title.trim(), description: form.description.trim(),
-        status: "pendiente", priority: form.priority, assignee: form.assignee,
-        clientId: form.clientId || undefined, projectId: form.projectId || undefined,
-        dueDate: form.dueDate, createdAt: new Date().toISOString().split("T")[0], comments: [],
-      };
-      setTasks((prev) => [newTask, ...prev]);
+      await supabase.from("tasks").insert(payload);
       toast({ title: "Tarea creada" });
     }
     setDialogOpen(false);
+    fetchData();
   };
 
   const handleDelete = (task: Task) => setDeleteTarget(task);
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteTarget) return;
-    setTasks((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+    await supabase.from("task_comments").delete().eq("task_id", deleteTarget.id);
+    await supabase.from("tasks").delete().eq("id", deleteTarget.id);
     if (detailTask?.id === deleteTarget.id) setDetailTask(null);
     toast({ title: "Tarea eliminada" });
     setDeleteTarget(null);
+    fetchData();
   };
 
-  const handleStatusChange = (taskId: string, status: TaskStatus) => {
+  const handleStatusChange = async (taskId: string, status: TaskStatus) => {
+    await supabase.from("tasks").update({ status }).eq("id", taskId);
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status } : t));
     if (detailTask?.id === taskId) setDetailTask((d) => d ? { ...d, status } : null);
   };
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!newComment.trim() || !detailTask) return;
-    const comment: TaskComment = {
-      id: crypto.randomUUID(), author: currentUserName,
-      text: newComment.trim(), createdAt: new Date().toISOString(),
-    };
-    setTasks((prev) => prev.map((t) => t.id === detailTask.id ? { ...t, comments: [...t.comments, comment] } : t));
-    setDetailTask((d) => d ? { ...d, comments: [...d.comments, comment] } : null);
+    const { data } = await supabase.from("task_comments").insert({
+      task_id: detailTask.id, author: currentUserName, text: newComment.trim(),
+    }).select().single();
+    if (data) {
+      const comment: TaskComment = { id: data.id, author: data.author, text: data.text, createdAt: data.created_at };
+      setTasks((prev) => prev.map((t) => t.id === detailTask.id ? { ...t, comments: [...t.comments, comment] } : t));
+      setDetailTask((d) => d ? { ...d, comments: [...d.comments, comment] } : null);
+    }
     setNewComment("");
     toast({ title: "Comentario agregado" });
   };
 
   const getClientName = (clientId?: string) => clientId ? clients.find((c) => c.id === clientId)?.name : undefined;
   const getProjectName = (projectId?: string) => projectId ? projects.find((p) => p.id === projectId)?.name : undefined;
-
   const isOverdue = (task: Task) => task.status !== "completada" && task.dueDate && new Date(task.dueDate) < new Date();
 
   const pendingCount = tasks.filter((t) => t.status === "pendiente").length;
@@ -157,32 +179,23 @@ const Tareas = () => {
     const PriorityIcon = priorityIcon[task.priority];
     const clientName = getClientName(task.clientId);
     const overdue = isOverdue(task);
-
     return (
-      <div
-        className="stat-card p-3 group cursor-pointer hover:shadow-md transition-shadow"
-        onClick={() => setDetailTask(task)}
-      >
+      <div className="stat-card p-3 group cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailTask(task)}>
         <div className="flex items-start justify-between gap-2 mb-2">
           <h4 className="text-sm font-medium leading-tight flex-1">{task.title}</h4>
           <div className="flex items-center gap-1 flex-shrink-0">
             <PriorityIcon className={`h-3.5 w-3.5 ${priorityColor[task.priority]}`} />
-            <Button
-              variant="ghost" size="sm"
-              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
-            >
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); handleDelete(task); }}>
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         </div>
-
         {clientName && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
             <Building2 className="h-3 w-3" /> {clientName}
           </div>
         )}
-
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1.5">
             <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
@@ -207,9 +220,16 @@ const Tareas = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Tareas</h1>
@@ -254,7 +274,6 @@ const Tareas = () => {
         </div>
       </div>
 
-      {/* Board View */}
       {view === "board" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {TASK_STATUSES.map((col) => {
@@ -280,7 +299,6 @@ const Tareas = () => {
         </div>
       )}
 
-      {/* List View */}
       {view === "list" && (
         <div className="stat-card overflow-x-auto">
           <table className="w-full text-sm">
@@ -308,12 +326,8 @@ const Tareas = () => {
                       {task.description && <p className="text-xs text-muted-foreground truncate max-w-[300px]">{task.description}</p>}
                     </td>
                     <td className="py-3 px-4">
-                      <select
-                        value={task.status}
-                        onChange={(e) => { e.stopPropagation(); handleStatusChange(task.id, e.target.value as TaskStatus); }}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`text-[11px] px-2 py-1 rounded-full text-primary-foreground border-0 cursor-pointer ${statusColor[task.status]}`}
-                      >
+                      <select value={task.status} onChange={(e) => { e.stopPropagation(); handleStatusChange(task.id, e.target.value as TaskStatus); }} onClick={(e) => e.stopPropagation()}
+                        className={`text-[11px] px-2 py-1 rounded-full text-primary-foreground border-0 cursor-pointer ${statusColor[task.status]}`}>
                         {TASK_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                       </select>
                     </td>
@@ -424,11 +438,8 @@ const Tareas = () => {
                   <div className="flex items-start justify-between gap-3">
                     <DialogTitle className="text-lg leading-tight">{freshTask.title}</DialogTitle>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button variant="outline" size="sm" onClick={() => { openEdit(freshTask); setDetailTask(null); }}>
-                        Editar
-                      </Button>
-                      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(freshTask)}>
+                      <Button variant="outline" size="sm" onClick={() => { openEdit(freshTask); setDetailTask(null); }}>Editar</Button>
+                      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(freshTask)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -436,18 +447,12 @@ const Tareas = () => {
                 </DialogHeader>
 
                 <div className="space-y-4 mt-2">
-                  {freshTask.description && (
-                    <p className="text-sm text-muted-foreground">{freshTask.description}</p>
-                  )}
-
+                  {freshTask.description && <p className="text-sm text-muted-foreground">{freshTask.description}</p>}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Estado</p>
-                      <select
-                        value={freshTask.status}
-                        onChange={(e) => handleStatusChange(freshTask.id, e.target.value as TaskStatus)}
-                        className={`text-xs px-2.5 py-1.5 rounded-full text-primary-foreground border-0 cursor-pointer ${statusColor[freshTask.status]}`}
-                      >
+                      <select value={freshTask.status} onChange={(e) => handleStatusChange(freshTask.id, e.target.value as TaskStatus)}
+                        className={`text-xs px-2.5 py-1.5 rounded-full text-primary-foreground border-0 cursor-pointer ${statusColor[freshTask.status]}`}>
                         {TASK_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                       </select>
                     </div>
@@ -459,9 +464,7 @@ const Tareas = () => {
                     </div>
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Responsable</p>
-                      <span className="flex items-center gap-1 text-xs">
-                        <User2 className="h-3 w-3" /> {freshTask.assignee}
-                      </span>
+                      <span className="flex items-center gap-1 text-xs"><User2 className="h-3 w-3" /> {freshTask.assignee}</span>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Vencimiento</p>
@@ -474,33 +477,21 @@ const Tareas = () => {
 
                   {(clientName || projectName) && (
                     <div className="flex gap-4 text-xs">
-                      {clientName && (
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <Building2 className="h-3 w-3" /> {clientName}
-                        </span>
-                      )}
-                      {projectName && (
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <FolderKanban className="h-3 w-3" /> {projectName}
-                        </span>
-                      )}
+                      {clientName && <span className="flex items-center gap-1 text-muted-foreground"><Building2 className="h-3 w-3" /> {clientName}</span>}
+                      {projectName && <span className="flex items-center gap-1 text-muted-foreground"><FolderKanban className="h-3 w-3" /> {projectName}</span>}
                     </div>
                   )}
 
-                  {/* Comments */}
                   <div className="border-t border-border/60 pt-4">
                     <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                       <MessageSquare className="h-4 w-4" /> Comentarios ({freshTask.comments.length})
                     </h3>
-
                     {freshTask.comments.length > 0 ? (
                       <div className="space-y-3 mb-4">
                         {freshTask.comments.map((c) => (
                           <div key={c.id} className="flex gap-3">
                             <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <span className="text-[10px] font-semibold text-primary">
-                                {c.author.split(" ").map((n) => n[0]).join("")}
-                              </span>
+                              <span className="text-[10px] font-semibold text-primary">{c.author.split(" ").map((n) => n[0]).join("")}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
@@ -517,17 +508,9 @@ const Tareas = () => {
                     ) : (
                       <p className="text-xs text-muted-foreground mb-4">Sin comentarios aún</p>
                     )}
-
                     <div className="flex gap-2">
-                      <Textarea
-                        ref={commentInputRef}
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Escribe un comentario..."
-                        rows={2}
-                        className="flex-1 text-sm"
-                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
-                      />
+                      <Textarea ref={commentInputRef} value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Escribe un comentario..." rows={2} className="flex-1 text-sm"
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }} />
                       <Button size="sm" className="self-end" onClick={handleAddComment} disabled={!newComment.trim()}>
                         <Send className="h-4 w-4" />
                       </Button>
