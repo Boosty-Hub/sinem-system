@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, DEFAULT_PARTNERS, type Quotation, type QuotationSnapshot, type QuotationLineItem, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
-import { mockClients, mockContacts, mockProspects, mockAppUsers } from "@/lib/mockData";
+import { supabase } from "@/integrations/supabase/client";
+import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import UserAvatar from "@/components/UserAvatar";
