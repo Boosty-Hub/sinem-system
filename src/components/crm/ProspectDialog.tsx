@@ -147,6 +147,15 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     }
   }, [open, prospect]);
 
+  // Auto-generate code when BU or client changes (only if not manually edited)
+  useEffect(() => {
+    if (!open || codeManuallyEdited) return;
+    const clientName = resolveCustomerName(directCustomer);
+    if (bu && clientName) {
+      generateCode(bu, clientName).then(setCode);
+    }
+  }, [bu, directCustomer, open, codeManuallyEdited]);
+
   const probability = Math.round((go * get_) / 100);
   const weighted = Math.round(priceUSD * probability / 100);
   const marginPercent = priceUSD > 0 ? Math.round((1 - costUSD / priceUSD) * 10000) / 100 : 0;
