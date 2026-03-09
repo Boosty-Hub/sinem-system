@@ -204,6 +204,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     const directIds = resolveIds(directCustomer);
     const saved: Prospect = {
       id: prospect?.id ?? crypto.randomUUID(),
+      code,
       cotorta: prospect?.cotorta ?? 0,
       projectName: projectName.trim(),
       clientId: directIds.clientId ?? prospect?.clientId,
