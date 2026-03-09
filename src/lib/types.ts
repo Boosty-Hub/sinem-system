@@ -11,6 +11,7 @@ export interface AppUser {
 
 export interface Prospect {
   id: string;
+  code: string;
   cotorta: number;
   projectName: string;
   createdBy?: string;

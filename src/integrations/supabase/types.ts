@@ -602,6 +602,7 @@ export type Database = {
         Row: {
           bu: string
           client_id: string | null
+          code: string
           comments: string
           contact_id: string | null
           cost_usd: number
@@ -630,6 +631,7 @@ export type Database = {
         Insert: {
           bu?: string
           client_id?: string | null
+          code?: string
           comments?: string
           contact_id?: string | null
           cost_usd?: number
@@ -658,6 +660,7 @@ export type Database = {
         Update: {
           bu?: string
           client_id?: string | null
+          code?: string
           comments?: string
           contact_id?: string | null
           cost_usd?: number

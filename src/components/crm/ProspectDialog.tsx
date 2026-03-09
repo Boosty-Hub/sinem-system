@@ -70,6 +70,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   }, [open, prospect]);
 
   // ── Controlled fields ──
+  const [code, setCode] = useState("");
+  const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [directCustomer, setDirectCustomer] = useState("none");
   const [endCustomer, setEndCustomer] = useState("none");
@@ -87,6 +89,30 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [quotationHistoryOpen, setQuotationHistoryOpen] = useState<string | null>(null);
   const [expandedSnapVersion, setExpandedSnapVersion] = useState<number | null>(null);
 
+  /** Generate code: SINEM-{BU}-{Client}-{consecutive} */
+  const generateCode = async (buVal: string, clientName: string) => {
+    const buPart = buVal || "XX";
+    const clientPart = clientName
+      ? clientName.replace(/\s+/g, "").substring(0, 15)
+      : "SinCliente";
+    const prefix = `SINEM-${buPart}-${clientPart}-`;
+
+    const { data: existing } = await supabase
+      .from("prospects")
+      .select("code")
+      .ilike("code", `${prefix}%`);
+
+    const nums = (existing ?? [])
+      .map((p) => {
+        const match = p.code.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`));
+        return match ? parseInt(match[1], 10) : NaN;
+      })
+      .filter((n) => !isNaN(n));
+
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return `${prefix}${next}`;
+  };
+
   const nameToSelectValue = (name: string | undefined, cId?: string, ctId?: string): string => {
     if (!name || name === "none" || name === "") return "none";
     if (cId) return `client:${cId}`;
@@ -100,6 +126,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
 
   useEffect(() => {
     if (open) {
+      setCode(prospect?.code ?? "");
+      setCodeManuallyEdited(!!prospect?.code);
       setProjectName(prospect?.projectName ?? "");
       setDirectCustomer(nameToSelectValue(prospect?.directCustomer, prospect?.clientId, prospect?.contactId));
       setEndCustomer(nameToSelectValue(prospect?.endCustomer));
@@ -118,6 +146,28 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setExpandedSnapVersion(null);
     }
   }, [open, prospect]);
+
+  // Auto-generate code when BU or client changes (only if not manually edited)
+  const resolveCustomerNameForCode = (val: string): string => {
+    if (val === "none") return "";
+    if (val.startsWith("client:")) {
+      const cl = clients.find((c) => c.id === val.replace("client:", ""));
+      return cl?.name ?? "";
+    }
+    if (val.startsWith("contact:")) {
+      const ct = contacts.find((c) => c.id === val.replace("contact:", ""));
+      return ct ? `${ct.firstName} ${ct.lastName}` : "";
+    }
+    return val;
+  };
+
+  useEffect(() => {
+    if (!open || codeManuallyEdited) return;
+    const clientName = resolveCustomerNameForCode(directCustomer);
+    if (bu && clientName) {
+      generateCode(bu, clientName).then(setCode);
+    }
+  }, [bu, directCustomer, open, codeManuallyEdited, clients, contacts]);
 
   const probability = Math.round((go * get_) / 100);
   const weighted = Math.round(priceUSD * probability / 100);
@@ -167,6 +217,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     const directIds = resolveIds(directCustomer);
     const saved: Prospect = {
       id: prospect?.id ?? crypto.randomUUID(),
+      code,
       cotorta: prospect?.cotorta ?? 0,
       projectName: projectName.trim(),
       clientId: directIds.clientId ?? prospect?.clientId,
@@ -202,6 +253,11 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="col-span-2">
+            <Label>Código</Label>
+            <Input value={code} onChange={(e) => { setCode(e.target.value); setCodeManuallyEdited(true); }} className="font-mono" placeholder="SINEM-BU-Cliente-1" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Formato: SINEM-BU-Cliente-Consecutivo (se genera automáticamente)</p>
+          </div>
           <div className="col-span-2">
             <Label>Nombre del Proyecto</Label>
             <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Ej: Transformadores ABB" />
@@ -276,6 +332,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                 <SelectItem value="DI">DI - Digital Industries</SelectItem>
                 <SelectItem value="MO">MO - Mobility</SelectItem>
                 <SelectItem value="EP">EP - Energy</SelectItem>
+                <SelectItem value="TR">TR - Trench</SelectItem>
+                <SelectItem value="IN">IN - Innomotics</SelectItem>
               </SelectContent>
             </Select>
           </div>

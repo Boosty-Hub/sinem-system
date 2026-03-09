@@ -6,6 +6,7 @@ type DbProspect = Tables<"prospects">;
 
 export const dbToProspect = (row: DbProspect): Prospect => ({
   id: row.id,
+  code: row.code,
   cotorta: row.cotorta,
   projectName: row.project_name,
   directCustomer: row.direct_customer,
@@ -33,6 +34,7 @@ export const dbToProspect = (row: DbProspect): Prospect => ({
 
 export const prospectToDb = (p: Prospect): Omit<DbProspect, "created_at" | "updated_at"> => ({
   id: p.id,
+  code: p.code,
   cotorta: p.cotorta,
   project_name: p.projectName,
   direct_customer: p.directCustomer,
