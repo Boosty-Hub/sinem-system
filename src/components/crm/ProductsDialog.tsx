@@ -20,6 +20,8 @@ const CATEGORIES = [
   { key: "DI", label: "DI - Digital Industries" },
   { key: "MO", label: "MO - Mobility" },
   { key: "EP", label: "EP - Energy" },
+  { key: "TR", label: "TR - Trench" },
+  { key: "IN", label: "IN - Innomotics" },
 ];
 
 const ProductsDialog = ({ open, onOpenChange, products, setProducts }: Props) => {
