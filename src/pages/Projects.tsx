@@ -1,18 +1,27 @@
-import { useState } from "react";
-import { mockProjects } from "@/lib/mockData";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
-import { PROJECT_STEPS, type Project } from "@/lib/types";
-import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil } from "lucide-react";
+import { PROJECT_STEPS } from "@/lib/types";
+import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { usePermissions } from "@/hooks/usePermissions";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
-const statusConfig = {
+interface ProjectRow {
+  id: string;
+  name: string;
+  client: string;
+  value: number;
+  current_step: number;
+  status: string;
+}
+
+const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
   activo: { label: "Activo", icon: FolderOpen, className: "text-sinem-teal bg-accent" },
   completado: { label: "Completado", icon: CheckCircle2, className: "text-sinem-success bg-sinem-success/10" },
   pausado: { label: "Pausado", icon: PauseCircle, className: "text-sinem-warning bg-sinem-warning/10" },
@@ -23,7 +32,7 @@ const emptyForm = {
   client: "",
   value: "",
   currentStep: "1",
-  status: "activo" as Project["status"],
+  status: "activo",
 };
 
 const Projects = () => {
@@ -32,11 +41,22 @@ const Projects = () => {
   const canCreateProj = canCreateFn("Proyectos");
   const canEditProj = canEditFn("Proyectos");
   const canDeleteProj = canDeleteFn("Proyectos");
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [allProjects, setAllProjects] = useLocalStorage<Project[]>("sinem:projects", mockProjects);
+  const [allProjects, setAllProjects] = useState<ProjectRow[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [deleteTarget, setDeleteTarget] = useState<ProjectRow | null>(null);
+
+  const fetchProjects = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status").order("created_at", { ascending: false });
+    setAllProjects(data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchProjects(); }, []);
 
   const projects = allProjects.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase())
@@ -48,52 +68,57 @@ const Projects = () => {
     setDialogOpen(true);
   };
 
-  const openEdit = (project: Project) => {
+  const openEdit = (project: ProjectRow) => {
     setEditId(project.id);
     setForm({
       name: project.name,
       client: project.client,
       value: String(project.value),
-      currentStep: String(project.currentStep),
+      currentStep: String(project.current_step),
       status: project.status,
     });
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) return;
+    const payload = {
+      name: form.name.trim(),
+      client: form.client.trim(),
+      value: Number(form.value) || 0,
+      current_step: Number(form.currentStep) || 1,
+      status: form.status,
+    };
     if (editId) {
-      setAllProjects((prev) =>
-        prev.map((p) =>
-          p.id === editId
-            ? { ...p, name: form.name.trim(), client: form.client.trim(), value: Number(form.value) || 0, currentStep: Number(form.currentStep) || 1, status: form.status }
-            : p
-        )
-      );
+      await supabase.from("projects").update(payload).eq("id", editId);
       toast({ title: "Proyecto actualizado" });
     } else {
-      const newProject: Project = {
-        id: crypto.randomUUID(),
-        name: form.name.trim(),
-        client: form.client.trim(),
-        value: Number(form.value) || 0,
-        currentStep: Number(form.currentStep) || 1,
-        status: form.status,
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setAllProjects((prev) => [newProject, ...prev]);
+      await supabase.from("projects").insert(payload);
       toast({ title: "Proyecto creado" });
     }
     setDialogOpen(false);
+    fetchProjects();
   };
 
-  const handleDelete = (project: Project) => {
-    if (!confirm(`¿Eliminar el proyecto "${project.name}"? Esta acción no se puede deshacer.`)) return;
-    setAllProjects((prev) => prev.filter((p) => p.id !== project.id));
+  const handleDelete = (project: ProjectRow) => setDeleteTarget(project);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    await supabase.from("projects").delete().eq("id", deleteTarget.id);
     toast({ title: "Proyecto eliminado" });
+    setDeleteTarget(null);
+    fetchProjects();
   };
 
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -119,17 +144,13 @@ const Projects = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {projects.map((project) => {
-          const cfg = statusConfig[project.status];
+          const cfg = statusConfig[project.status] ?? statusConfig.activo;
           const StatusIcon = cfg.icon;
-          const progress = (project.currentStep / 11) * 100;
-          const currentStepName = PROJECT_STEPS[project.currentStep - 1]?.name ?? "";
+          const progress = (project.current_step / 11) * 100;
+          const currentStepName = PROJECT_STEPS[project.current_step - 1]?.name ?? "";
 
           return (
-            <Link
-              key={project.id}
-              to={`/projects/${project.id}`}
-              className="stat-card group block"
-            >
+            <Link key={project.id} to={`/projects/${project.id}`} className="stat-card group block">
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="font-semibold group-hover:text-primary transition-colors">{project.name}</h3>
@@ -141,22 +162,14 @@ const Projects = () => {
                     {cfg.label}
                   </span>
                   {canEditProj && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(project); }}
-                    >
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(project); }}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   )}
                   {canDeleteProj && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project); }}
-                    >
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project); }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
@@ -165,7 +178,7 @@ const Projects = () => {
 
               <div className="flex items-center justify-between text-sm mb-2">
                 <span className="text-muted-foreground">
-                  Paso {project.currentStep}: <span className="text-foreground font-medium">{currentStepName}</span>
+                  Paso {project.current_step}: <span className="text-foreground font-medium">{currentStepName}</span>
                 </span>
                 <span className="font-semibold text-primary">${project.value.toLocaleString()}</span>
               </div>
@@ -179,12 +192,7 @@ const Projects = () => {
 
               <div className="flex gap-1 mt-3">
                 {PROJECT_STEPS.map((step) => (
-                  <div
-                    key={step.number}
-                    className={`h-1 flex-1 rounded-full ${
-                      step.number <= project.currentStep ? "bg-primary" : "bg-muted"
-                    }`}
-                  />
+                  <div key={step.number} className={`h-1 flex-1 rounded-full ${step.number <= project.current_step ? "bg-primary" : "bg-muted"}`} />
                 ))}
               </div>
             </Link>
@@ -219,9 +227,7 @@ const Projects = () => {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PROJECT_STEPS.map((s) => (
-                    <SelectItem key={s.number} value={String(s.number)}>
-                      {s.number}. {s.name}
-                    </SelectItem>
+                    <SelectItem key={s.number} value={String(s.number)}>{s.number}. {s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -246,6 +252,14 @@ const Projects = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar Proyecto"
+        description={`¿Estás seguro de eliminar "${deleteTarget?.name}"? Esta acción no se puede deshacer.`}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 };
