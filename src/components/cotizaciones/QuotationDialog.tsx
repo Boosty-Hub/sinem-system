@@ -391,7 +391,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label>Código</Label>
-              <Input value={code} readOnly disabled className="bg-muted/50 font-mono" />
+              <Input value={code} onChange={(e) => { setCode(e.target.value); setCodeManuallyEdited(true); }} className="font-mono" placeholder="SINEM-BU-Cliente-1-V1" />
+              <p className="text-[10px] text-muted-foreground mt-0.5">Formato: SINEM-BU-Cliente-Consecutivo-Versión</p>
             </div>
             <div>
               <Label>Estado</Label>
