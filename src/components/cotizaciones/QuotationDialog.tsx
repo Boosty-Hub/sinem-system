@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, DEFAULT_PARTNERS, type Quotation, type QuotationSnapshot, type QuotationLineItem, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
-import { mockClients, mockContacts, mockProspects, mockAppUsers } from "@/lib/mockData";
+import { supabase } from "@/integrations/supabase/client";
+import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import UserAvatar from "@/components/UserAvatar";
@@ -53,10 +54,11 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000
 const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
   const [generalSettings] = useLocalStorage<GeneralSettings>("sinem:general-settings", DEFAULT_GENERAL_SETTINGS);
-  const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
-  const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
-  const [contacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
+  const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [selectedProspectId, setSelectedProspectId] = useState<string>("none");
   const [clientData, setClientData] = useState<ClientData>(emptyClientData);
@@ -87,6 +89,47 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [selectedClientId, setSelectedClientId] = useState("none");
   const [selectedContactId, setSelectedContactId] = useState("none");
 
+  // Fetch prospects, clients, contacts from Supabase
+  useEffect(() => {
+    if (!open) return;
+    const fetchData = async () => {
+      const [{ data: dbP }, { data: dbCl }, { data: dbCt }] = await Promise.all([
+        supabase.from("prospects").select("*").order("project_name"),
+        supabase.from("clients").select("*").order("name"),
+        supabase.from("contacts").select("*").order("first_name"),
+      ]);
+      if (dbP) setProspects(dbP.map(dbToProspect));
+      if (dbCl) setClients(dbCl.map(dbToClient));
+      if (dbCt) setContacts(dbCt.map(dbToContact));
+    };
+    fetchData();
+  }, [open]);
+
+  /** Generate code: SINEM-{BU}-{Client}-{consecutive}-V{version} */
+  const generateCode = async (bu: string, clientName: string, version: number) => {
+    const buPart = bu || "XX";
+    const clientPart = clientName
+      ? clientName.replace(/\s+/g, "").substring(0, 15)
+      : "SinCliente";
+    const prefix = `SINEM-${buPart}-${clientPart}-`;
+
+    // Get consecutive from existing quotations in DB
+    const { data: existing } = await supabase
+      .from("quotations")
+      .select("code")
+      .ilike("code", `${prefix}%`);
+
+    const nums = (existing ?? [])
+      .map((q) => {
+        const match = q.code.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`));
+        return match ? parseInt(match[1], 10) : NaN;
+      })
+      .filter((n) => !isNaN(n));
+
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return `${prefix}${next}-V${version}`;
+  };
+
   useEffect(() => {
     if (open) {
       setLineItems(quotation?.lineItems ?? []);
@@ -96,24 +139,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       setClientData(quotation?.client ?? emptyClientData);
       setHistoryOpen(false);
       setExpandedVersion(null);
+      setCodeManuallyEdited(false);
       if (quotation) {
         setCode(quotation.code);
       } else {
-        // Auto-generate next code: COT-YYYY-NNN
-        const year = new Date().getFullYear();
-        const prefix = `COT-${year}-`;
-        try {
-          const stored = JSON.parse(localStorage.getItem("sinem:quotations") || "[]") as { code?: string }[];
-          const nums = stored
-            .map((q) => q.code ?? "")
-            .filter((c) => c.startsWith(prefix))
-            .map((c) => parseInt(c.replace(prefix, ""), 10))
-            .filter((n) => !isNaN(n));
-          const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-          setCode(`${prefix}${String(next).padStart(3, "0")}`);
-        } catch {
-          setCode(`${prefix}001`);
-        }
+        setCode(""); // Will be generated after prospect/client selection
       }
       setStatus(quotation?.status ?? "borrador");
       setCreatedAt(quotation?.createdAt ?? "");
@@ -139,7 +169,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         fillFromProspect(prefill.prospectId);
       }
     }
-  }, [open, quotation, prefill, prospects]);
+  }, [open, quotation, prefill]);
 
   const fillFromProspect = (prospectId: string) => {
     const prospect = prospects.find((p) => p.id === prospectId);
@@ -192,17 +222,26 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setClientData(data);
   };
 
-  const handleProspectChange = (value: string) => {
+  const handleProspectChange = async (value: string) => {
     setSelectedProspectId(value);
     if (value !== "none") {
       fillFromProspect(value);
+      // Auto-generate code from prospect BU + client
+      if (!codeManuallyEdited) {
+        const prospect = prospects.find((p) => p.id === value);
+        if (prospect) {
+          const clientName = prospect.directCustomer || clientData.company;
+          const newCode = await generateCode(prospect.bu, clientName, quotation ? quotation.version + 1 : 1);
+          setCode(newCode);
+        }
+      }
     } else {
       setSelectedClientId("none");
       setSelectedContactId("none");
     }
   };
 
-  const handleClientChange = (value: string) => {
+  const handleClientChange = async (value: string) => {
     setSelectedClientId(value);
     if (value !== "none") {
       const client = clients.find((c) => c.id === value);
@@ -215,6 +254,13 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           email: client.contactEmail,
           attention: client.contactName,
         }));
+        // Auto-regenerate code with new client name
+        if (!codeManuallyEdited && !quotation) {
+          const prospect = selectedProspectId !== "none" ? prospects.find((p) => p.id === selectedProspectId) : null;
+          const bu = prospect?.bu || "";
+          const newCode = await generateCode(bu, client.name, 1);
+          setCode(newCode);
+        }
       }
     }
   };
@@ -293,9 +339,20 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         status: quotation.status,
       };
 
+      // Auto-update version in code if it follows the SINEM format
+      const newVersion = quotation.version + 1;
+      let updatedCode = code;
+      if (!codeManuallyEdited) {
+        // Replace V{old} with V{new} at the end
+        updatedCode = code.replace(/-V\d+$/, `-V${newVersion}`);
+        if (updatedCode === code && !code.includes("-V")) {
+          updatedCode = `${code}-V${newVersion}`;
+        }
+      }
+
       const updated: Quotation = {
         ...quotation,
-        code, status, createdAt, subject,
+        code: updatedCode, status, createdAt, subject,
         client: { ...clientData },
         prospectId: selectedProspectId === "none" ? undefined : selectedProspectId,
         clientId: selectedClientId === "none" ? undefined : selectedClientId,
@@ -305,7 +362,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         currency, exchangeRate, partner,
         costUSD, marginPercent, marginUSD,
         paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
-        version: quotation.version + 1,
+        version: newVersion,
         history: [...quotation.history, snapshot],
       };
       onSave(updated);
@@ -345,7 +402,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label>Código</Label>
-              <Input value={code} readOnly disabled className="bg-muted/50 font-mono" />
+              <Input value={code} onChange={(e) => { setCode(e.target.value); setCodeManuallyEdited(true); }} className="font-mono" placeholder="SINEM-BU-Cliente-1-V1" />
+              <p className="text-[10px] text-muted-foreground mt-0.5">Formato: SINEM-BU-Cliente-Consecutivo-Versión</p>
             </div>
             <div>
               <Label>Estado</Label>
@@ -806,7 +864,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 <div className="flex-1">
                   <p className="text-sm font-medium text-green-800 dark:text-green-300">Aprobada</p>
                   <p className="text-xs text-green-600 dark:text-green-400">
-                    Aprobada por <strong>{mockAppUsers.find((u) => u.id === quotation.approvedBy)?.name ?? quotation.approvedBy}</strong>
+                    Aprobada por <strong>{quotation.approvedBy ?? "—"}</strong>
                     {quotation.approvedAt && ` el ${quotation.approvedAt}`}
                   </p>
                 </div>
@@ -818,7 +876,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 <div className="flex-1">
                   <p className="text-sm font-medium text-red-800 dark:text-red-300">Rechazada</p>
                   <p className="text-xs text-red-600 dark:text-red-400">
-                    Rechazada por <strong>{mockAppUsers.find((u) => u.id === quotation.approvedBy)?.name ?? quotation.approvedBy}</strong>
+                    Rechazada por <strong>{quotation.approvedBy ?? "—"}</strong>
                     {quotation.approvedAt && ` el ${quotation.approvedAt}`}
                   </p>
                   {quotation.approvalNote && <p className="text-xs text-red-600 dark:text-red-400 mt-1">Motivo: {quotation.approvalNote}</p>}
