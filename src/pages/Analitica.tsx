@@ -118,7 +118,7 @@ const Analitica = () => {
       const [{ data: prospectsData }, { data: stagesData }, { data: fyData }] = await Promise.all([
         supabase.from("prospects").select("*"),
         supabase.from("pipeline_stages").select("*").order("sort_order"),
-        supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle(),
+        supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle() as any,
       ]);
 
       setProspects((prospectsData ?? []).map(dbToProspect));
