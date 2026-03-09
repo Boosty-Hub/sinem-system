@@ -126,6 +126,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
 
   useEffect(() => {
     if (open) {
+      setCode(prospect?.code ?? "");
+      setCodeManuallyEdited(!!prospect?.code);
       setProjectName(prospect?.projectName ?? "");
       setDirectCustomer(nameToSelectValue(prospect?.directCustomer, prospect?.clientId, prospect?.contactId));
       setEndCustomer(nameToSelectValue(prospect?.endCustomer));
