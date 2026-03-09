@@ -339,9 +339,20 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         status: quotation.status,
       };
 
+      // Auto-update version in code if it follows the SINEM format
+      const newVersion = quotation.version + 1;
+      let updatedCode = code;
+      if (!codeManuallyEdited) {
+        // Replace V{old} with V{new} at the end
+        updatedCode = code.replace(/-V\d+$/, `-V${newVersion}`);
+        if (updatedCode === code && !code.includes("-V")) {
+          updatedCode = `${code}-V${newVersion}`;
+        }
+      }
+
       const updated: Quotation = {
         ...quotation,
-        code, status, createdAt, subject,
+        code: updatedCode, status, createdAt, subject,
         client: { ...clientData },
         prospectId: selectedProspectId === "none" ? undefined : selectedProspectId,
         clientId: selectedClientId === "none" ? undefined : selectedClientId,
@@ -351,7 +362,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         currency, exchangeRate, partner,
         costUSD, marginPercent, marginUSD,
         paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
-        version: quotation.version + 1,
+        version: newVersion,
         history: [...quotation.history, snapshot],
       };
       onSave(updated);
