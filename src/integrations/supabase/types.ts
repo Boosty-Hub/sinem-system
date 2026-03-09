@@ -295,7 +295,11 @@ export type Database = {
           annual_target: number
           created_at: string
           id: string
+          margin_budget: number
+          previous_year_margin: number
+          previous_year_revenue: number
           previous_year_won: number
+          revenue_budget: number
           updated_at: string
           year: number
         }
@@ -303,7 +307,11 @@ export type Database = {
           annual_target?: number
           created_at?: string
           id?: string
+          margin_budget?: number
+          previous_year_margin?: number
+          previous_year_revenue?: number
           previous_year_won?: number
+          revenue_budget?: number
           updated_at?: string
           year: number
         }
@@ -311,7 +319,11 @@ export type Database = {
           annual_target?: number
           created_at?: string
           id?: string
+          margin_budget?: number
+          previous_year_margin?: number
+          previous_year_revenue?: number
           previous_year_won?: number
+          revenue_budget?: number
           updated_at?: string
           year?: number
         }
