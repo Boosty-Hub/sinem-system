@@ -222,10 +222,19 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setClientData(data);
   };
 
-  const handleProspectChange = (value: string) => {
+  const handleProspectChange = async (value: string) => {
     setSelectedProspectId(value);
     if (value !== "none") {
       fillFromProspect(value);
+      // Auto-generate code from prospect BU + client
+      if (!codeManuallyEdited) {
+        const prospect = prospects.find((p) => p.id === value);
+        if (prospect) {
+          const clientName = prospect.directCustomer || clientData.company;
+          const newCode = await generateCode(prospect.bu, clientName, quotation ? quotation.version + 1 : 1);
+          setCode(newCode);
+        }
+      }
     } else {
       setSelectedClientId("none");
       setSelectedContactId("none");
