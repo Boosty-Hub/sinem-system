@@ -21,17 +21,17 @@ export interface QuotationPrefill {
 
 /** Ensure cached quotations have the version/history fields (migration from old schema) */
 const migrateQuotations = (cached: Quotation[]): Quotation[] => {
-  let needsMigration = false;
-  const migrated = cached.map((q) => {
-    if (q.version === undefined || q.history === undefined || (q as any).deliveryTerms === undefined || (q as any).approvalStatus === undefined || (q as any).currency === undefined || (q as any).partner === undefined) {
-      needsMigration = true;
-      return { ...q, version: q.version ?? 1, history: q.history ?? [], deliveryTerms: (q as any).deliveryTerms ?? "CIF", approvalStatus: (q as any).approvalStatus ?? "pending", currency: (q as any).currency ?? "USD", exchangeRate: (q as any).exchangeRate ?? 1, partner: (q as any).partner ?? "Siemens" };
-    }
-    return q;
-  });
-  // If schema changed (e.g. new mock history data), reset to mock
-  if (needsMigration || cached.length === 0) return mockQuotations;
-  return migrated;
+  if (cached.length === 0) return cached;
+  return cached.map((q) => ({
+    ...q,
+    version: q.version ?? 1,
+    history: q.history ?? [],
+    deliveryTerms: (q as any).deliveryTerms ?? "CIF",
+    approvalStatus: (q as any).approvalStatus ?? "pending",
+    currency: (q as any).currency ?? "USD",
+    exchangeRate: (q as any).exchangeRate ?? 1,
+    partner: (q as any).partner ?? "Siemens",
+  }));
 };
 
 const Cotizaciones = () => {
