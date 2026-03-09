@@ -54,10 +54,11 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000
 const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
   const [generalSettings] = useLocalStorage<GeneralSettings>("sinem:general-settings", DEFAULT_GENERAL_SETTINGS);
-  const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
-  const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
-  const [contacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
+  const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [selectedProspectId, setSelectedProspectId] = useState<string>("none");
   const [clientData, setClientData] = useState<ClientData>(emptyClientData);
