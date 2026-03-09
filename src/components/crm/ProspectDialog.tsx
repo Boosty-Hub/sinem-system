@@ -241,6 +241,11 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
 
         <div className="grid grid-cols-2 gap-4 mt-4">
           <div className="col-span-2">
+            <Label>Código</Label>
+            <Input value={code} onChange={(e) => { setCode(e.target.value); setCodeManuallyEdited(true); }} className="font-mono" placeholder="SINEM-BU-Cliente-1" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Formato: SINEM-BU-Cliente-Consecutivo (se genera automáticamente)</p>
+          </div>
+          <div className="col-span-2">
             <Label>Nombre del Proyecto</Label>
             <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Ej: Transformadores ABB" />
           </div>
