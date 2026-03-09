@@ -853,7 +853,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 <div className="flex-1">
                   <p className="text-sm font-medium text-green-800 dark:text-green-300">Aprobada</p>
                   <p className="text-xs text-green-600 dark:text-green-400">
-                    Aprobada por <strong>{mockAppUsers.find((u) => u.id === quotation.approvedBy)?.name ?? quotation.approvedBy}</strong>
+                    Aprobada por <strong>{quotation.approvedBy ?? "—"}</strong>
                     {quotation.approvedAt && ` el ${quotation.approvedAt}`}
                   </p>
                 </div>
