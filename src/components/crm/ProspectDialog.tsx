@@ -5,10 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { PIPELINE_STAGES, QUOTATION_STATUSES, DEFAULT_PARTNERS, type Prospect, type Product, type PipelineStage } from "@/lib/types";
-import { mockClients, mockContacts, mockQuotations } from "@/lib/mockData";
+import { PIPELINE_STAGES, QUOTATION_STATUSES, DEFAULT_PARTNERS, type Prospect, type Product, type PipelineStage, type Client, type Contact, type Quotation } from "@/lib/types";
+import { supabase } from "@/integrations/supabase/client";
+import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import type { Client, Contact, Quotation } from "@/lib/types";
 import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Link, useNavigate } from "react-router-dom";
@@ -24,7 +24,6 @@ interface Props {
   onOpenProducts?: () => void;
 }
 
-/** Add weeks to a date string (YYYY-MM-DD) and return YYYY-MM-DD */
 const addWeeksToDate = (dateStr: string, weeks: number): string => {
   if (!dateStr || weeks <= 0) return "";
   const date = new Date(dateStr + "T00:00:00");
@@ -37,10 +36,38 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const stageList = stagesProp ?? PIPELINE_STAGES;
   const isEdit = !!prospect;
   const navigate = useNavigate();
-  const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
-  const [contacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
-  const [allQuotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations);
+  const [linkedQuotations, setLinkedQuotations] = useState<any[]>([]);
+
+  // Fetch clients & contacts from Supabase
+  useEffect(() => {
+    if (!open) return;
+    const fetch = async () => {
+      const [{ data: dbClients }, { data: dbContacts }] = await Promise.all([
+        supabase.from("clients").select("*").order("name"),
+        supabase.from("contacts").select("*").order("first_name"),
+      ]);
+      if (dbClients) setClients(dbClients.map(dbToClient));
+      if (dbContacts) setContacts(dbContacts.map(dbToContact));
+    };
+    fetch();
+  }, [open]);
+
+  // Fetch linked quotations
+  useEffect(() => {
+    if (!open || !prospect) { setLinkedQuotations([]); return; }
+    const fetch = async () => {
+      const { data } = await supabase
+        .from("quotations")
+        .select("id, code, subject, total_usd, status, delivery_weeks_max, version, created_at")
+        .eq("prospect_id", prospect.id)
+        .order("created_at", { ascending: false });
+      setLinkedQuotations(data ?? []);
+    };
+    fetch();
+  }, [open, prospect]);
 
   // ── Controlled fields ──
   const [projectName, setProjectName] = useState("");
@@ -60,12 +87,10 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [quotationHistoryOpen, setQuotationHistoryOpen] = useState<string | null>(null);
   const [expandedSnapVersion, setExpandedSnapVersion] = useState<number | null>(null);
 
-  // Reverse-map a stored name + optional IDs back to the select value format
   const nameToSelectValue = (name: string | undefined, cId?: string, ctId?: string): string => {
     if (!name || name === "none" || name === "") return "none";
     if (cId) return `client:${cId}`;
     if (ctId) return `contact:${ctId}`;
-    // Try matching by name to clients then contacts
     const cl = clients.find((c) => c.name === name);
     if (cl) return `client:${cl.id}`;
     const ct = contacts.find((c) => `${c.firstName} ${c.lastName}` === name);
@@ -73,7 +98,6 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     return "none";
   };
 
-  // Reset form when prospect changes or dialog opens
   useEffect(() => {
     if (open) {
       setProjectName(prospect?.projectName ?? "");
@@ -95,23 +119,15 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     }
   }, [open, prospect]);
 
-  // ── Linked quotations ──
-  const linkedQuotations = useMemo(
-    () => (prospect ? allQuotations.filter((q) => q.prospectId === prospect.id) : []),
-    [prospect, allQuotations]
-  );
-
-  // ── Calculated fields ──
   const probability = Math.round((go * get_) / 100);
   const weighted = Math.round(priceUSD * probability / 100);
   const marginPercent = priceUSD > 0 ? Math.round((1 - costUSD / priceUSD) * 10000) / 100 : 0;
   const marginUSD = Math.round(weighted * marginPercent / 100);
 
-  // Revenue: estimatedOE + deliveryWeeksMax from the linked quotation
   const revenue = useMemo(() => {
     if (!estimatedOE) return "";
     if (linkedQuotations.length === 0) return "";
-    const weeks = linkedQuotations[0].deliveryWeeksMax;
+    const weeks = linkedQuotations[0].delivery_weeks_max ?? 0;
     return addWeeksToDate(estimatedOE, weeks);
   }, [estimatedOE, linkedQuotations]);
 
@@ -301,108 +317,47 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Textarea value={scope} onChange={(e) => setScope(e.target.value)} rows={2} />
           </div>
 
-          {/* ── Manual numeric fields ── */}
           <div>
             <Label>Costo USD</Label>
-            <Input
-              type="number"
-              value={costUSD || ""}
-              onChange={(e) => setCostUSD(Number(e.target.value) || 0)}
-              placeholder="0"
-            />
+            <Input type="number" value={costUSD || ""} onChange={(e) => setCostUSD(Number(e.target.value) || 0)} placeholder="0" />
           </div>
           <div>
             <Label>Precio USD</Label>
-            <Input
-              type="number"
-              value={priceUSD || ""}
-              onChange={(e) => setPriceUSD(Number(e.target.value) || 0)}
-              placeholder="0"
-            />
+            <Input type="number" value={priceUSD || ""} onChange={(e) => setPriceUSD(Number(e.target.value) || 0)} placeholder="0" />
           </div>
           <div>
             <Label>Go %</Label>
-            <Input
-              type="number"
-              value={go || ""}
-              onChange={(e) => setGo(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-              placeholder="0"
-              min={0}
-              max={100}
-            />
+            <Input type="number" value={go || ""} onChange={(e) => setGo(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="0" min={0} max={100} />
           </div>
           <div>
             <Label>Get %</Label>
-            <Input
-              type="number"
-              value={get_ || ""}
-              onChange={(e) => setGet(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-              placeholder="0"
-              min={0}
-              max={100}
-            />
+            <Input type="number" value={get_ || ""} onChange={(e) => setGet(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="0" min={0} max={100} />
           </div>
 
-          {/* ── Calculated fields (read-only) ── */}
           <div>
             <Label className="flex items-center gap-1.5">Probabilidad % <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input
-              type="text"
-              value={`${probability}%`}
-              readOnly
-              disabled
-              className="bg-muted/50 font-medium"
-            />
+            <Input type="text" value={`${probability}%`} readOnly disabled className="bg-muted/50 font-medium" />
           </div>
           <div>
             <Label className="flex items-center gap-1.5">Peso USD <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input
-              type="text"
-              value={`$${weighted.toLocaleString()}`}
-              readOnly
-              disabled
-              className="bg-muted/50 font-medium"
-            />
+            <Input type="text" value={`$${weighted.toLocaleString()}`} readOnly disabled className="bg-muted/50 font-medium" />
           </div>
           <div>
             <Label className="flex items-center gap-1.5">Margen % <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input
-              type="text"
-              value={`${marginPercent}%`}
-              readOnly
-              disabled
-              className="bg-muted/50 font-medium"
-            />
+            <Input type="text" value={`${marginPercent}%`} readOnly disabled className="bg-muted/50 font-medium" />
           </div>
           <div>
             <Label className="flex items-center gap-1.5">Margen USD <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input
-              type="text"
-              value={`$${marginUSD.toLocaleString()}`}
-              readOnly
-              disabled
-              className="bg-muted/50 font-medium"
-            />
+            <Input type="text" value={`$${marginUSD.toLocaleString()}`} readOnly disabled className="bg-muted/50 font-medium" />
           </div>
 
-          {/* ── Date fields ── */}
           <div>
             <Label>Estimated OE</Label>
-            <Input
-              type="date"
-              value={estimatedOE}
-              onChange={(e) => setEstimatedOE(e.target.value)}
-            />
+            <Input type="date" value={estimatedOE} onChange={(e) => setEstimatedOE(e.target.value)} />
           </div>
           <div>
             <Label className="flex items-center gap-1.5">Revenue <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input
-              type="date"
-              value={revenue}
-              readOnly
-              disabled
-              className="bg-muted/50 font-medium"
-            />
+            <Input type="date" value={revenue} readOnly disabled className="bg-muted/50 font-medium" />
             {!revenue && estimatedOE && (
               <p className="text-[10px] text-muted-foreground mt-1">Se calcula al vincular una cotización</p>
             )}
@@ -415,156 +370,56 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
         </div>
 
         {/* Cotizaciones vinculadas */}
-        {isEdit && (() => {
-          if (linkedQuotations.length === 0) return null;
-          return (
-            <div className="mt-4 border rounded-lg">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold">Cotización Vinculada</span>
-              </div>
-              <div className="divide-y">
-                {linkedQuotations.map((q) => {
-                  const sCfg = QUOTATION_STATUSES.find((s) => s.key === q.status);
-                  const isHistOpen = quotationHistoryOpen === q.id;
-                  return (
-                    <div key={q.id}>
-                      <div className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/20 transition-colors">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-muted-foreground">{q.code}</span>
-                            <span className="text-xs font-mono text-muted-foreground">v{q.version}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full text-primary-foreground ${sCfg?.color ?? "bg-muted"}`}>
-                              {sCfg?.label ?? q.status}
-                            </span>
-                          </div>
-                          <p className="text-sm font-medium truncate mt-0.5">{q.subject}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            Entrega: {q.deliveryWeeksMin}-{q.deliveryWeeksMax} sem. · ${q.totalUSD.toLocaleString()} USD
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-3">
-                          {q.history.length > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs gap-1"
-                              onClick={() => {
-                                setQuotationHistoryOpen(isHistOpen ? null : q.id);
-                                setExpandedSnapVersion(null);
-                              }}
-                            >
-                              <History className="h-3 w-3" />
-                              {q.history.length}
-                              {isHistOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                            </Button>
-                          )}
-                          <span className="text-sm font-semibold text-primary">${q.totalUSD.toLocaleString()}</span>
-                          <Link to={`/oferta/${q.id}`} target="_blank" onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                      {/* Inline version history for this quotation */}
-                      {isHistOpen && q.history.length > 0 && (
-                        <div className="border-t bg-muted/5">
-                          <div className="px-4 py-2 text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-                            Historial de versiones
-                          </div>
-                          <div className="divide-y">
-                            {[...q.history].reverse().map((snap) => (
-                              <div key={snap.version}>
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedSnapVersion(expandedSnapVersion === snap.version ? null : snap.version)}
-                                  className="flex items-center justify-between w-full px-4 py-2 hover:bg-muted/20 transition-colors text-left"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">v{snap.version}</span>
-                                    <UserAvatar userId={snap.modifiedBy} size="xs" />
-                                    <span className="text-xs">{snap.subject}</span>
-                                    <span className={`text-[9px] px-1 py-0.5 rounded-full text-primary-foreground ${QUOTATION_STATUSES.find((s) => s.key === snap.status)?.color ?? "bg-muted"}`}>
-                                      {QUOTATION_STATUSES.find((s) => s.key === snap.status)?.label ?? snap.status}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-[10px] text-muted-foreground">{snap.savedAt}</span>
-                                    <span className="text-xs font-medium">${snap.totalUSD.toLocaleString()}</span>
-                                    {expandedSnapVersion === snap.version ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                                  </div>
-                                </button>
-                                {expandedSnapVersion === snap.version && (
-                                  <div className="px-4 pb-3 bg-muted/10 border-t space-y-2">
-                                    <div className="grid grid-cols-3 gap-2 pt-2 text-[10px]">
-                                      <div><span className="text-muted-foreground">Total:</span> <strong>${snap.totalUSD.toLocaleString()}</strong></div>
-                                      <div><span className="text-muted-foreground">Costo:</span> <strong>${snap.costUSD.toLocaleString()}</strong></div>
-                                      <div><span className="text-muted-foreground">Margen:</span> <strong>{snap.marginPercent}%</strong></div>
-                                      <div><span className="text-muted-foreground">Entrega:</span> <strong>{snap.deliveryWeeksMin}-{snap.deliveryWeeksMax} sem.</strong></div>
-                                      <div><span className="text-muted-foreground">Validez:</span> <strong>{snap.validityDays} días</strong></div>
-                                      <div><span className="text-muted-foreground">Pago:</span> <strong>{snap.paymentTerms || "—"}</strong></div>
-                                    </div>
-                                    {snap.lineItems.length > 0 && (
-                                      <table className="w-full text-[10px] border rounded">
-                                        <thead>
-                                          <tr className="bg-muted/50 border-b">
-                                            <th className="text-left py-0.5 px-1.5">Ítem</th>
-                                            <th className="text-center py-0.5 px-1.5 w-8">Qty</th>
-                                            <th className="text-right py-0.5 px-1.5 w-16">P.U.</th>
-                                            <th className="text-right py-0.5 px-1.5 w-16">Total</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {snap.lineItems.map((li, idx) => (
-                                            <tr key={idx} className="border-b last:border-0">
-                                              <td className="py-0.5 px-1.5">{li.description}</td>
-                                              <td className="py-0.5 px-1.5 text-center">{li.quantity}</td>
-                                              <td className="py-0.5 px-1.5 text-right">${li.unitPriceUSD.toLocaleString()}</td>
-                                              <td className="py-0.5 px-1.5 text-right">${li.totalUSD.toLocaleString()}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+        {isEdit && linkedQuotations.length > 0 && (
+          <div className="mt-4 border rounded-lg">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">Cotización Vinculada</span>
             </div>
-          );
-        })()}
+            <div className="divide-y">
+              {linkedQuotations.map((q: any) => {
+                const statusCfg = QUOTATION_STATUSES.find((s) => s.key === q.status);
+                return (
+                  <div key={q.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">{q.subject || q.code}</p>
+                        <p className="text-xs text-muted-foreground">{q.code} · v{q.version}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full text-primary-foreground ${statusCfg?.color ?? "bg-muted"}`}>
+                          {statusCfg?.label ?? q.status}
+                        </span>
+                        <span className="text-sm font-semibold">${Number(q.total_usd).toLocaleString()}</span>
+                        <Link to={`/oferta/${q.id}`} target="_blank">
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-        <div className="flex items-center justify-between mt-4">
-          <div className="flex gap-2">
-            {isEdit && (
-              <Button variant="outline" onClick={handleGenerateQuotation} className="text-primary border-primary/30 hover:bg-primary/5">
-                <Plus className="h-4 w-4 mr-1" /> Generar Cotización
-              </Button>
-            )}
+        {/* Actions */}
+        <div className="flex items-center justify-between mt-6">
+          <div className="flex items-center gap-2">
             {isEdit && onDelete && (
-              <Button
-                variant="outline"
-                className="text-destructive border-destructive/30 hover:bg-destructive/5"
-                onClick={() => {
-                  if (confirm(`¿Eliminar la oportunidad "${prospect.projectName}"? Esta acción no se puede deshacer.`)) {
-                    onDelete(prospect.id);
-                    onOpenChange(false);
-                  }
-                }}
-              >
+              <Button variant="destructive" size="sm" onClick={() => { onDelete(prospect.id); onOpenChange(false); }}>
                 <Trash2 className="h-4 w-4 mr-1" /> Eliminar
               </Button>
             )}
+            {isEdit && (
+              <Button variant="outline" size="sm" onClick={handleGenerateQuotation}>
+                <FileText className="h-4 w-4 mr-1" /> Generar Cotización
+              </Button>
+            )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!projectName.trim()}>
               {isEdit ? "Guardar Cambios" : "Crear Oportunidad"}

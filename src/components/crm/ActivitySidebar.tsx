@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Send, Paperclip, Mic, Square, Play, Pause, File, FileImage, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { mockAppUsers } from "@/lib/mockData";
+import { supabase } from "@/integrations/supabase/client";
 import UserAvatar from "@/components/UserAvatar";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
@@ -29,6 +29,8 @@ interface ActivityEntry {
   voiceNote?: ActivityVoiceNote;
   createdAt: string;
 }
+
+interface AppUserInfo { id: string; name: string; }
 
 interface Props {
   prospectId: string;
@@ -91,10 +93,12 @@ const MentionInput = ({
   value,
   onChange,
   onSubmit,
+  users,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
+  users: AppUserInfo[];
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
@@ -104,7 +108,6 @@ const MentionInput = ({
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     onChange(val);
-
     const pos = e.target.selectionStart;
     const before = val.slice(0, pos);
     const atIdx = before.lastIndexOf("@");
@@ -129,14 +132,11 @@ const MentionInput = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !showDropdown) {
-      e.preventDefault();
-      onSubmit();
-    }
+    if (e.key === "Enter" && !e.shiftKey && !showDropdown) { e.preventDefault(); onSubmit(); }
     if (e.key === "Escape") setShowDropdown(false);
   };
 
-  const filtered = mockAppUsers.filter((u) => u.name.toLowerCase().includes(mentionFilter));
+  const filtered = users.filter((u) => u.name.toLowerCase().includes(mentionFilter));
 
   return (
     <div className="relative">
@@ -187,6 +187,7 @@ const RichText = ({ text }: { text: string }) => {
 /* ── Main Component ── */
 const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => {
   const [entries, setEntries] = useLocalStorage<ActivityEntry[]>("sinem:crm:activities", []);
+  const [appUsers, setAppUsers] = useState<AppUserInfo[]>([]);
   const [text, setText] = useState("");
   const [pendingFiles, setPendingFiles] = useState<ActivityAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,6 +200,13 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Fetch users from Supabase
+  useEffect(() => {
+    if (!open) return;
+    supabase.from("app_users").select("id, name").eq("status", "activo").order("name")
+      .then(({ data }) => { if (data) setAppUsers(data); });
+  }, [open]);
 
   const prospectEntries = entries.filter((e) => e.prospectId === prospectId);
 
@@ -217,11 +225,7 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         const reader = new FileReader();
         reader.onloadend = () => {
-          setPendingVoice({
-            id: crypto.randomUUID(),
-            dataUrl: reader.result as string,
-            durationSec: recordingTime,
-          });
+          setPendingVoice({ id: crypto.randomUUID(), dataUrl: reader.result as string, durationSec: recordingTime });
         };
         reader.readAsDataURL(blob);
         stream.getTracks().forEach((t) => t.stop());
@@ -230,9 +234,7 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
       setRecording(true);
       setRecordingTime(0);
       timerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000);
-    } catch {
-      // microphone permission denied
-    }
+    } catch { /* microphone permission denied */ }
   };
 
   const stopRecording = () => {
@@ -244,10 +246,7 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const newFiles: ActivityAttachment[] = Array.from(e.target.files).map((f) => ({
-      id: crypto.randomUUID(),
-      name: f.name,
-      size: f.size,
-      type: f.type || "application/octet-stream",
+      id: crypto.randomUUID(), name: f.name, size: f.size, type: f.type || "application/octet-stream",
     }));
     setPendingFiles((prev) => [...prev, ...newFiles]);
     e.target.value = "";
@@ -255,31 +254,29 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
 
   const handleSend = useCallback(() => {
     if (!text.trim() && pendingFiles.length === 0 && !pendingVoice) return;
-
     const mentions = (text.match(/@(\S+)/g) ?? []).map((m) => m.slice(1));
-
     const entry: ActivityEntry = {
       id: crypto.randomUUID(),
       prospectId,
-      authorId: "u1",
+      authorId: appUsers[0]?.id ?? "u1",
       text: text.trim(),
       mentions,
       attachments: pendingFiles,
       voiceNote: pendingVoice ?? undefined,
       createdAt: new Date().toISOString(),
     };
-
     setEntries((prev) => [...prev, entry]);
     setText("");
     setPendingFiles([]);
     setPendingVoice(null);
-  }, [text, pendingFiles, pendingVoice, prospectId, setEntries]);
+  }, [text, pendingFiles, pendingVoice, prospectId, setEntries, appUsers]);
 
   if (!open) return null;
 
+  const getUserName = (userId: string) => appUsers.find((u) => u.id === userId)?.name ?? "Usuario";
+
   return (
     <div className="fixed inset-y-0 right-0 w-[420px] bg-background border-l border-border shadow-2xl z-50 flex flex-col animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold truncate">Actividad</h3>
@@ -290,27 +287,20 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
         </Button>
       </div>
 
-      {/* Feed */}
       <div ref={feedRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {prospectEntries.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-12">
-            Sin actualizaciones todavía. Publica la primera.
-          </p>
+          <p className="text-center text-sm text-muted-foreground py-12">Sin actualizaciones todavía. Publica la primera.</p>
         )}
         {prospectEntries.map((entry) => (
           <div key={entry.id} className="flex gap-3">
             <UserAvatar userId={entry.authorId} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold">
-                  {mockAppUsers.find((u) => u.id === entry.authorId)?.name ?? "Usuario"}
-                </span>
+                <span className="text-xs font-semibold">{getUserName(entry.authorId)}</span>
                 <span className="text-[10px] text-muted-foreground">{formatDate(entry.createdAt)}</span>
               </div>
               {entry.text && <RichText text={entry.text} />}
-              {entry.voiceNote && (
-                <VoicePlayer dataUrl={entry.voiceNote.dataUrl} durationSec={entry.voiceNote.durationSec} />
-              )}
+              {entry.voiceNote && <VoicePlayer dataUrl={entry.voiceNote.dataUrl} durationSec={entry.voiceNote.durationSec} />}
               {entry.attachments.length > 0 && (
                 <div className="mt-1.5 space-y-1">
                   {entry.attachments.map((att) => (
@@ -327,35 +317,25 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
         ))}
       </div>
 
-      {/* Composer */}
       <div className="border-t p-3 space-y-2">
-        {/* Pending voice note */}
         {pendingVoice && (
           <div className="flex items-center gap-2 bg-primary/5 rounded-lg px-3 py-2">
             <Play className="h-3.5 w-3.5 text-primary" />
             <span className="text-xs flex-1">Nota de voz — {formatDuration(pendingVoice.durationSec)}</span>
-            <button onClick={() => setPendingVoice(null)} className="text-muted-foreground hover:text-destructive">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <button onClick={() => setPendingVoice(null)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
         )}
-
-        {/* Pending files */}
         {pendingFiles.length > 0 && (
           <div className="space-y-1">
             {pendingFiles.map((f) => (
               <div key={f.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5">
                 <File className="h-3 w-3 text-muted-foreground" />
                 <span className="truncate flex-1">{f.name}</span>
-                <button onClick={() => setPendingFiles((prev) => prev.filter((p) => p.id !== f.id))} className="text-muted-foreground hover:text-destructive">
-                  <Trash2 className="h-3 w-3" />
-                </button>
+                <button onClick={() => setPendingFiles((prev) => prev.filter((p) => p.id !== f.id))} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
               </div>
             ))}
           </div>
         )}
-
-        {/* Recording indicator */}
         {recording && (
           <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg px-3 py-2">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -365,9 +345,7 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
             </Button>
           </div>
         )}
-
-        <MentionInput value={text} onChange={setText} onSubmit={handleSend} />
-
+        <MentionInput value={text} onChange={setText} onSubmit={handleSend} users={appUsers} />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => fileInputRef.current?.click()}>

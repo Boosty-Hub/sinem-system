@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PIPELINE_STAGES, type Prospect, type PipelineStage } from "@/lib/types";
-import { mockQuotations } from "@/lib/mockData";
 import { DollarSign, FileText, GripVertical, MessageSquareText, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/UserAvatar";
+import { supabase } from "@/integrations/supabase/client";
 import {
   DndContext,
   DragOverlay,
@@ -17,7 +17,6 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 
 interface Props {
   prospects: Prospect[];
@@ -35,12 +34,7 @@ interface CardProps {
 }
 
 /* ── Draggable Card ── */
-const DraggableCard = ({
-  prospect,
-  onEdit,
-  onActivity,
-  onMarkInvoiced,
-}: CardProps) => {
+const DraggableCard = ({ prospect, onEdit, onActivity, onMarkInvoiced }: CardProps) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: prospect.id,
     data: { prospect },
@@ -67,9 +61,15 @@ const DraggableCard = ({
   );
 };
 
-/* ── Card Content (shared between real card and overlay) ── */
+/* ── Card Content ── */
 const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prospect; onActivity?: (p: Prospect) => void; onMarkInvoiced?: (prospectId: string) => void }) => {
-  const quotationCount = mockQuotations.filter((q) => q.prospectId === prospect.id).length;
+  const [quotationCount, setQuotationCount] = useState(0);
+
+  useEffect(() => {
+    supabase.from("quotations").select("id", { count: "exact", head: true }).eq("prospect_id", prospect.id)
+      .then(({ count }) => setQuotationCount(count ?? 0));
+  }, [prospect.id]);
+
   return (
     <>
       <p className="text-sm font-medium mb-1 leading-snug pr-5">{prospect.projectName}</p>
@@ -119,23 +119,12 @@ const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prosp
 };
 
 /* ── Droppable Column ── */
-const DroppableColumn = ({
-  stageKey,
-  isOver,
-  children,
-}: {
-  stageKey: string;
-  isOver: boolean;
-  children: React.ReactNode;
-}) => {
+const DroppableColumn = ({ stageKey, isOver, children }: { stageKey: string; isOver: boolean; children: React.ReactNode }) => {
   const { setNodeRef } = useDroppable({ id: stageKey });
-
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-2.5 min-h-[80px] rounded-lg transition-all duration-200 ${
-        isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-dashed" : ""
-      }`}
+      className={`space-y-2.5 min-h-[80px] rounded-lg transition-all duration-200 ${isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-dashed" : ""}`}
       style={{ padding: isOver ? "8px" : "0" }}
     >
       {children}
@@ -154,90 +143,54 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
-
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const activeProspect = activeId ? prospects.find((p) => p.id === activeId) : null;
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
+  const handleDragStart = (event: DragStartEvent) => setActiveId(event.active.id as string);
   const handleDragOver = (event: DragOverEvent) => {
     const overId = event.over?.id as string | undefined;
     if (!overId) { setOverColumnId(null); return; }
-    // Check if hovering over a column (stage key)
     const isColumn = stageList.some((s) => s.key === overId);
-    if (isColumn) {
-      setOverColumnId(overId);
-    } else {
-      // Hovering over a card — find which column it belongs to
+    if (isColumn) { setOverColumnId(overId); } else {
       const overProspect = prospects.find((p) => p.id === overId);
       setOverColumnId(overProspect?.status ?? null);
     }
   };
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
-    setOverColumnId(null);
-
+    setActiveId(null); setOverColumnId(null);
     if (!over || !onStageChange) return;
-
     const prospectId = active.id as string;
     const prospect = prospects.find((p) => p.id === prospectId);
     if (!prospect) return;
-
     let targetStage: string | null = null;
     const isColumn = stageList.some((s) => s.key === over.id);
-    if (isColumn) {
-      targetStage = over.id as string;
-    } else {
+    if (isColumn) { targetStage = over.id as string; } else {
       const overProspect = prospects.find((p) => p.id === over.id);
       targetStage = overProspect?.status ?? null;
     }
-
-    if (targetStage && targetStage !== prospect.status) {
-      onStageChange(prospectId, targetStage);
-    }
+    if (targetStage && targetStage !== prospect.status) onStageChange(prospectId, targetStage);
   };
-
-  const handleDragCancel = () => {
-    setActiveId(null);
-    setOverColumnId(null);
-  };
+  const handleDragCancel = () => { setActiveId(null); setOverColumnId(null); };
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stageList.map((stage) => {
           const items = prospects.filter((p) => p.status === stage.key);
           const total = items.reduce((s, p) => s + p.priceUSD, 0);
-
           return (
             <div key={stage.key} className="pipeline-column flex-shrink-0">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
                   <h3 className="text-sm font-semibold">{stage.label}</h3>
-                  <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">
-                    {items.length}
-                  </span>
+                  <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5">{items.length}</span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
-                <DollarSign className="h-3 w-3" />
-                {total.toLocaleString()}
+                <DollarSign className="h-3 w-3" />{total.toLocaleString()}
               </p>
-
               <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null}>
                 {items.map((prospect) => (
                   <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} onMarkInvoiced={onStageChange ? (id) => onStageChange(id, "facturada") : undefined} />
@@ -250,7 +203,6 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
           );
         })}
       </div>
-
       <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
         {activeProspect ? (
           <div className="deal-card shadow-xl ring-2 ring-primary/30 rotate-[2deg] w-[280px]">
