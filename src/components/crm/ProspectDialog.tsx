@@ -319,6 +319,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                 <SelectItem value="DI">DI - Digital Industries</SelectItem>
                 <SelectItem value="MO">MO - Mobility</SelectItem>
                 <SelectItem value="EP">EP - Energy</SelectItem>
+                <SelectItem value="TR">TR - Trench</SelectItem>
+                <SelectItem value="IN">IN - Innomotics</SelectItem>
               </SelectContent>
             </Select>
           </div>
