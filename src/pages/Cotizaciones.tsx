@@ -67,7 +67,7 @@ const Cotizaciones = () => {
         email: q.client_email,
         rnc: q.client_rnc,
       },
-      items: (itemsByQuotation.get(q.id) ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+      lineItems: (itemsByQuotation.get(q.id) ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
       subtotalUSD: Number(q.subtotal_usd),
       applyITBIS: q.apply_itbis,
       itbisPercent: Number(q.itbis_percent),
