@@ -6,6 +6,7 @@ type DbProspect = Tables<"prospects">;
 
 export const dbToProspect = (row: DbProspect): Prospect => ({
   id: row.id,
+  code: row.code,
   cotorta: row.cotorta,
   projectName: row.project_name,
   directCustomer: row.direct_customer,
