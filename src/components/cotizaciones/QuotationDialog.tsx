@@ -241,7 +241,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     }
   };
 
-  const handleClientChange = (value: string) => {
+  const handleClientChange = async (value: string) => {
     setSelectedClientId(value);
     if (value !== "none") {
       const client = clients.find((c) => c.id === value);
@@ -254,6 +254,13 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           email: client.contactEmail,
           attention: client.contactName,
         }));
+        // Auto-regenerate code with new client name
+        if (!codeManuallyEdited && !quotation) {
+          const prospect = selectedProspectId !== "none" ? prospects.find((p) => p.id === selectedProspectId) : null;
+          const bu = prospect?.bu || "";
+          const newCode = await generateCode(bu, client.name, 1);
+          setCode(newCode);
+        }
       }
     }
   };
