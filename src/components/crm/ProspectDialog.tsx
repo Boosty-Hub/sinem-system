@@ -148,13 +148,26 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   }, [open, prospect]);
 
   // Auto-generate code when BU or client changes (only if not manually edited)
+  const resolveCustomerNameForCode = (val: string): string => {
+    if (val === "none") return "";
+    if (val.startsWith("client:")) {
+      const cl = clients.find((c) => c.id === val.replace("client:", ""));
+      return cl?.name ?? "";
+    }
+    if (val.startsWith("contact:")) {
+      const ct = contacts.find((c) => c.id === val.replace("contact:", ""));
+      return ct ? `${ct.firstName} ${ct.lastName}` : "";
+    }
+    return val;
+  };
+
   useEffect(() => {
     if (!open || codeManuallyEdited) return;
-    const clientName = resolveCustomerName(directCustomer);
+    const clientName = resolveCustomerNameForCode(directCustomer);
     if (bu && clientName) {
       generateCode(bu, clientName).then(setCode);
     }
-  }, [bu, directCustomer, open, codeManuallyEdited]);
+  }, [bu, directCustomer, open, codeManuallyEdited, clients, contacts]);
 
   const probability = Math.round((go * get_) / 100);
   const weighted = Math.round(priceUSD * probability / 100);
