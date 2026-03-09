@@ -70,6 +70,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   }, [open, prospect]);
 
   // ── Controlled fields ──
+  const [code, setCode] = useState("");
+  const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [directCustomer, setDirectCustomer] = useState("none");
   const [endCustomer, setEndCustomer] = useState("none");
@@ -86,6 +88,30 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [comments, setComments] = useState("");
   const [quotationHistoryOpen, setQuotationHistoryOpen] = useState<string | null>(null);
   const [expandedSnapVersion, setExpandedSnapVersion] = useState<number | null>(null);
+
+  /** Generate code: SINEM-{BU}-{Client}-{consecutive} */
+  const generateCode = async (buVal: string, clientName: string) => {
+    const buPart = buVal || "XX";
+    const clientPart = clientName
+      ? clientName.replace(/\s+/g, "").substring(0, 15)
+      : "SinCliente";
+    const prefix = `SINEM-${buPart}-${clientPart}-`;
+
+    const { data: existing } = await supabase
+      .from("prospects")
+      .select("code")
+      .ilike("code", `${prefix}%`);
+
+    const nums = (existing ?? [])
+      .map((p) => {
+        const match = p.code.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`));
+        return match ? parseInt(match[1], 10) : NaN;
+      })
+      .filter((n) => !isNaN(n));
+
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    return `${prefix}${next}`;
+  };
 
   const nameToSelectValue = (name: string | undefined, cId?: string, ctId?: string): string => {
     if (!name || name === "none" || name === "") return "none";
