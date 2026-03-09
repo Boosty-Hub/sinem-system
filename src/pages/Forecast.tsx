@@ -1,45 +1,103 @@
-import { useState } from "react";
-import { mockForecast, mockProspects } from "@/lib/mockData";
-import { PIPELINE_STAGES, type ForecastYear, type ForecastMonth, type Prospect } from "@/lib/types";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { Prospect } from "@/lib/types";
+import { dbToProspect } from "@/lib/supabaseMappers";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Target, TrendingUp, TrendingDown, DollarSign, Pencil, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, DollarSign, Pencil, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import {
   ComposedChart, Area, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
 const fmt = (n: number) => `$${n.toLocaleString()}`;
 
+const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+interface ForecastMonth {
+  id?: string;
+  month: string;
+  target: number;
+  actual: number;
+  projected: number;
+}
+
 const Forecast = () => {
   const { toast } = useToast();
-  const [forecast, setForecast] = useLocalStorage<ForecastYear>("sinem:forecast", mockForecast);
-  const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
+  const [loading, setLoading] = useState(true);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [forecastYearId, setForecastYearId] = useState<string | null>(null);
+  const [annualTarget, setAnnualTarget] = useState(0);
+  const [months, setMonths] = useState<ForecastMonth[]>([]);
+  const [year, setYear] = useState(new Date().getFullYear());
+
   const [editOpen, setEditOpen] = useState(false);
   const [editMonths, setEditMonths] = useState<ForecastMonth[]>([]);
   const [editAnnual, setEditAnnual] = useState(0);
 
+  useEffect(() => {
+    const fetch = async () => {
+      setLoading(true);
+      const currentYear = new Date().getFullYear();
+      setYear(currentYear);
+
+      const [{ data: prospectsData }, { data: fyData }] = await Promise.all([
+        supabase.from("prospects").select("*"),
+        supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle(),
+      ]);
+
+      setProspects((prospectsData ?? []).map(dbToProspect));
+
+      if (fyData) {
+        setForecastYearId(fyData.id);
+        setAnnualTarget(Number(fyData.annual_target));
+
+        const { data: monthsData } = await supabase
+          .from("forecast_months")
+          .select("*")
+          .eq("forecast_year_id", fyData.id);
+
+        if (monthsData && monthsData.length > 0) {
+          const mapped = MONTH_NAMES.map((m) => {
+            const found = monthsData.find((md) => md.month === m);
+            return {
+              id: found?.id,
+              month: m,
+              target: Number(found?.target ?? 0),
+              actual: Number(found?.actual ?? 0),
+              projected: Number(found?.projected ?? 0),
+            };
+          });
+          setMonths(mapped);
+        } else {
+          setMonths(MONTH_NAMES.map((m) => ({ month: m, target: 0, actual: 0, projected: 0 })));
+        }
+      } else {
+        setMonths(MONTH_NAMES.map((m) => ({ month: m, target: 0, actual: 0, projected: 0 })));
+      }
+      setLoading(false);
+    };
+    fetch();
+  }, []);
+
   const now = new Date();
   const currentMonthIdx = now.getMonth();
 
-  // Compute projected from pipeline for future months
   const pipelineTotal = prospects
     .filter((p) => p.status !== "perdido")
     .reduce((sum, p) => sum + p.weighted, 0);
 
-  const totalActual = forecast.months.reduce((s, m) => s + m.actual, 0);
-  const totalProjected = forecast.months.reduce((s, m) => s + m.projected, 0);
-  const totalTarget = forecast.months.reduce((s, m) => s + m.target, 0);
+  const totalActual = months.reduce((s, m) => s + m.actual, 0);
+  const totalProjected = months.reduce((s, m) => s + m.projected, 0);
+  const totalTarget = months.reduce((s, m) => s + m.target, 0);
   const remainingTarget = totalTarget - totalActual;
   const achievementPct = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
   const projectedAchievement = totalTarget > 0 ? Math.round((totalProjected / totalTarget) * 100) : 0;
 
-  // Chart data with cumulative
   let cumActual = 0, cumTarget = 0, cumProjected = 0;
-  const chartData = forecast.months.map((m, i) => {
+  const chartData = months.map((m, i) => {
     cumTarget += m.target;
     cumActual += m.actual;
     cumProjected += m.projected;
@@ -57,8 +115,8 @@ const Forecast = () => {
   });
 
   const openEdit = () => {
-    setEditMonths(forecast.months.map((m) => ({ ...m })));
-    setEditAnnual(forecast.annualTarget);
+    setEditMonths(months.map((m) => ({ ...m })));
+    setEditAnnual(annualTarget);
     setEditOpen(true);
   };
 
@@ -67,8 +125,37 @@ const Forecast = () => {
     setEditMonths((prev) => prev.map((m) => ({ ...m, target: perMonth })));
   };
 
-  const handleSave = () => {
-    setForecast({ ...forecast, annualTarget: editAnnual, months: editMonths });
+  const handleSave = async () => {
+    let fyId = forecastYearId;
+
+    if (!fyId) {
+      const { data } = await supabase.from("forecast_years")
+        .insert({ year, annual_target: editAnnual })
+        .select().single();
+      if (!data) return;
+      fyId = data.id;
+      setForecastYearId(fyId);
+    } else {
+      await supabase.from("forecast_years").update({ annual_target: editAnnual }).eq("id", fyId);
+    }
+
+    // Upsert months
+    for (const m of editMonths) {
+      if (m.id) {
+        await supabase.from("forecast_months").update({
+          target: m.target, actual: m.actual, projected: m.projected,
+        }).eq("id", m.id);
+      } else {
+        const { data } = await supabase.from("forecast_months").insert({
+          forecast_year_id: fyId!, month: m.month,
+          target: m.target, actual: m.actual, projected: m.projected,
+        }).select().single();
+        if (data) m.id = data.id;
+      }
+    }
+
+    setAnnualTarget(editAnnual);
+    setMonths(editMonths.map((m) => ({ ...m })));
     setEditOpen(false);
     toast({ title: "Forecast actualizado" });
   };
@@ -86,11 +173,19 @@ const Forecast = () => {
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Forecast {forecast.year}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Forecast {year}</h1>
           <p className="text-muted-foreground text-sm mt-1">Proyecciones de ventas y metas mensuales</p>
         </div>
         <Button variant="outline" size="sm" onClick={openEdit}>
@@ -162,7 +257,7 @@ const Forecast = () => {
             </tr>
           </thead>
           <tbody>
-            {forecast.months.map((m, i) => {
+            {months.map((m, i) => {
               const isPast = i < currentMonthIdx;
               const isCurrent = i === currentMonthIdx;
               const value = isPast || isCurrent ? m.actual : m.projected;
@@ -203,7 +298,7 @@ const Forecast = () => {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar Metas {forecast.year}</DialogTitle>
+            <DialogTitle>Editar Metas {year}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="flex items-end gap-3">
@@ -231,25 +326,16 @@ const Forecast = () => {
                     <tr key={m.month} className="border-b border-border/30">
                       <td className="py-2 px-3 font-medium">{m.month}</td>
                       <td className="py-1 px-3">
-                        <Input
-                          type="number" className="h-8 w-28"
-                          value={m.target}
-                          onChange={(e) => setEditMonths((prev) => prev.map((p, j) => j === i ? { ...p, target: Number(e.target.value) } : p))}
-                        />
+                        <Input type="number" className="h-8 w-28" value={m.target}
+                          onChange={(e) => setEditMonths((prev) => prev.map((p, j) => j === i ? { ...p, target: Number(e.target.value) } : p))} />
                       </td>
                       <td className="py-1 px-3">
-                        <Input
-                          type="number" className="h-8 w-28"
-                          value={m.actual}
-                          onChange={(e) => setEditMonths((prev) => prev.map((p, j) => j === i ? { ...p, actual: Number(e.target.value) } : p))}
-                        />
+                        <Input type="number" className="h-8 w-28" value={m.actual}
+                          onChange={(e) => setEditMonths((prev) => prev.map((p, j) => j === i ? { ...p, actual: Number(e.target.value) } : p))} />
                       </td>
                       <td className="py-1 px-3">
-                        <Input
-                          type="number" className="h-8 w-28"
-                          value={m.projected}
-                          onChange={(e) => setEditMonths((prev) => prev.map((p, j) => j === i ? { ...p, projected: Number(e.target.value) } : p))}
-                        />
+                        <Input type="number" className="h-8 w-28" value={m.projected}
+                          onChange={(e) => setEditMonths((prev) => prev.map((p, j) => j === i ? { ...p, projected: Number(e.target.value) } : p))} />
                       </td>
                     </tr>
                   ))}

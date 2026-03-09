@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { mockProspects, mockForecast } from "@/lib/mockData";
-import { DEFAULT_PIPELINE_STAGES, type Prospect, type ForecastYear, type PipelineStage } from "@/lib/types";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { Prospect, PipelineStage } from "@/lib/types";
+import { dbToProspect, dbToStage } from "@/lib/supabaseMappers";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DollarSign, TrendingUp, Users, Target, BarChart3, PieChart as PieChartIcon,
-  Info, Pencil,
+  Info, Pencil, Loader2,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -25,15 +25,13 @@ const COLORS = ["hsl(199 89% 48%)", "hsl(168 76% 42%)", "hsl(45 93% 47%)", "hsl(
 
 const fmt = (n: number) => `$${n.toLocaleString()}`;
 
-// ── Order Entry bar colors matching the reference chart ──
 const BAR_COLORS = {
-  previousYear: "#38bdf8",  // sky-400
-  current: "#06b6d4",       // cyan-500
-  forecast: "#0ea5e9",      // sky-500
-  budget: "#6d28d9",        // violet-700
+  previousYear: "#38bdf8",
+  current: "#06b6d4",
+  forecast: "#0ea5e9",
+  budget: "#6d28d9",
 };
 
-// ── Order Entry bar descriptions ──
 const BAR_INFO: Record<string, { label: string; description: string }> = {
   previousYear: {
     label: "Año anterior",
@@ -53,7 +51,6 @@ const BAR_INFO: Record<string, { label: string; description: string }> = {
   },
 };
 
-/** Custom tooltip for the Order Entry chart */
 const OrderEntryTooltip = ({ active, payload }: any) => {
   if (!active || !payload || !payload.length) return null;
   const item = payload[0].payload;
@@ -76,7 +73,6 @@ const OrderEntryTooltip = ({ active, payload }: any) => {
   );
 };
 
-/** Custom bar label showing value on top */
 const BarTopLabel = (props: any) => {
   const { x, y, width, value } = props;
   return (
@@ -86,15 +82,27 @@ const BarTopLabel = (props: any) => {
   );
 };
 
+interface ForecastBudget {
+  annualTarget: number;
+  previousYearWon: number;
+  revenueBudget: number;
+  previousYearRevenue: number;
+  marginBudget: number;
+  previousYearMargin: number;
+  year: number;
+}
+
 const Analitica = () => {
   const { toast } = useToast();
-  const [prospects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
-  const [forecast, setForecast] = useLocalStorage<ForecastYear>("sinem:forecast", mockForecast, (cached) => {
-    if (cached.previousYearWon === undefined) return { ...cached, previousYearWon: mockForecast.previousYearWon };
-    if (cached.revenueBudget === undefined) return { ...cached, revenueBudget: mockForecast.revenueBudget, previousYearRevenue: mockForecast.previousYearRevenue };
-    if (cached.marginBudget === undefined) return { ...cached, marginBudget: mockForecast.marginBudget, previousYearMargin: mockForecast.previousYearMargin };
-    return cached;
+  const [loading, setLoading] = useState(true);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
+  const [budget, setBudget] = useState<ForecastBudget>({
+    annualTarget: 0, previousYearWon: 0, revenueBudget: 0,
+    previousYearRevenue: 0, marginBudget: 0, previousYearMargin: 0,
+    year: new Date().getFullYear(),
   });
+  const [forecastYearId, setForecastYearId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editAnnual, setEditAnnual] = useState(0);
   const [editPrevYear, setEditPrevYear] = useState(0);
@@ -103,7 +111,39 @@ const Analitica = () => {
   const [editMarginBudget, setEditMarginBudget] = useState(0);
   const [editPrevYearMargin, setEditPrevYearMargin] = useState(0);
 
-  const currentYear = forecast.year;
+  useEffect(() => {
+    const fetch = async () => {
+      setLoading(true);
+      const currentYear = new Date().getFullYear();
+      const [{ data: prospectsData }, { data: stagesData }, { data: fyData }] = await Promise.all([
+        supabase.from("prospects").select("*"),
+        supabase.from("pipeline_stages").select("*").order("sort_order"),
+        supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle(),
+      ]);
+
+      setProspects((prospectsData ?? []).map(dbToProspect));
+      setStages((stagesData ?? []).map(dbToStage));
+
+      if (fyData) {
+        setForecastYearId(fyData.id);
+        setBudget({
+          year: fyData.year,
+          annualTarget: Number(fyData.annual_target),
+          previousYearWon: Number(fyData.previous_year_won),
+          revenueBudget: Number(fyData.revenue_budget),
+          previousYearRevenue: Number(fyData.previous_year_revenue),
+          marginBudget: Number(fyData.margin_budget),
+          previousYearMargin: Number(fyData.previous_year_margin),
+        });
+      } else {
+        setBudget({ ...budget, year: currentYear });
+      }
+      setLoading(false);
+    };
+    fetch();
+  }, []);
+
+  const currentYear = budget.year;
   const previousYear = currentYear - 1;
 
   // ── Order Entry data ──
@@ -113,44 +153,12 @@ const Analitica = () => {
   const forecastWeighted = openProspects.reduce((s, p) => s + p.weighted, 0);
 
   const orderEntryData = [
-    {
-      name: `${previousYear}`,
-      label: `${previousYear}`,
-      value: forecast.previousYearWon,
-      fill: BAR_COLORS.previousYear,
-      description: BAR_INFO.previousYear.description,
-      details: [],
-    },
-    {
-      name: "Current",
-      label: "Current",
-      value: wonTotal,
-      fill: BAR_COLORS.current,
-      description: BAR_INFO.current.description,
-      details: wonDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })),
-    },
-    {
-      name: "Forecast",
-      label: "Forecast",
-      value: forecastWeighted,
-      fill: BAR_COLORS.forecast,
-      description: BAR_INFO.forecast.description,
-      details: openProspects
-        .sort((a, b) => b.weighted - a.weighted)
-        .slice(0, 6)
-        .map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })),
-    },
-    {
-      name: `Budget ${currentYear}`,
-      label: `Budget ${currentYear}`,
-      value: forecast.annualTarget,
-      fill: BAR_COLORS.budget,
-      description: BAR_INFO.budget.description,
-      details: [],
-    },
+    { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearWon, fill: BAR_COLORS.previousYear, description: BAR_INFO.previousYear.description, details: [] },
+    { name: "Current", label: "Current", value: wonTotal, fill: BAR_COLORS.current, description: BAR_INFO.current.description, details: wonDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
+    { name: "Forecast", label: "Forecast", value: forecastWeighted, fill: BAR_COLORS.forecast, description: BAR_INFO.forecast.description, details: openProspects.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
+    { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.annualTarget, fill: BAR_COLORS.budget, description: BAR_INFO.budget.description, details: [] },
   ];
-
-  const maxBarValue = Math.max(...orderEntryData.map((d) => d.value));
+  const maxBarValue = Math.max(...orderEntryData.map((d) => d.value), 1);
 
   // ── Revenue data ──
   const invoicedDeals = prospects.filter((p) => p.status === "facturada");
@@ -159,44 +167,12 @@ const Analitica = () => {
   const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.priceUSD, 0);
 
   const revenueData = [
-    {
-      name: `${previousYear}`,
-      label: `${previousYear}`,
-      value: forecast.previousYearRevenue,
-      fill: "#67e8f9",  // cyan-300
-      description: "Revenue facturado del año anterior.",
-      details: [],
-    },
-    {
-      name: "Current",
-      label: "Current",
-      value: invoicedTotal,
-      fill: "#06b6d4",  // cyan-500
-      description: "Total de oportunidades marcadas como facturadas en el año en curso.",
-      details: invoicedDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })),
-    },
-    {
-      name: "Forecast",
-      label: "Forecast",
-      value: revenueForecastTotal,
-      fill: "#0891b2",  // cyan-600
-      description: "Oportunidades con fecha de revenue que aún no han sido facturadas.",
-      details: revenueForecastDeals
-        .sort((a, b) => b.priceUSD - a.priceUSD)
-        .slice(0, 6)
-        .map((p) => ({ name: p.projectName, amount: p.priceUSD })),
-    },
-    {
-      name: `Budget ${currentYear}`,
-      label: `Budget ${currentYear}`,
-      value: forecast.revenueBudget,
-      fill: "#6d28d9",  // violet-700
-      description: "Meta de revenue estipulada para el año.",
-      details: [],
-    },
+    { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearRevenue, fill: "#67e8f9", description: "Revenue facturado del año anterior.", details: [] },
+    { name: "Current", label: "Current", value: invoicedTotal, fill: "#06b6d4", description: "Total de oportunidades marcadas como facturadas en el año en curso.", details: invoicedDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
+    { name: "Forecast", label: "Forecast", value: revenueForecastTotal, fill: "#0891b2", description: "Oportunidades con fecha de revenue que aún no han sido facturadas.", details: revenueForecastDeals.sort((a, b) => b.priceUSD - a.priceUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
+    { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.revenueBudget, fill: "#6d28d9", description: "Meta de revenue estipulada para el año.", details: [] },
   ];
-
-  const maxRevenueValue = Math.max(...revenueData.map((d) => d.value));
+  const maxRevenueValue = Math.max(...revenueData.map((d) => d.value), 1);
 
   // ── Operative Margin data ──
   const marginWonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
@@ -205,44 +181,12 @@ const Analitica = () => {
   const marginForecastTotal = marginOpenDeals.reduce((s, p) => s + p.marginUSD, 0);
 
   const marginData = [
-    {
-      name: `${previousYear}`,
-      label: `${previousYear}`,
-      value: forecast.previousYearMargin,
-      fill: "#67e8f9",
-      description: "Margen operativo total de oportunidades ganadas del año anterior.",
-      details: [],
-    },
-    {
-      name: "Current",
-      label: "Current",
-      value: marginWonTotal,
-      fill: "#06b6d4",
-      description: "Suma del margen USD de todas las oportunidades ganadas/facturadas en el año en curso.",
-      details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })),
-    },
-    {
-      name: "Forecast",
-      label: "Forecast",
-      value: marginForecastTotal,
-      fill: "#0891b2",
-      description: "Suma del margen USD de oportunidades abiertas (no ganadas ni perdidas).",
-      details: marginOpenDeals
-        .sort((a, b) => b.marginUSD - a.marginUSD)
-        .slice(0, 6)
-        .map((p) => ({ name: p.projectName, amount: p.marginUSD })),
-    },
-    {
-      name: `Budget ${currentYear}`,
-      label: `Budget ${currentYear}`,
-      value: forecast.marginBudget,
-      fill: "#6d28d9",
-      description: "Meta de margen operativo estipulada para el año.",
-      details: [],
-    },
+    { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearMargin, fill: "#67e8f9", description: "Margen operativo total de oportunidades ganadas del año anterior.", details: [] },
+    { name: "Current", label: "Current", value: marginWonTotal, fill: "#06b6d4", description: "Suma del margen USD de todas las oportunidades ganadas/facturadas en el año en curso.", details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
+    { name: "Forecast", label: "Forecast", value: marginForecastTotal, fill: "#0891b2", description: "Suma del margen USD de oportunidades abiertas (no ganadas ni perdidas).", details: marginOpenDeals.sort((a, b) => b.marginUSD - a.marginUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
+    { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.marginBudget, fill: "#6d28d9", description: "Meta de margen operativo estipulada para el año.", details: [] },
   ];
-
-  const maxMarginValue = Math.max(...marginData.map((d) => d.value));
+  const maxMarginValue = Math.max(...marginData.map((d) => d.value), 1);
 
   // ── Pipeline KPIs ──
   const totalPipeline = prospects.reduce((s, p) => s + p.priceUSD, 0);
@@ -250,18 +194,14 @@ const Analitica = () => {
   const totalMargin = prospects.reduce((s, p) => s + p.marginUSD, 0);
   const avgMarginPct = prospects.length > 0 ? Math.round(prospects.reduce((s, p) => s + p.marginPercent, 0) / prospects.length) : 0;
   const winRate = prospects.length > 0
-    ? Math.round((wonDeals.length / prospects.filter((p) => p.status !== "prospecto").length) * 100)
+    ? Math.round((wonDeals.length / Math.max(prospects.filter((p) => p.status !== "prospecto").length, 1)) * 100)
     : 0;
-
-  // Pipeline by stage
-  const [stages] = useLocalStorage<PipelineStage[]>("sinem:pipeline:stages", DEFAULT_PIPELINE_STAGES);
 
   const stageData = stages.map((stage) => {
     const sp = prospects.filter((p) => p.status === stage.key);
     return { name: stage.label, count: sp.length, value: sp.reduce((s, p) => s + p.priceUSD, 0), weighted: sp.reduce((s, p) => s + p.weighted, 0) };
   });
 
-  // Pipeline by product
   const productMap = new Map<string, { count: number; value: number }>();
   prospects.forEach((p) => {
     const e = productMap.get(p.product) || { count: 0, value: 0 };
@@ -272,7 +212,6 @@ const Analitica = () => {
     .sort((a, b) => b.value - a.value)
     .slice(0, 6);
 
-  // Probability distribution (radar)
   const probRanges = [
     { range: "0-20%", min: 0, max: 20 },
     { range: "21-40%", min: 21, max: 40 },
@@ -285,7 +224,6 @@ const Analitica = () => {
     return { subject: r.range, count: matching.length, value: matching.reduce((s, p) => s + p.priceUSD, 0) / 1000 };
   });
 
-  // Top clients
   const clientPipeline = new Map<string, number>();
   prospects.forEach((p) => clientPipeline.set(p.directCustomer, (clientPipeline.get(p.directCustomer) || 0) + p.priceUSD));
   const topClients = Array.from(clientPipeline.entries())
@@ -295,16 +233,41 @@ const Analitica = () => {
 
   // ── Budget edit ──
   const openEdit = () => {
-    setEditAnnual(forecast.annualTarget);
-    setEditPrevYear(forecast.previousYearWon);
-    setEditRevenueBudget(forecast.revenueBudget);
-    setEditPrevYearRevenue(forecast.previousYearRevenue);
-    setEditMarginBudget(forecast.marginBudget);
-    setEditPrevYearMargin(forecast.previousYearMargin);
+    setEditAnnual(budget.annualTarget);
+    setEditPrevYear(budget.previousYearWon);
+    setEditRevenueBudget(budget.revenueBudget);
+    setEditPrevYearRevenue(budget.previousYearRevenue);
+    setEditMarginBudget(budget.marginBudget);
+    setEditPrevYearMargin(budget.previousYearMargin);
     setEditOpen(true);
   };
-  const handleSave = () => {
-    setForecast({ ...forecast, annualTarget: editAnnual, previousYearWon: editPrevYear, revenueBudget: editRevenueBudget, previousYearRevenue: editPrevYearRevenue, marginBudget: editMarginBudget, previousYearMargin: editPrevYearMargin });
+
+  const handleSave = async () => {
+    const updates = {
+      annual_target: editAnnual,
+      previous_year_won: editPrevYear,
+      revenue_budget: editRevenueBudget,
+      previous_year_revenue: editPrevYearRevenue,
+      margin_budget: editMarginBudget,
+      previous_year_margin: editPrevYearMargin,
+    };
+
+    if (forecastYearId) {
+      await supabase.from("forecast_years").update(updates).eq("id", forecastYearId);
+    } else {
+      const { data } = await supabase.from("forecast_years").insert({ ...updates, year: currentYear }).select().single();
+      if (data) setForecastYearId(data.id);
+    }
+
+    setBudget({
+      ...budget,
+      annualTarget: editAnnual,
+      previousYearWon: editPrevYear,
+      revenueBudget: editRevenueBudget,
+      previousYearRevenue: editPrevYearRevenue,
+      marginBudget: editMarginBudget,
+      previousYearMargin: editPrevYearMargin,
+    });
     setEditOpen(false);
     toast({ title: "Budget actualizado" });
   };
@@ -322,6 +285,14 @@ const Analitica = () => {
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -334,9 +305,7 @@ const Analitica = () => {
         </Button>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          ORDER ENTRY CHART — Hero section
-          ══════════════════════════════════════════════════════ */}
+      {/* ORDER ENTRY CHART */}
       <div className="stat-card p-6">
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-lg font-bold">Order Entry</h2>
@@ -356,23 +325,11 @@ const Analitica = () => {
           </Tooltip>
         </div>
         <p className="text-xs text-muted-foreground mb-5">Datos en USD$</p>
-
         <ResponsiveContainer width="100%" height={360}>
           <BarChart data={orderEntryData} barCategoryGap="25%">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-            <XAxis
-              dataKey="name"
-              tick={{ fontSize: 12, fontWeight: 600 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 11 }}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-              axisLine={false}
-              tickLine={false}
-              domain={[0, Math.ceil(maxBarValue * 1.15 / 100000) * 100000]}
-            />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} domain={[0, Math.ceil(maxBarValue * 1.15 / 100000) * 100000 || 100000]} />
             <RechartsTooltip content={<OrderEntryTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
             <Bar dataKey="value" radius={[6, 6, 0, 0]} label={<BarTopLabel />}>
               {orderEntryData.map((entry, i) => (
@@ -383,9 +340,7 @@ const Analitica = () => {
         </ResponsiveContainer>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          REVENUE CHART
-          ══════════════════════════════════════════════════════ */}
+      {/* REVENUE CHART */}
       <div className="stat-card p-6">
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-lg font-bold">Revenue</h2>
@@ -405,18 +360,11 @@ const Analitica = () => {
           </Tooltip>
         </div>
         <p className="text-xs text-muted-foreground mb-5">Datos en USD$</p>
-
         <ResponsiveContainer width="100%" height={360}>
           <BarChart data={revenueData} barCategoryGap="25%">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
-            <YAxis
-              tick={{ fontSize: 11 }}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-              axisLine={false}
-              tickLine={false}
-              domain={[0, Math.ceil(maxRevenueValue * 1.15 / 100000) * 100000]}
-            />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} domain={[0, Math.ceil(maxRevenueValue * 1.15 / 100000) * 100000 || 100000]} />
             <RechartsTooltip content={<OrderEntryTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
             <Bar dataKey="value" radius={[6, 6, 0, 0]} label={<BarTopLabel />}>
               {revenueData.map((entry, i) => (
@@ -427,9 +375,7 @@ const Analitica = () => {
         </ResponsiveContainer>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          OPERATIVE MARGIN CHART
-          ══════════════════════════════════════════════════════ */}
+      {/* OPERATIVE MARGIN CHART */}
       <div className="stat-card p-6">
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-lg font-bold">Operative Margin</h2>
@@ -449,18 +395,11 @@ const Analitica = () => {
           </Tooltip>
         </div>
         <p className="text-xs text-muted-foreground mb-5">Datos en USD$</p>
-
         <ResponsiveContainer width="100%" height={360}>
           <BarChart data={marginData} barCategoryGap="25%">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis dataKey="name" tick={{ fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} />
-            <YAxis
-              tick={{ fontSize: 11 }}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-              axisLine={false}
-              tickLine={false}
-              domain={[0, Math.ceil(maxMarginValue * 1.15 / 100000) * 100000]}
-            />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} domain={[0, Math.ceil(maxMarginValue * 1.15 / 100000) * 100000 || 100000]} />
             <RechartsTooltip content={<OrderEntryTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
             <Bar dataKey="value" radius={[6, 6, 0, 0]} label={<BarTopLabel />}>
               {marginData.map((entry, i) => (
@@ -477,10 +416,10 @@ const Analitica = () => {
         <KpiCard icon={TrendingUp} label="Ponderado" value={fmt(totalWeighted)} color="bg-sinem-info" />
         <KpiCard icon={Target} label="Ganados" value={fmt(wonTotal)} sub={`Win rate: ${winRate}%`} color="bg-sinem-success" />
         <KpiCard icon={BarChart3} label="Margen Total" value={fmt(totalMargin)} sub={`Promedio: ${avgMarginPct}%`} color="bg-sinem-teal" />
-        <KpiCard icon={Target} label={`Budget ${currentYear}`} value={fmt(forecast.annualTarget)} sub={`${previousYear}: ${fmt(forecast.previousYearWon)}`} color="bg-violet-600" />
+        <KpiCard icon={Target} label={`Budget ${currentYear}`} value={fmt(budget.annualTarget)} sub={`${previousYear}: ${fmt(budget.previousYearWon)}`} color="bg-violet-600" />
       </div>
 
-      {/* Row 1: Pipeline by Stage + By Product */}
+      {/* Pipeline by Stage + By Product */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="stat-card p-5">
           <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
@@ -491,10 +430,7 @@ const Analitica = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
-              <RechartsTooltip
-                formatter={(value: number, name: string) => [fmt(value), name]}
-                contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-              />
+              <RechartsTooltip formatter={(value: number, name: string) => [fmt(value), name]} contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
               <Bar dataKey="value" name="Valor" fill="hsl(199 89% 48%)" radius={[0, 4, 4, 0]} />
               <Bar dataKey="weighted" name="Ponderado" fill="hsl(168 76% 42%)" radius={[0, 4, 4, 0]} />
             </BarChart>
@@ -507,29 +443,18 @@ const Analitica = () => {
           </h3>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie
-                data={productData}
-                cx="50%" cy="50%"
-                innerRadius={60} outerRadius={100}
-                paddingAngle={3}
-                dataKey="value"
-                label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                labelLine={{ strokeWidth: 1 }}
-              >
+              <Pie data={productData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`} labelLine={{ strokeWidth: 1 }}>
                 {productData.map((_, i) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <RechartsTooltip
-                formatter={(value: number) => [fmt(value), "Valor"]}
-                contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-              />
+              <RechartsTooltip formatter={(value: number) => [fmt(value), "Valor"]} contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Row 2: Probability Radar + Top Clients */}
+      {/* Probability Radar + Top Clients */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="stat-card p-5">
           <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
@@ -553,6 +478,7 @@ const Analitica = () => {
             <Users className="h-4 w-4 text-muted-foreground" /> Top Clientes por Pipeline
           </h3>
           <div className="space-y-3">
+            {topClients.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">No hay datos</p>}
             {topClients.map((client, i) => {
               const pct = totalPipeline > 0 ? (client.value / totalPipeline) * 100 : 0;
               return (
@@ -572,9 +498,7 @@ const Analitica = () => {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          EDIT BUDGET / METAS DIALOG
-          ══════════════════════════════════════════════════════ */}
+      {/* EDIT BUDGET DIALOG */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
