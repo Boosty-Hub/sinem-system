@@ -1,14 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { mockAppUsers } from "@/lib/mockData";
-import type { AppUser } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Save, User2, Mail, Phone } from "lucide-react";
+import { Camera, Save, User2, Mail, Phone, Loader2 } from "lucide-react";
 
 const getInitials = (name: string) =>
   name
@@ -21,36 +19,93 @@ const getInitials = (name: string) =>
 const Perfil = () => {
   const { user: authUser } = useAuth();
   const { toast } = useToast();
-  const [appUsers, setAppUsers] = useLocalStorage<AppUser[]>("sinem:appUsers", mockAppUsers);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Find the current app_user matching the auth user email (or fallback to first)
-  const currentUser = appUsers.find((u) => u.email === authUser?.email) ?? appUsers[0];
-  const [name, setName] = useState(currentUser?.name ?? "");
-  const [phone, setPhone] = useState(currentUser?.phone ?? "");
-  const [avatarPreview, setAvatarPreview] = useState(currentUser?.avatarUrl ?? "");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [appUserId, setAppUserId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (!authUser?.email) return;
+    const fetch = async () => {
+      const { data } = await supabase
+        .from("app_users")
+        .select("*")
+        .eq("email", authUser.email!)
+        .maybeSingle();
+      if (data) {
+        setAppUserId(data.id);
+        setName(data.name);
+        setPhone(data.phone ?? "");
+        setAvatarUrl(data.avatar_url ?? "");
+        setAvatarPreview(data.avatar_url ?? "");
+      }
+      setLoading(false);
+    };
+    fetch();
+  }, [authUser?.email]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // For now, use a local object URL as preview. In production this would upload to Supabase Storage.
-    const url = URL.createObjectURL(file);
-    setAvatarPreview(url);
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
   };
 
-  const handleSave = () => {
-    if (!currentUser) return;
-    setAppUsers((prev) =>
-      prev.map((u) =>
-        u.id === currentUser.id
-          ? { ...u, name, phone, avatarUrl: avatarPreview }
-          : u
-      )
+  const handleSave = async () => {
+    if (!appUserId) return;
+    setSaving(true);
+    try {
+      let finalAvatarUrl = avatarUrl;
+
+      if (avatarFile) {
+        const ext = avatarFile.name.split(".").pop();
+        const path = `${appUserId}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from("avatars")
+          .upload(path, avatarFile, { upsert: true });
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(path);
+        finalAvatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      }
+
+      const { error } = await supabase
+        .from("app_users")
+        .update({
+          name,
+          phone,
+          avatar_url: finalAvatarUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appUserId);
+
+      if (error) throw error;
+      setAvatarUrl(finalAvatarUrl);
+      setAvatarFile(null);
+      toast({ title: "Perfil actualizado" });
+    } catch (err: any) {
+      toast({ title: "Error al guardar", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
-    toast({ title: "Perfil actualizado" });
-  };
+  }
 
-  if (!currentUser) {
+  if (!appUserId) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
         No se encontró el usuario.
@@ -65,15 +120,12 @@ const Perfil = () => {
         <p className="text-muted-foreground text-sm mt-1">Gestiona tu información personal y foto de perfil</p>
       </div>
 
-      {/* Avatar section */}
       <div className="stat-card p-8 flex flex-col items-center gap-4">
         <div className="relative group">
           <Avatar className="h-28 w-28 text-3xl">
-            {avatarPreview ? (
-              <AvatarImage src={avatarPreview} alt={name} />
-            ) : null}
+            {avatarPreview ? <AvatarImage src={avatarPreview} alt={name} /> : null}
             <AvatarFallback className="bg-primary/10 text-primary text-2xl font-bold">
-              {getInitials(name)}
+              {getInitials(name || "U")}
             </AvatarFallback>
           </Avatar>
           <button
@@ -83,21 +135,14 @@ const Perfil = () => {
           >
             <Camera className="h-6 w-6 text-white" />
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
         </div>
         <div className="text-center">
           <p className="font-semibold text-lg">{name}</p>
-          <p className="text-sm text-muted-foreground">{authUser?.email ?? currentUser.email}</p>
+          <p className="text-sm text-muted-foreground">{authUser?.email}</p>
         </div>
       </div>
 
-      {/* Form */}
       <div className="stat-card p-6 space-y-5">
         <h3 className="font-semibold text-sm mb-2">Información Personal</h3>
 
@@ -112,7 +157,7 @@ const Perfil = () => {
           <Label className="flex items-center gap-1.5">
             <Mail className="h-3.5 w-3.5 text-muted-foreground" /> Email
           </Label>
-          <Input value={authUser?.email ?? currentUser.email} disabled className="bg-muted/50" />
+          <Input value={authUser?.email ?? ""} disabled className="bg-muted/50" />
           <p className="text-[10px] text-muted-foreground">El email se gestiona desde la autenticación y no puede cambiarse aquí.</p>
         </div>
 
@@ -124,8 +169,9 @@ const Perfil = () => {
         </div>
 
         <div className="flex justify-end pt-2">
-          <Button onClick={handleSave}>
-            <Save className="h-4 w-4 mr-1" /> Guardar Cambios
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+            Guardar Cambios
           </Button>
         </div>
       </div>
