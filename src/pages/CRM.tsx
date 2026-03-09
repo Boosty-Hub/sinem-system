@@ -1,8 +1,7 @@
-import { useState, useMemo } from "react";
-import { mockProspects, mockProducts, mockProjects, mockQuotations } from "@/lib/mockData";
-import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project, type Quotation } from "@/lib/types";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X } from "lucide-react";
+import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +13,8 @@ import StagesDialog from "@/components/crm/StagesDialog";
 import ActivitySidebar from "@/components/crm/ActivitySidebar";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { usePermissions } from "@/hooks/usePermissions";
+import { supabase } from "@/integrations/supabase/client";
+import { dbToProspect, prospectToDb, dbToProduct, dbToStage } from "@/lib/supabaseMappers";
 
 const CRM = () => {
   const { toast } = useToast();
@@ -23,14 +24,13 @@ const CRM = () => {
   const canDeleteCRM = canDelete("CRM");
   const [view, setView] = useLocalStorage<"kanban" | "table">("sinem:crm:view", "kanban");
   const [search, setSearch] = useState("");
-  const [prospects, setProspects] = useLocalStorage<Prospect[]>("sinem:crm:prospects", mockProspects);
-  const [products, setProducts] = useLocalStorage<Product[]>("sinem:products", mockProducts);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stages, setStages] = useState<PipelineStage[]>(DEFAULT_PIPELINE_STAGES);
+  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [productsDialogOpen, setProductsDialogOpen] = useState(false);
   const [stagesDialogOpen, setStagesDialogOpen] = useState(false);
-  const [stages, setStages] = useLocalStorage<PipelineStage[]>("sinem:pipeline:stages", DEFAULT_PIPELINE_STAGES);
-  const [allProjects, setAllProjects] = useLocalStorage<Project[]>("sinem:projects", mockProjects);
-  const [quotations] = useLocalStorage<Quotation[]>("sinem:quotations", mockQuotations);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [activityProspect, setActivityProspect] = useState<Prospect | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -42,6 +42,21 @@ const CRM = () => {
   const [filterProbMax, setFilterProbMax] = useState("");
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
+
+  // ── Fetch data ──
+  const fetchData = useCallback(async () => {
+    const [{ data: dbProspects }, { data: dbProducts }, { data: dbStages }] = await Promise.all([
+      supabase.from("prospects").select("*").order("cotorta", { ascending: true }),
+      supabase.from("products").select("*").order("name"),
+      supabase.from("pipeline_stages").select("*").order("sort_order"),
+    ]);
+    if (dbProspects) setProspects(dbProspects.map(dbToProspect));
+    if (dbProducts) setProducts(dbProducts.map(dbToProduct));
+    if (dbStages && dbStages.length > 0) setStages(dbStages.map(dbToStage));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   // Unique values for selects
   const uniqueProducts = useMemo(() => [...new Set(prospects.map((p) => p.product).filter(Boolean))].sort(), [prospects]);
@@ -79,48 +94,91 @@ const CRM = () => {
     setDialogOpen(true);
   };
 
-  const handleStageChange = (prospectId: string, newStage: string) => {
+  const handleStageChange = async (prospectId: string, newStage: string) => {
     setProspects((prev) =>
-      prev.map((p) => (p.id === prospectId ? { ...p, status: newStage as Prospect["status"] } : p))
+      prev.map((p) => (p.id === prospectId ? { ...p, status: newStage } : p))
     );
+    await supabase.from("prospects").update({ status: newStage }).eq("id", prospectId);
 
     // Auto-create project when opportunity is won
     if (newStage === "ganado") {
       const prospect = prospects.find((p) => p.id === prospectId);
       if (!prospect) return;
-      const alreadyExists = allProjects.some((p) => p.prospectId === prospectId);
-      if (alreadyExists) return;
+      // Check if project already exists
+      const { data: existingProj } = await supabase.from("projects").select("id").eq("origin_prospect_id", prospectId).maybeSingle();
+      if (existingProj) return;
 
-      // Find the quotation linked to this prospect
-      const linkedQuotation = quotations.find((q) => q.prospectId === prospectId);
-
-      const newProject: Project = {
-        id: crypto.randomUUID(),
+      await supabase.from("projects").insert({
         name: prospect.projectName,
         client: prospect.directCustomer,
         value: prospect.priceUSD,
-        currentStep: 1,
-        createdAt: new Date().toISOString().split("T")[0],
+        current_step: 1,
         status: "activo",
-        prospectId: prospectId,
-        quotationId: linkedQuotation?.id,
-      };
-      setAllProjects((prev) => [newProject, ...prev]);
+        origin_prospect_id: prospectId,
+        client_id: prospect.clientId ?? null,
+      });
       toast({ title: "Proyecto creado", description: `Se creó el proyecto "${prospect.projectName}" automáticamente.` });
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     setProspects((prev) => prev.filter((p) => p.id !== id));
+    await supabase.from("prospects").delete().eq("id", id);
   };
 
-  const handleSaveProspect = (saved: Prospect) => {
-    setProspects((prev) => {
-      const exists = prev.find((p) => p.id === saved.id);
-      if (exists) return prev.map((p) => (p.id === saved.id ? saved : p));
-      return [saved, ...prev];
-    });
+  const handleSaveProspect = async (saved: Prospect) => {
+    const exists = prospects.find((p) => p.id === saved.id);
+    if (exists) {
+      setProspects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+      const { id, ...rest } = prospectToDb(saved);
+      await supabase.from("prospects").update(rest).eq("id", saved.id);
+    } else {
+      setProspects((prev) => [saved, ...prev]);
+      await supabase.from("prospects").insert(prospectToDb(saved));
+    }
   };
+
+  // ── Products CRUD ──
+  const handleSetProducts = async (fn: (prev: Product[]) => Product[]) => {
+    const newProducts = fn(products);
+    setProducts(newProducts);
+    // Sync with Supabase - find diff
+    const oldIds = new Set(products.map((p) => p.id));
+    const newIds = new Set(newProducts.map((p) => p.id));
+    // Deleted
+    for (const old of products) {
+      if (!newIds.has(old.id)) await supabase.from("products").delete().eq("id", old.id);
+    }
+    // Upserted
+    for (const p of newProducts) {
+      if (!oldIds.has(p.id)) {
+        await supabase.from("products").insert({ id: p.id, name: p.name, category: p.category });
+      } else {
+        const old = products.find((o) => o.id === p.id);
+        if (old && (old.name !== p.name || old.category !== p.category)) {
+          await supabase.from("products").update({ name: p.name, category: p.category }).eq("id", p.id);
+        }
+      }
+    }
+  };
+
+  // ── Stages CRUD ──
+  const handleSetStages: React.Dispatch<React.SetStateAction<PipelineStage[]>> = async (action) => {
+    const newStages = typeof action === "function" ? action(stages) : action;
+    setStages(newStages);
+    // Replace all stages
+    await supabase.from("pipeline_stages").delete().neq("id", 0); // delete all
+    const inserts = newStages.map((s, i) => ({ key: s.key, label: s.label, color: s.color, sort_order: i }));
+    if (inserts.length > 0) await supabase.from("pipeline_stages").insert(inserts);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -293,14 +351,14 @@ const CRM = () => {
         open={productsDialogOpen}
         onOpenChange={setProductsDialogOpen}
         products={products}
-        setProducts={setProducts}
+        setProducts={handleSetProducts}
       />
 
       <StagesDialog
         open={stagesDialogOpen}
         onOpenChange={setStagesDialogOpen}
         stages={stages}
-        setStages={setStages}
+        setStages={handleSetStages}
       />
 
       <ActivitySidebar
