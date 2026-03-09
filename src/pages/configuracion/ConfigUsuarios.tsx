@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Mail, Shield, Loader2, Eye, EyeOff } from "lucide-react";
+import { Search, Plus, Mail, Shield, Loader2, Eye, EyeOff, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 const SUPABASE_URL = "https://fxsshhrxzjyjvfszaorq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4c3NoaHJ4emp5anZmc3phb3JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyOTEwODQsImV4cCI6MjA4Njg2NzA4NH0.qJl7Dle-5iqFnNXir4mDPKR2c3-s8Og4e_6h6ZgquIE";
@@ -26,16 +27,29 @@ interface Role {
   name: string;
 }
 
+interface UserForm {
+  name: string;
+  email: string;
+  password: string;
+  role_id: string;
+  status: string;
+}
+
+const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none", status: "activo" };
+
 const ConfigUsuarios = () => {
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<AppUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role_id: "none" });
+  const [form, setForm] = useState<UserForm>({ ...emptyForm });
+
+  const isEditing = !!editingUser;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -57,50 +71,87 @@ const ConfigUsuarios = () => {
     fetchRoles();
   }, []);
 
-  const handleCreate = async () => {
+  const openCreate = () => {
+    setEditingUser(null);
+    setForm({ ...emptyForm });
     setError("");
-    if (!form.name || !form.email || !form.password) {
-      setError("Todos los campos son requeridos");
+    setShowPassword(false);
+    setDialogOpen(true);
+  };
+
+  const openEdit = (user: AppUser) => {
+    setEditingUser(user);
+    setForm({
+      name: user.name,
+      email: user.email,
+      password: "",
+      role_id: user.role_id ?? "none",
+      status: user.status,
+    });
+    setError("");
+    setShowPassword(false);
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    setError("");
+    if (!form.name || !form.email) {
+      setError("Nombre y email son requeridos");
       return;
     }
-    if (form.password.length < 6) {
+    if (!isEditing && !form.password) {
+      setError("La contraseña es requerida");
+      return;
+    }
+    if (form.password && form.password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres");
       return;
     }
 
-    setCreating(true);
+    setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${SUPABASE_URL}/functions/v1/create-user`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token}`,
-            apikey: SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
+      const endpoint = isEditing ? "update-user" : "create-user";
+      const body = isEditing
+        ? {
+            app_user_id: editingUser!.id,
+            name: form.name,
+            email: form.email,
+            password: form.password || undefined,
+            role_id: form.role_id === "none" ? null : form.role_id,
+            status: form.status,
+          }
+        : {
             name: form.name,
             email: form.email,
             password: form.password,
             role_id: form.role_id === "none" ? null : form.role_id,
-          }),
-        }
-      );
+          };
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify(body),
+      });
       const result = await res.json();
       if (!res.ok) {
-        setError(result.error || "Error al crear usuario");
-        setCreating(false);
+        setError(result.error || "Error al guardar");
+        setSaving(false);
         return;
       }
       setDialogOpen(false);
-      setForm({ name: "", email: "", password: "", role_id: "none" });
+      setForm({ ...emptyForm });
+      setEditingUser(null);
+      toast.success(isEditing ? "Usuario actualizado" : "Usuario creado");
       fetchUsers();
-    } catch (err) {
+    } catch {
       setError("Error de conexión");
     }
-    setCreating(false);
+    setSaving(false);
   };
 
   const filtered = users.filter(
@@ -117,7 +168,7 @@ const ConfigUsuarios = () => {
           <h1 className="text-xl font-bold tracking-tight">Gestión de Usuarios</h1>
           <p className="text-muted-foreground text-sm mt-1">{users.length} usuarios registrados</p>
         </div>
-        <Button size="sm" onClick={() => { setError(""); setDialogOpen(true); }}>
+        <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo Usuario
         </Button>
       </div>
@@ -141,6 +192,7 @@ const ConfigUsuarios = () => {
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Rol</th>
                 <th className="text-center py-3 px-4 font-medium text-muted-foreground">Estado</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Creado</th>
+                <th className="text-center py-3 px-4 font-medium text-muted-foreground">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -178,11 +230,16 @@ const ConfigUsuarios = () => {
                   <td className="py-3 px-4 text-muted-foreground text-xs">
                     {new Date(user.created_at).toLocaleDateString("es-DO")}
                   </td>
+                  <td className="py-3 px-4 text-center">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(user)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-muted-foreground text-sm">
+                  <td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">
                     No se encontraron usuarios
                   </td>
                 </tr>
@@ -192,11 +249,11 @@ const ConfigUsuarios = () => {
         )}
       </div>
 
-      {/* Create User Dialog */}
+      {/* Create / Edit User Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nuevo Usuario</DialogTitle>
+            <DialogTitle>{isEditing ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
@@ -217,13 +274,13 @@ const ConfigUsuarios = () => {
               />
             </div>
             <div>
-              <Label>Contraseña</Label>
+              <Label>{isEditing ? "Nueva contraseña (dejar vacío para no cambiar)" : "Contraseña"}</Label>
               <div className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder={isEditing ? "••••••••" : "Mínimo 6 caracteres"}
                   className="pr-10"
                 />
                 <button
@@ -247,6 +304,18 @@ const ConfigUsuarios = () => {
                 </SelectContent>
               </Select>
             </div>
+            {isEditing && (
+              <div>
+                <Label>Estado</Label>
+                <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="activo">Activo</SelectItem>
+                    <SelectItem value="inactivo">Inactivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {error && (
               <div className="bg-destructive/10 text-destructive text-sm px-3 py-2 rounded-lg border border-destructive/20">
@@ -256,8 +325,8 @@ const ConfigUsuarios = () => {
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={creating}>
-                {creating ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Creando...</> : "Crear Usuario"}
+              <Button onClick={handleSubmit} disabled={saving}>
+                {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando...</> : isEditing ? "Guardar Cambios" : "Crear Usuario"}
               </Button>
             </div>
           </div>
