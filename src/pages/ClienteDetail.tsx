@@ -1,22 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { mockClients, mockClientOffers, mockProjects, mockContacts } from "@/lib/mockData";
+import { supabase } from "@/integrations/supabase/client";
+import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { OFFER_STATUSES, type ClientOffer, type Client, type Contact } from "@/lib/types";
-import { ArrowLeft, Building2, Mail, Phone, MapPin, Plus, FileText, Eye, FolderKanban, UserCircle, Pencil, Trash2, Link2 } from "lucide-react";
+import { ArrowLeft, Building2, Mail, Phone, MapPin, Plus, FileText, Eye, FolderKanban, UserCircle, Pencil, Trash2, Link2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import OfferDialog from "@/components/clientes/OfferDialog";
 
 const ClienteDetail = () => {
   const { id } = useParams();
   const { toast } = useToast();
-  const [clients, setClients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
-  const client = clients.find((c) => c.id === id);
+  const [loading, setLoading] = useState(true);
+  const [client, setClient] = useState<Client | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [unlinkedContacts, setUnlinkedContacts] = useState<Contact[]>([]);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<ClientOffer | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -24,12 +29,30 @@ const ClienteDetail = () => {
     name: "", contactName: "", contactEmail: "", contactPhone: "", industry: "", address: "", status: "activo" as "activo" | "inactivo",
   });
 
-  // Contacts state
-  const [allContacts, setAllContacts] = useLocalStorage<Contact[]>("sinem:contacts", mockContacts);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const emptyContactForm = { firstName: "", lastName: "", position: "", email: "", phone: "", mobile: "", notes: "" };
   const [contactForm, setContactForm] = useState(emptyContactForm);
+
+  const fetchAll = async () => {
+    if (!id) return;
+    setLoading(true);
+    const [clientRes, contactsRes, unlinkedRes, offersRes, projectsRes] = await Promise.all([
+      supabase.from("clients").select("*").eq("id", id).single(),
+      supabase.from("contacts").select("*").eq("client_id", id),
+      supabase.from("contacts").select("*").is("client_id", null),
+      supabase.from("client_offers").select("*").eq("client_id", id).order("created_at", { ascending: false }),
+      supabase.from("projects").select("*").eq("client_id", id),
+    ]);
+    if (clientRes.data) setClient(dbToClient(clientRes.data));
+    setContacts((contactsRes.data ?? []).map(dbToContact));
+    setUnlinkedContacts((unlinkedRes.data ?? []).map(dbToContact));
+    setOffers(offersRes.data ?? []);
+    setProjects(projectsRes.data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchAll(); }, [id]);
 
   const openEditClient = () => {
     if (!client) return;
@@ -40,16 +63,33 @@ const ClienteDetail = () => {
     setEditOpen(true);
   };
 
-  const handleSaveClient = () => {
+  const handleSaveClient = async () => {
     if (!client || !editForm.name.trim()) return;
-    setClients((prev) =>
-      prev.map((c) => c.id === client.id ? { ...c, ...editForm, name: editForm.name.trim() } : c)
-    );
-    setEditOpen(false);
-    toast({ title: "Cliente actualizado" });
+    const { error } = await supabase.from("clients").update({
+      name: editForm.name.trim(),
+      contact_name: editForm.contactName.trim(),
+      contact_email: editForm.contactEmail.trim(),
+      contact_phone: editForm.contactPhone.trim(),
+      industry: editForm.industry.trim(),
+      address: editForm.address.trim(),
+      status: editForm.status,
+    }).eq("id", client.id);
+    if (!error) {
+      toast({ title: "Cliente actualizado" });
+      setEditOpen(false);
+      fetchAll();
+    }
   };
 
   const uf = (key: keyof typeof editForm, value: string) => setEditForm((f) => ({ ...f, [key]: value }));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (!client) {
     return (
@@ -62,52 +102,62 @@ const ClienteDetail = () => {
     );
   }
 
-  const offers = mockClientOffers.filter((o) => o.clientId === client.id);
-  const projects = mockProjects.filter((p) => p.client === client.name);
-  const contacts = allContacts.filter((ct) => ct.clientId === client.id);
-  const unlinkedContacts = allContacts.filter((ct) => !ct.clientId);
-
-  const handleSaveContact = () => {
+  const handleSaveContact = async () => {
     if (!contactForm.firstName.trim() || !contactForm.lastName.trim()) return;
-    const newContact: Contact = {
-      id: `ct-${Date.now()}`,
-      clientId: client.id,
-      firstName: contactForm.firstName.trim(),
-      lastName: contactForm.lastName.trim(),
+    const { error } = await supabase.from("contacts").insert({
+      client_id: client.id,
+      first_name: contactForm.firstName.trim(),
+      last_name: contactForm.lastName.trim(),
       position: contactForm.position.trim(),
       email: contactForm.email.trim(),
       phone: contactForm.phone.trim(),
-      mobile: contactForm.mobile?.trim() || undefined,
+      mobile: contactForm.mobile?.trim() || null,
       notes: contactForm.notes.trim(),
-      createdAt: new Date().toISOString().split("T")[0],
-      status: "activo",
-    };
-    setAllContacts((prev) => [...prev, newContact]);
-    setContactDialogOpen(false);
-    setContactForm(emptyContactForm);
-    toast({ title: "Contacto creado y vinculado" });
+    });
+    if (!error) {
+      setContactDialogOpen(false);
+      setContactForm(emptyContactForm);
+      toast({ title: "Contacto creado y vinculado" });
+      fetchAll();
+    }
   };
 
-  const handleLinkContact = (contactId: string) => {
-    setAllContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, clientId: client.id } : c));
+  const handleLinkContact = async (contactId: string) => {
+    await supabase.from("contacts").update({ client_id: client.id }).eq("id", contactId);
     setLinkDialogOpen(false);
     toast({ title: "Contacto vinculado" });
+    fetchAll();
   };
 
-  const handleUnlinkContact = (contactId: string) => {
-    setAllContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, clientId: undefined } : c));
+  const handleUnlinkContact = async (contactId: string) => {
+    await supabase.from("contacts").update({ client_id: null }).eq("id", contactId);
     toast({ title: "Contacto desvinculado" });
+    fetchAll();
   };
 
-  const totalOffersValue = offers.reduce((sum, o) => sum + o.priceUSD, 0);
-  const activeOffers = offers.filter((o) => !["ganada", "perdida"].includes(o.status));
+  const totalOffersValue = offers.reduce((sum: number, o: any) => sum + Number(o.price_usd), 0);
+  const activeOffers = offers.filter((o: any) => !["ganada", "perdida"].includes(o.status));
 
   const getStatusConfig = (status: string) => {
     return OFFER_STATUSES.find((s) => s.key === status) ?? { label: status, color: "bg-muted" };
   };
 
-  const handleEditOffer = (offer: ClientOffer) => {
-    setSelectedOffer(offer);
+  const handleEditOffer = (offer: any) => {
+    setSelectedOffer({
+      id: offer.id,
+      clientId: offer.client_id,
+      code: offer.code,
+      projectName: offer.project_name,
+      items: offer.items,
+      costUSD: Number(offer.cost_usd),
+      priceUSD: Number(offer.price_usd),
+      marginPercent: Number(offer.margin_percent),
+      marginUSD: Number(offer.margin_usd),
+      status: offer.status,
+      validUntil: offer.valid_until,
+      notes: offer.notes,
+      createdAt: offer.created_at,
+    });
     setDialogOpen(true);
   };
 
@@ -124,12 +174,11 @@ const ClienteDetail = () => {
               <Pencil className="h-4 w-4 text-muted-foreground" />
             </Button>
           </div>
-          <p className="text-muted-foreground text-sm">{client.industry} · Cliente desde {client.createdAt}</p>
+          <p className="text-muted-foreground text-sm">{client.industry} · Cliente desde {client.createdAt?.split("T")[0]}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Info del cliente */}
         <div className="stat-card">
           <h2 className="font-semibold mb-4 flex items-center gap-2">
             <Building2 className="h-4 w-4" /> Información del Cliente
@@ -154,7 +203,6 @@ const ClienteDetail = () => {
           </div>
         </div>
 
-        {/* Contactos del cliente */}
         <div className="stat-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold flex items-center gap-2">
@@ -197,21 +245,20 @@ const ClienteDetail = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Proyectos vinculados */}
         <div className="stat-card">
           <h2 className="font-semibold mb-4 flex items-center gap-2">
             <FolderKanban className="h-4 w-4" /> Proyectos
           </h2>
           {projects.length > 0 ? (
             <div className="space-y-3">
-              {projects.map((proj) => (
+              {projects.map((proj: any) => (
                 <Link key={proj.id} to={`/projects/${proj.id}`} className="block group">
                   <div className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
                     <div>
                       <p className="text-sm font-medium group-hover:text-primary transition-colors">{proj.name}</p>
-                      <p className="text-xs text-muted-foreground">Paso {proj.currentStep}/11</p>
+                      <p className="text-xs text-muted-foreground">Paso {proj.current_step}/11</p>
                     </div>
-                    <span className="text-xs font-semibold text-primary">${proj.value.toLocaleString()}</span>
+                    <span className="text-xs font-semibold text-primary">${Number(proj.value).toLocaleString()}</span>
                   </div>
                 </Link>
               ))}
@@ -221,7 +268,6 @@ const ClienteDetail = () => {
           )}
         </div>
 
-        {/* Stats */}
         <div className="stat-card">
           <h2 className="font-semibold mb-4">Resumen</h2>
           <div className="grid grid-cols-2 gap-4">
@@ -249,7 +295,6 @@ const ClienteDetail = () => {
         </div>
       </div>
 
-      {/* Ofertas del cliente */}
       <div className="stat-card">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -279,7 +324,7 @@ const ClienteDetail = () => {
               </tr>
             </thead>
             <tbody>
-              {offers.map((offer) => {
+              {offers.map((offer: any) => {
                 const statusCfg = getStatusConfig(offer.status);
                 return (
                   <tr key={offer.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
@@ -289,19 +334,19 @@ const ClienteDetail = () => {
                         <span className="font-mono text-xs">{offer.code}</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-medium">{offer.projectName}</td>
+                    <td className="py-3 px-4 font-medium">{offer.project_name}</td>
                     <td className="py-3 px-4 text-muted-foreground text-xs max-w-[200px] truncate">{offer.items}</td>
-                    <td className="py-3 px-4 text-right">${offer.costUSD.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-primary">${offer.priceUSD.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right">${Number(offer.cost_usd).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-primary">${Number(offer.price_usd).toLocaleString()}</td>
                     <td className="py-3 px-4 text-right">
-                      <span className="text-sinem-success font-medium">{offer.marginPercent}%</span>
+                      <span className="text-sinem-success font-medium">{Number(offer.margin_percent)}%</span>
                     </td>
                     <td className="py-3 px-4 text-center">
                       <span className={`inline-flex text-[10px] px-2 py-0.5 rounded-full text-primary-foreground ${statusCfg.color}`}>
                         {statusCfg.label}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-muted-foreground text-xs">{offer.createdAt}</td>
+                    <td className="py-3 px-4 text-muted-foreground text-xs">{offer.created_at?.split("T")[0]}</td>
                     <td className="py-3 px-4 text-center">
                       <Button variant="ghost" size="sm" onClick={() => handleEditOffer(offer)}>
                         <Eye className="h-4 w-4" />
@@ -377,7 +422,6 @@ const ClienteDetail = () => {
         </DialogContent>
       </Dialog>
 
-      {/* New Contact Dialog */}
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -420,7 +464,6 @@ const ClienteDetail = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Link Existing Contact Dialog */}
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
