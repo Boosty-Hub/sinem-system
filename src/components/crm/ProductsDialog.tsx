@@ -18,6 +18,7 @@ interface Props {
 
 const ProductsDialog = ({ open, onOpenChange, products, setProducts }: Props) => {
   const { toast } = useToast();
+  const { businessUnits: CATEGORIES } = useBusinessUnits();
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("SE");
