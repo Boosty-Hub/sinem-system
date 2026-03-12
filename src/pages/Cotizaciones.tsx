@@ -176,7 +176,7 @@ const Cotizaciones = () => {
       approved_at: updated.approvedAt ?? null,
       currency: updated.currency ?? "USD",
       exchange_rate: updated.exchangeRate ?? 1,
-      created_by: updated.createdBy ?? null,
+      created_by: updated.createdBy ?? user?.id ?? null,
     };
 
     const exists = quotations.find((q) => q.id === updated.id);
