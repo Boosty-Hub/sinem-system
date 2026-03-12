@@ -38,7 +38,7 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="w-10"></TableHead>
-              <TableHead className="w-10">#</TableHead>
+              <TableHead className="w-10">Código</TableHead>
               <TableHead>Proyecto</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Producto</TableHead>
