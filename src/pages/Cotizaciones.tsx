@@ -10,6 +10,7 @@ import UserAvatar from "@/components/UserAvatar";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/AuthContext";
 
 export interface QuotationPrefill {
   prospectId?: string;
@@ -21,6 +22,7 @@ export interface QuotationPrefill {
 
 const Cotizaciones = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { canCreate: canCreateFn, canDelete: canDeleteFn } = usePermissions();
   const canCreateCot = canCreateFn("Cotizaciones");
   const canDeleteCot = canDeleteFn("Cotizaciones");
@@ -136,11 +138,78 @@ const Cotizaciones = () => {
     setDialogOpen(true);
   };
 
-  const handleSave = (updated: Quotation) => {
+  const handleSave = async (updated: Quotation) => {
+    // Persist to Supabase
+    const quotationRow = {
+      id: updated.id,
+      code: updated.code,
+      subject: updated.subject,
+      status: updated.status,
+      prospect_id: updated.prospectId ?? null,
+      client_id: updated.clientId ?? null,
+      contact_id: updated.contactId ?? null,
+      client_company: updated.client.company,
+      client_attention: updated.client.attention,
+      client_address: updated.client.address,
+      client_phone: updated.client.phone,
+      client_email: updated.client.email,
+      client_rnc: updated.client.rnc,
+      subtotal_usd: updated.subtotalUSD,
+      apply_itbis: updated.applyItbis,
+      itbis_percent: updated.itbisPercent,
+      itbis_usd: updated.itbisUSD,
+      total_usd: updated.totalUSD,
+      cost_usd: updated.costUSD,
+      margin_percent: updated.marginPercent,
+      margin_usd: updated.marginUSD,
+      payment_terms: updated.paymentTerms,
+      delivery_terms: updated.deliveryTerms,
+      delivery_weeks_min: updated.deliveryWeeksMin,
+      delivery_weeks_max: updated.deliveryWeeksMax,
+      delivery_location: updated.deliveryLocation,
+      validity_days: updated.validityDays,
+      notes: updated.notes,
+      version: updated.version,
+      approval_status: updated.approvalStatus ?? "pending",
+      approval_note: updated.approvalNote ?? null,
+      approved_by: updated.approvedBy ?? null,
+      approved_at: updated.approvedAt ?? null,
+      currency: updated.currency ?? "USD",
+      exchange_rate: updated.exchangeRate ?? 1,
+      created_by: updated.createdBy ?? user?.id ?? null,
+    };
+
+    const exists = quotations.find((q) => q.id === updated.id);
+    if (exists) {
+      await supabase.from("quotations").update(quotationRow).eq("id", updated.id);
+    } else {
+      // For new quotations, generate a proper UUID
+      quotationRow.id = crypto.randomUUID();
+      updated = { ...updated, id: quotationRow.id };
+      await supabase.from("quotations").insert(quotationRow);
+    }
+
+    // Sync line items: delete old, insert new
+    await supabase.from("quotation_line_items").delete().eq("quotation_id", quotationRow.id);
+    if (updated.lineItems.length > 0) {
+      await supabase.from("quotation_line_items").insert(
+        updated.lineItems.map((li, idx) => ({
+          id: crypto.randomUUID(),
+          quotation_id: quotationRow.id,
+          description: li.description,
+          quantity: li.quantity,
+          unit_price_usd: li.unitPriceUSD,
+          total_usd: li.totalUSD,
+          sort_order: idx,
+        }))
+      );
+    }
+
+    // Update local state
     setQuotations((prev) => {
-      const exists = prev.find((q) => q.id === updated.id);
-      if (exists) return prev.map((q) => (q.id === updated.id ? updated : q));
-      return [...prev, updated];
+      const idx = prev.findIndex((q) => q.id === updated.id);
+      if (idx >= 0) return prev.map((q) => (q.id === updated.id ? updated : q));
+      return [updated, ...prev];
     });
     setSelectedQuotation(updated);
   };
