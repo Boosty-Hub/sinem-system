@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Handshake } from "lucide-react";
+import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Handshake, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { usePartners } from "@/hooks/usePartners";
+import { useBusinessUnits, type BusinessUnit } from "@/hooks/useBusinessUnits";
 import { type GeneralSettings } from "@/lib/types";
 
 const STORAGE_KEY = "sinem:general-settings";
@@ -14,9 +15,16 @@ const ConfigGeneral = () => {
   const { toast } = useToast();
   const [settings, setSettings] = useState<GeneralSettings>(DEFAULT_SETTINGS);
   const { partners, setPartners } = usePartners();
+  const { businessUnits, setBusinessUnits } = useBusinessUnits();
   const [newPartner, setNewPartner] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  // BU state
+  const [newBUKey, setNewBUKey] = useState("");
+  const [newBULabel, setNewBULabel] = useState("");
+  const [editingBUIdx, setEditingBUIdx] = useState<number | null>(null);
+  const [editingBUKey, setEditingBUKey] = useState("");
+  const [editingBULabel, setEditingBULabel] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -199,7 +207,148 @@ const ConfigGeneral = () => {
         </div>
       </div>
 
-      {/* Aprobación de Cotizaciones */}
+      {/* Business Units */}
+      <div className="stat-card max-w-xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Briefcase className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm">Unidades de Negocio (BU)</h3>
+            <p className="text-xs text-muted-foreground">Categorías disponibles en CRM y catálogo de productos</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {businessUnits.map((bu, i) => (
+            <div key={i} className="flex items-center gap-2 group">
+              {editingBUIdx === i ? (
+                <>
+                  <Input
+                    value={editingBUKey}
+                    onChange={(e) => setEditingBUKey(e.target.value.toUpperCase())}
+                    className="h-8 text-sm w-20"
+                    placeholder="KEY"
+                    maxLength={4}
+                  />
+                  <Input
+                    value={editingBULabel}
+                    onChange={(e) => setEditingBULabel(e.target.value)}
+                    className="h-8 text-sm flex-1"
+                    placeholder="Nombre completo"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const k = editingBUKey.trim();
+                        const l = editingBULabel.trim();
+                        if (!k || !l) return;
+                        if (businessUnits.some((b, j) => j !== i && b.key === k)) {
+                          toast({ title: "Error", description: "Esta clave ya existe.", variant: "destructive" });
+                          return;
+                        }
+                        setBusinessUnits(businessUnits.map((b, j) => j === i ? { key: k, label: `${k} - ${l}` } : b));
+                        setEditingBUIdx(null);
+                        toast({ title: "BU actualizada" });
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <Button size="sm" variant="default" className="h-8 px-2" onClick={() => {
+                    const k = editingBUKey.trim();
+                    const l = editingBULabel.trim();
+                    if (!k || !l) return;
+                    if (businessUnits.some((b, j) => j !== i && b.key === k)) {
+                      toast({ title: "Error", description: "Esta clave ya existe.", variant: "destructive" });
+                      return;
+                    }
+                    setBusinessUnits(businessUnits.map((b, j) => j === i ? { key: k, label: `${k} - ${l}` } : b));
+                    setEditingBUIdx(null);
+                    toast({ title: "BU actualizada" });
+                  }}>
+                    <Save className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setEditingBUIdx(null)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-mono w-10 text-center py-1.5 px-1 rounded bg-primary/10 text-primary font-semibold">{bu.key}</span>
+                  <span className="text-sm flex-1 py-1.5 px-2 rounded bg-muted/50">{bu.label}</span>
+                  <Button
+                    size="sm" variant="ghost"
+                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                      setEditingBUIdx(i);
+                      setEditingBUKey(bu.key);
+                      // Extract label part after "KEY - "
+                      const parts = bu.label.split(" - ");
+                      setEditingBULabel(parts.length > 1 ? parts.slice(1).join(" - ") : bu.label);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost"
+                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                    onClick={() => {
+                      setBusinessUnits(businessUnits.filter((_, j) => j !== i));
+                      toast({ title: "BU eliminada" });
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              )}
+            </div>
+          ))}
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <Input
+              value={newBUKey}
+              onChange={(e) => setNewBUKey(e.target.value.toUpperCase())}
+              placeholder="KEY"
+              className="h-8 text-sm w-20"
+              maxLength={4}
+            />
+            <Input
+              value={newBULabel}
+              onChange={(e) => setNewBULabel(e.target.value)}
+              placeholder="Nombre completo (ej: Electrical Products)"
+              className="h-8 text-sm flex-1"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const k = newBUKey.trim();
+                  const l = newBULabel.trim();
+                  if (!k || !l) return;
+                  if (businessUnits.some((b) => b.key === k)) {
+                    toast({ title: "Error", description: "Esta clave ya existe.", variant: "destructive" });
+                    return;
+                  }
+                  setBusinessUnits([...businessUnits, { key: k, label: `${k} - ${l}` }]);
+                  setNewBUKey("");
+                  setNewBULabel("");
+                  toast({ title: "BU agregada" });
+                }
+              }}
+            />
+            <Button size="sm" variant="outline" className="h-8" disabled={!newBUKey.trim() || !newBULabel.trim()} onClick={() => {
+              const k = newBUKey.trim();
+              const l = newBULabel.trim();
+              if (!k || !l) return;
+              if (businessUnits.some((b) => b.key === k)) {
+                toast({ title: "Error", description: "Esta clave ya existe.", variant: "destructive" });
+                return;
+              }
+              setBusinessUnits([...businessUnits, { key: k, label: `${k} - ${l}` }]);
+              setNewBUKey("");
+              setNewBULabel("");
+              toast({ title: "BU agregada" });
+            }}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="stat-card max-w-xl">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">

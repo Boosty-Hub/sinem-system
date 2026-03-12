@@ -9,6 +9,7 @@ import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect, type Product, type 
 import { supabase } from "@/integrations/supabase/client";
 import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { usePartners } from "@/hooks/usePartners";
+import { useBusinessUnits } from "@/hooks/useBusinessUnits";
 import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Link, useNavigate } from "react-router-dom";
@@ -39,6 +40,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const { partners } = usePartners();
+  const { businessUnits } = useBusinessUnits();
   const [linkedQuotations, setLinkedQuotations] = useState<any[]>([]);
 
   // Fetch clients & contacts from Supabase
@@ -328,12 +330,9 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Select value={bu} onValueChange={setBu}>
               <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="SE">SE - Smart Infrastructure</SelectItem>
-                <SelectItem value="DI">DI - Digital Industries</SelectItem>
-                <SelectItem value="MO">MO - Mobility</SelectItem>
-                <SelectItem value="EP">EP - Energy</SelectItem>
-                <SelectItem value="TR">TR - Trench</SelectItem>
-                <SelectItem value="IN">IN - Innomotics</SelectItem>
+                {businessUnits.map((u) => (
+                  <SelectItem key={u.key} value={u.key}>{u.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

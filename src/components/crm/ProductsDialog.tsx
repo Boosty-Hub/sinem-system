@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import type { Product } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { useBusinessUnits } from "@/hooks/useBusinessUnits";
 
 interface Props {
   open: boolean;
@@ -15,17 +16,9 @@ interface Props {
   setProducts: (fn: (prev: Product[]) => Product[]) => void;
 }
 
-const CATEGORIES = [
-  { key: "SE", label: "SE - Smart Infrastructure" },
-  { key: "DI", label: "DI - Digital Industries" },
-  { key: "MO", label: "MO - Mobility" },
-  { key: "EP", label: "EP - Energy" },
-  { key: "TR", label: "TR - Trench" },
-  { key: "IN", label: "IN - Innomotics" },
-];
-
 const ProductsDialog = ({ open, onOpenChange, products, setProducts }: Props) => {
   const { toast } = useToast();
+  const { businessUnits: CATEGORIES } = useBusinessUnits();
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("SE");
