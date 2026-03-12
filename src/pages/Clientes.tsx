@@ -37,6 +37,7 @@ const Clientes = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchClients = async () => {
     setLoading(true);
