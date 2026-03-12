@@ -273,6 +273,12 @@ const Clientes = () => {
         description={`¿Estás seguro de eliminar "${deleteTarget?.name}"? Esta acción no se puede deshacer.`}
         onConfirm={confirmDelete}
       />
+
+      <ClientImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={fetchClients}
+      />
     </div>
   );
 };
