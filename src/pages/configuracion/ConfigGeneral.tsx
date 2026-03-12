@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Handshake } from "lucide-react";
+import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Handshake, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { usePartners } from "@/hooks/usePartners";
+import { useBusinessUnits, type BusinessUnit } from "@/hooks/useBusinessUnits";
 import { type GeneralSettings } from "@/lib/types";
 
 const STORAGE_KEY = "sinem:general-settings";
