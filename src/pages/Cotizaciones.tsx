@@ -10,6 +10,7 @@ import UserAvatar from "@/components/UserAvatar";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/AuthContext";
 
 export interface QuotationPrefill {
   prospectId?: string;
