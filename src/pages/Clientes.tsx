@@ -139,9 +139,14 @@ const Clientes = () => {
             <Input placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-[240px]" />
           </div>
           {canCreateCli && (
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4 mr-1" /> Importar
+              </Button>
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
+              </Button>
+            </>
           )}
         </div>
       </div>
