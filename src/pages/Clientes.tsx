@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Client } from "@/lib/types";
 import { dbToClient, clientToDb } from "@/lib/supabaseMappers";
-import { Search, Plus, Building2, Mail, Phone, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Building2, Mail, Phone, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Link } from "react-router-dom";
+import ClientImportDialog from "@/components/clientes/ClientImportDialog";
 
 const emptyForm = {
   name: "",
@@ -36,6 +37,7 @@ const Clientes = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchClients = async () => {
     setLoading(true);
@@ -137,9 +139,14 @@ const Clientes = () => {
             <Input placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-[240px]" />
           </div>
           {canCreateCli && (
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4 mr-1" /> Importar
+              </Button>
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -265,6 +272,12 @@ const Clientes = () => {
         title="Eliminar Cliente"
         description={`¿Estás seguro de eliminar "${deleteTarget?.name}"? Esta acción no se puede deshacer.`}
         onConfirm={confirmDelete}
+      />
+
+      <ClientImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={fetchClients}
       />
     </div>
   );
