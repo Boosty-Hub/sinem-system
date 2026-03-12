@@ -22,6 +22,7 @@ export interface QuotationPrefill {
 
 const Cotizaciones = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { canCreate: canCreateFn, canDelete: canDeleteFn } = usePermissions();
   const canCreateCot = canCreateFn("Cotizaciones");
   const canDeleteCot = canDeleteFn("Cotizaciones");
