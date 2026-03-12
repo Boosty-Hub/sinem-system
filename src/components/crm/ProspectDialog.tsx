@@ -9,6 +9,7 @@ import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect, type Product, type 
 import { supabase } from "@/integrations/supabase/client";
 import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { usePartners } from "@/hooks/usePartners";
+import { useBusinessUnits } from "@/hooks/useBusinessUnits";
 import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Link, useNavigate } from "react-router-dom";
