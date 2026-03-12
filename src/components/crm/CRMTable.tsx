@@ -64,7 +64,7 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
                 onClick={() => onEdit(p)}
               >
                 <TableCell><UserAvatar userId={p.createdBy} size="sm" /></TableCell>
-                <TableCell className="text-muted-foreground text-xs">{p.cotorta}</TableCell>
+                <TableCell className="text-muted-foreground text-xs font-mono">{p.code || p.cotorta || "—"}</TableCell>
                 <TableCell>
                   <p className="font-medium text-sm">{p.projectName}</p>
                   <p className="text-xs text-muted-foreground">{p.scope.slice(0, 50)}</p>
