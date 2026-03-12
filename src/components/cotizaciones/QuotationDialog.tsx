@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload } from "lucide-react";
 import { usePartners } from "@/hooks/usePartners";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import UserAvatar from "@/components/UserAvatar";
 import * as XLSX from "xlsx";
 
