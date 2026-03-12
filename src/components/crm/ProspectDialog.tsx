@@ -38,7 +38,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
+  const { partners } = usePartners();
   const [linkedQuotations, setLinkedQuotations] = useState<any[]>([]);
 
   // Fetch clients & contacts from Supabase

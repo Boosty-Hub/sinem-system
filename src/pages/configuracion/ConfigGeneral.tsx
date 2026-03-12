@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000 };
 const ConfigGeneral = () => {
   const { toast } = useToast();
   const [settings, setSettings] = useState<GeneralSettings>(DEFAULT_SETTINGS);
-  const [partners, setPartners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
+  const { partners, setPartners } = usePartners();
   const [newPartner, setNewPartner] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
