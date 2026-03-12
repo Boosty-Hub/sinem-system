@@ -15,9 +15,16 @@ const ConfigGeneral = () => {
   const { toast } = useToast();
   const [settings, setSettings] = useState<GeneralSettings>(DEFAULT_SETTINGS);
   const { partners, setPartners } = usePartners();
+  const { businessUnits, setBusinessUnits } = useBusinessUnits();
   const [newPartner, setNewPartner] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  // BU state
+  const [newBUKey, setNewBUKey] = useState("");
+  const [newBULabel, setNewBULabel] = useState("");
+  const [editingBUIdx, setEditingBUIdx] = useState<number | null>(null);
+  const [editingBUKey, setEditingBUKey] = useState("");
+  const [editingBULabel, setEditingBULabel] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
