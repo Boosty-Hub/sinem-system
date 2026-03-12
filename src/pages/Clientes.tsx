@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Link } from "react-router-dom";
+import ClientImportDialog from "@/components/clientes/ClientImportDialog";
 
 const emptyForm = {
   name: "",
