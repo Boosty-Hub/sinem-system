@@ -5,10 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { PIPELINE_STAGES, QUOTATION_STATUSES, DEFAULT_PARTNERS, type Prospect, type Product, type PipelineStage, type Client, type Contact, type Quotation } from "@/lib/types";
+import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect, type Product, type PipelineStage, type Client, type Contact, type Quotation } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { usePartners } from "@/hooks/usePartners";
 import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Link, useNavigate } from "react-router-dom";
@@ -38,7 +38,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [partners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
+  const { partners } = usePartners();
   const [linkedQuotations, setLinkedQuotations] = useState<any[]>([]);
 
   // Fetch clients & contacts from Supabase

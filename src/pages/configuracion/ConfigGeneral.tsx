@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { DEFAULT_PARTNERS, type GeneralSettings } from "@/lib/types";
+import { usePartners } from "@/hooks/usePartners";
+import { type GeneralSettings } from "@/lib/types";
 
 const STORAGE_KEY = "sinem:general-settings";
 const DEFAULT_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000 };
@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000 };
 const ConfigGeneral = () => {
   const { toast } = useToast();
   const [settings, setSettings] = useState<GeneralSettings>(DEFAULT_SETTINGS);
-  const [partners, setPartners] = useLocalStorage<string[]>("sinem:partners", DEFAULT_PARTNERS);
+  const { partners, setPartners } = usePartners();
   const [newPartner, setNewPartner] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
