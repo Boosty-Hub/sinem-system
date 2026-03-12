@@ -330,12 +330,9 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Select value={bu} onValueChange={setBu}>
               <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="SE">SE - Smart Infrastructure</SelectItem>
-                <SelectItem value="DI">DI - Digital Industries</SelectItem>
-                <SelectItem value="MO">MO - Mobility</SelectItem>
-                <SelectItem value="EP">EP - Energy</SelectItem>
-                <SelectItem value="TR">TR - Trench</SelectItem>
-                <SelectItem value="IN">IN - Innomotics</SelectItem>
+                {businessUnits.map((u) => (
+                  <SelectItem key={u.key} value={u.key}>{u.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
