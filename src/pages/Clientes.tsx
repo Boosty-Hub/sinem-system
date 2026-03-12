@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Client } from "@/lib/types";
 import { dbToClient, clientToDb } from "@/lib/supabaseMappers";
-import { Search, Plus, Building2, Mail, Phone, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, Building2, Mail, Phone, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
