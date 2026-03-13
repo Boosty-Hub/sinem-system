@@ -1,25 +1,20 @@
 import { useState, useEffect, useRef } from "react";
-import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Handshake, Briefcase } from "lucide-react";
+import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Handshake, Briefcase, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { usePartners } from "@/hooks/usePartners";
 import { useBusinessUnits, type BusinessUnit } from "@/hooks/useBusinessUnits";
-import { type GeneralSettings } from "@/lib/types";
-
-const STORAGE_KEY = "sinem:general-settings";
-const DEFAULT_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000 };
+import { supabase } from "@/integrations/supabase/client";
 
 const ConfigGeneral = () => {
   const { toast } = useToast();
-  const [settings, setSettings] = useState<GeneralSettings>(DEFAULT_SETTINGS);
   const { partners, setPartners } = usePartners();
   const { businessUnits, setBusinessUnits } = useBusinessUnits();
   const [newPartner, setNewPartner] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
-  // BU state
   const [newBUKey, setNewBUKey] = useState("");
   const [newBULabel, setNewBULabel] = useState("");
   const [editingBUIdx, setEditingBUIdx] = useState<number | null>(null);
@@ -27,39 +22,95 @@ const ConfigGeneral = () => {
   const [editingBULabel, setEditingBULabel] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Logo state
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // Approval limit
+  const [managerApprovalLimit, setManagerApprovalLimit] = useState(300000);
+
+  // Load settings from DB
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try { setSettings(JSON.parse(stored)); } catch { /* use default */ }
-    }
+    const load = async () => {
+      const { data } = await supabase
+        .from("general_settings")
+        .select("key, value")
+        .in("key", ["company_logo_url", "manager_approval_limit"]);
+      if (data) {
+        for (const row of data) {
+          if (row.key === "company_logo_url") setLogoUrl(row.value);
+          if (row.key === "manager_approval_limit") setManagerApprovalLimit(Number(row.value) || 300000);
+        }
+      }
+    };
+    load();
   }, []);
 
-  const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    toast({ title: "Configuración guardada" });
-  };
-
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       toast({ title: "Error", description: "Solo se permiten archivos de imagen.", variant: "destructive" });
       return;
     }
-    if (file.size > 500 * 1024) {
-      toast({ title: "Error", description: "La imagen no debe superar 500KB.", variant: "destructive" });
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Error", description: "La imagen no debe superar 2MB.", variant: "destructive" });
       return;
     }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setSettings((s) => ({ ...s, companyLogoUrl: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
+
+    setUploadingLogo(true);
+    const ext = file.name.split(".").pop() || "png";
+    const filePath = `logo/company-logo.${ext}`;
+
+    // Upload to storage (overwrite)
+    const { error: uploadErr } = await supabase.storage
+      .from("company-assets")
+      .upload(filePath, file, { upsert: true, cacheControl: "0" });
+
+    if (uploadErr) {
+      toast({ title: "Error al subir", description: uploadErr.message, variant: "destructive" });
+      setUploadingLogo(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(filePath);
+    const publicUrl = urlData.publicUrl + "?t=" + Date.now(); // cache bust
+
+    // Save URL to general_settings
+    await supabase.from("general_settings").upsert(
+      { key: "company_logo_url", value: publicUrl, description: "URL del logo de la empresa" },
+      { onConflict: "key" }
+    );
+
+    // Also update proposal_settings logo_url
+    const { data: ps } = await supabase.from("proposal_settings").select("id").limit(1).maybeSingle();
+    if (ps) {
+      await supabase.from("proposal_settings").update({ logo_url: publicUrl }).eq("id", ps.id);
+    }
+
+    setLogoUrl(publicUrl);
+    setUploadingLogo(false);
+    toast({ title: "Logo actualizado" });
     e.target.value = "";
   };
 
-  const handleRemoveLogo = () => {
-    setSettings((s) => ({ ...s, companyLogoUrl: undefined }));
+  const handleRemoveLogo = async () => {
+    await supabase.storage.from("company-assets").remove(["logo/company-logo.png", "logo/company-logo.jpg", "logo/company-logo.svg", "logo/company-logo.jpeg", "logo/company-logo.webp"]);
+    await supabase.from("general_settings").delete().eq("key", "company_logo_url");
+    const { data: ps } = await supabase.from("proposal_settings").select("id").limit(1).maybeSingle();
+    if (ps) {
+      await supabase.from("proposal_settings").update({ logo_url: "" }).eq("id", ps.id);
+    }
+    setLogoUrl(null);
+    toast({ title: "Logo eliminado" });
+  };
+
+  const handleSave = async () => {
+    await supabase.from("general_settings").upsert(
+      { key: "manager_approval_limit", value: String(managerApprovalLimit), description: "Límite de aprobación del gerente comercial (USD)" },
+      { onConflict: "key" }
+    );
+    toast({ title: "Configuración guardada" });
   };
 
   // ── Partners CRUD ──
@@ -112,14 +163,14 @@ const ConfigGeneral = () => {
         </div>
 
         <div className="space-y-4">
-          {settings.companyLogoUrl ? (
+          {logoUrl ? (
             <div className="flex items-center gap-4">
               <div className="border rounded-lg p-3 bg-white">
-                <img src={settings.companyLogoUrl} alt="Logo" className="h-14 max-w-[200px] object-contain" />
+                <img src={logoUrl} alt="Logo" className="h-14 max-w-[200px] object-contain" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => logoInputRef.current?.click()}>
-                  <Upload className="h-3 w-3 mr-1" /> Cambiar
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+                  {uploadingLogo ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />} Cambiar
                 </Button>
                 <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleRemoveLogo}>
                   <Trash2 className="h-3 w-3 mr-1" /> Eliminar
@@ -128,12 +179,16 @@ const ConfigGeneral = () => {
             </div>
           ) : (
             <div
-              className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/40 transition-colors"
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/40 transition-colors ${uploadingLogo ? "opacity-50 pointer-events-none" : ""}`}
               onClick={() => logoInputRef.current?.click()}
             >
-              <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Haz clic para subir el logo</p>
-              <p className="text-[10px] text-muted-foreground mt-1">PNG, JPG o SVG · Máximo 500KB</p>
+              {uploadingLogo ? (
+                <Loader2 className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2 animate-spin" />
+              ) : (
+                <Upload className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+              )}
+              <p className="text-sm text-muted-foreground">{uploadingLogo ? "Subiendo..." : "Haz clic para subir el logo"}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">PNG, JPG o SVG · Máximo 2MB</p>
             </div>
           )}
           <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
@@ -280,7 +335,6 @@ const ConfigGeneral = () => {
                     onClick={() => {
                       setEditingBUIdx(i);
                       setEditingBUKey(bu.key);
-                      // Extract label part after "KEY - "
                       const parts = bu.label.split(" - ");
                       setEditingBULabel(parts.length > 1 ? parts.slice(1).join(" - ") : bu.label);
                     }}
@@ -371,8 +425,8 @@ const ConfigGeneral = () => {
               <span className="text-sm text-muted-foreground font-medium">$</span>
               <Input
                 type="number"
-                value={settings.managerApprovalLimit}
-                onChange={(e) => setSettings((s) => ({ ...s, managerApprovalLimit: Number(e.target.value) || 0 }))}
+                value={managerApprovalLimit}
+                onChange={(e) => setManagerApprovalLimit(Number(e.target.value) || 0)}
                 className="w-48"
                 min={0}
                 step={10000}
@@ -380,7 +434,7 @@ const ConfigGeneral = () => {
               <span className="text-sm text-muted-foreground">USD</span>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5">
-              Valor actual: <strong>${settings.managerApprovalLimit.toLocaleString()} USD</strong>
+              Valor actual: <strong>${managerApprovalLimit.toLocaleString()} USD</strong>
             </p>
           </div>
         </div>
