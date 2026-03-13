@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2 } from "lucide-react";
+import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import ProspectDialog from "@/components/crm/ProspectDialog";
 import ProductsDialog from "@/components/crm/ProductsDialog";
 import StagesDialog from "@/components/crm/StagesDialog";
 import ActivitySidebar from "@/components/crm/ActivitySidebar";
+import ProspectImportDialog from "@/components/crm/ProspectImportDialog";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +34,7 @@ const CRM = () => {
   const [stagesDialogOpen, setStagesDialogOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [activityProspect, setActivityProspect] = useState<Prospect | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterStage, setFilterStage] = useState("all");
   const [filterProduct, setFilterProduct] = useState("all");
@@ -238,6 +240,11 @@ const CRM = () => {
             </Button>
           )}
           {canCreateCRM && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-1" /> Importar
+            </Button>
+          )}
+          {canCreateCRM && (
             <Button onClick={() => { setSelectedProspect(null); setDialogOpen(true); }} size="sm">
               <Plus className="h-4 w-4 mr-1" /> Nueva Oportunidad
             </Button>
@@ -366,6 +373,12 @@ const CRM = () => {
         prospectName={activityProspect?.projectName ?? ""}
         open={!!activityProspect}
         onClose={() => setActivityProspect(null)}
+      />
+
+      <ProspectImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={fetchData}
       />
     </div>
   );
