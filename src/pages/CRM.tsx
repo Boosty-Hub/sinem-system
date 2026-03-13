@@ -240,6 +240,11 @@ const CRM = () => {
             </Button>
           )}
           {canCreateCRM && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-1" /> Importar
+            </Button>
+          )}
+          {canCreateCRM && (
             <Button onClick={() => { setSelectedProspect(null); setDialogOpen(true); }} size="sm">
               <Plus className="h-4 w-4 mr-1" /> Nueva Oportunidad
             </Button>
