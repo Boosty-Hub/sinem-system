@@ -11,6 +11,7 @@ import ProspectDialog from "@/components/crm/ProspectDialog";
 import ProductsDialog from "@/components/crm/ProductsDialog";
 import StagesDialog from "@/components/crm/StagesDialog";
 import ActivitySidebar from "@/components/crm/ActivitySidebar";
+import ProspectImportDialog from "@/components/crm/ProspectImportDialog";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
