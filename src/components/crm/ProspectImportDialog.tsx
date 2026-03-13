@@ -90,7 +90,7 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
 
         const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell != null && String(cell).trim() !== ""));
 
-        const prospects: ParsedProspect[] = dataRows.map((row) => {
+        const prospects: ParsedProspect[] = dataRows.map((row, idx) => {
           const code = String(row[0] ?? "").trim();
           const projectName = String(row[1] ?? "").trim();
           const directCustomer = String(row[2] ?? "").trim();
@@ -105,14 +105,19 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
           const status = String(row[11] ?? "prospecto").trim().toLowerCase();
           const comments = String(row[12] ?? "").trim();
 
-          let valid = true;
-          let error: string | undefined;
-          if (!projectName) {
-            valid = false;
-            error = "Nombre de proyecto vacío";
-          }
+          const errors: string[] = [];
+          if (!projectName) errors.push("Nombre de proyecto vacío");
+          if (!directCustomer) errors.push("Cliente directo vacío");
+          if (go < 0 || go > 100) errors.push("GO% debe ser 0-100");
+          if (get_ < 0 || get_ > 100) errors.push("GET% debe ser 0-100");
+          if (costUSD < 0) errors.push("Costo negativo");
+          if (priceUSD < 0) errors.push("Precio negativo");
 
-          return { code, projectName, directCustomer, endCustomer, bu, product, scope, costUSD, priceUSD, go, get: get_, status, comments, valid, error };
+          return {
+            code, projectName, directCustomer, endCustomer, bu, product, scope, costUSD, priceUSD, go, get: get_, status, comments,
+            valid: errors.length === 0,
+            error: errors.length > 0 ? `Fila ${idx + 2}: ${errors.join(", ")}` : undefined,
+          };
         });
 
         if (prospects.length === 0) {
