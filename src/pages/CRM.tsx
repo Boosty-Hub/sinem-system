@@ -374,6 +374,12 @@ const CRM = () => {
         open={!!activityProspect}
         onClose={() => setActivityProspect(null)}
       />
+
+      <ProspectImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={fetchData}
+      />
     </div>
   );
 };
