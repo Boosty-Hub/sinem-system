@@ -79,7 +79,7 @@ const ClientImportDialog = ({ open, onOpenChange, onImported }: Props) => {
         // Skip header row
         const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell != null && String(cell).trim() !== ""));
 
-        const clients: ParsedClient[] = dataRows.map((row) => {
+        const clients: ParsedClient[] = dataRows.map((row, idx) => {
           const name = String(row[0] ?? "").trim();
           const contactName = String(row[1] ?? "").trim();
           const contactEmail = String(row[2] ?? "").trim();
@@ -89,14 +89,15 @@ const ClientImportDialog = ({ open, onOpenChange, onImported }: Props) => {
           const rawStatus = String(row[6] ?? "activo").trim().toLowerCase();
           const status = rawStatus === "inactivo" ? "inactivo" : "activo";
 
-          let valid = true;
-          let error: string | undefined;
-          if (!name) {
-            valid = false;
-            error = "Nombre vacío";
-          }
+          const errors: string[] = [];
+          if (!name) errors.push("Nombre vacío");
+          if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) errors.push("Email inválido");
 
-          return { name, contactName, contactEmail, contactPhone, industry, address, status, valid, error };
+          return {
+            name, contactName, contactEmail, contactPhone, industry, address, status,
+            valid: errors.length === 0,
+            error: errors.length > 0 ? `Fila ${idx + 2}: ${errors.join(", ")}` : undefined,
+          };
         });
 
         if (clients.length === 0) {
