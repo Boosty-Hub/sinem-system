@@ -34,6 +34,7 @@ const CRM = () => {
   const [stagesDialogOpen, setStagesDialogOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null);
   const [activityProspect, setActivityProspect] = useState<Prospect | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterStage, setFilterStage] = useState("all");
   const [filterProduct, setFilterProduct] = useState("all");
