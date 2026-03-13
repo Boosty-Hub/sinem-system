@@ -79,7 +79,7 @@ const ClientImportDialog = ({ open, onOpenChange, onImported }: Props) => {
         // Skip header row
         const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell != null && String(cell).trim() !== ""));
 
-        const clients: ParsedClient[] = dataRows.map((row) => {
+        const clients: ParsedClient[] = dataRows.map((row, idx) => {
           const name = String(row[0] ?? "").trim();
           const contactName = String(row[1] ?? "").trim();
           const contactEmail = String(row[2] ?? "").trim();
@@ -89,14 +89,15 @@ const ClientImportDialog = ({ open, onOpenChange, onImported }: Props) => {
           const rawStatus = String(row[6] ?? "activo").trim().toLowerCase();
           const status = rawStatus === "inactivo" ? "inactivo" : "activo";
 
-          let valid = true;
-          let error: string | undefined;
-          if (!name) {
-            valid = false;
-            error = "Nombre vacío";
-          }
+          const errors: string[] = [];
+          if (!name) errors.push("Nombre vacío");
+          if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) errors.push("Email inválido");
 
-          return { name, contactName, contactEmail, contactPhone, industry, address, status, valid, error };
+          return {
+            name, contactName, contactEmail, contactPhone, industry, address, status,
+            valid: errors.length === 0,
+            error: errors.length > 0 ? `Fila ${idx + 2}: ${errors.join(", ")}` : undefined,
+          };
         });
 
         if (clients.length === 0) {
@@ -215,6 +216,16 @@ const ClientImportDialog = ({ open, onOpenChange, onImported }: Props) => {
               <span className="text-xs text-muted-foreground ml-auto">Total: {parsed.length} filas</span>
             </div>
 
+            {/* Error details */}
+            {invalidClients.length > 0 && (
+              <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 space-y-1">
+                <p className="text-xs font-semibold text-destructive">Detalle de errores:</p>
+                {invalidClients.map((c, i) => (
+                  <p key={i} className="text-[11px] text-destructive/80">• {c.error}</p>
+                ))}
+              </div>
+            )}
+
             {/* Preview table */}
             <div className="border rounded-lg overflow-hidden">
               <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
@@ -248,7 +259,12 @@ const ClientImportDialog = ({ open, onOpenChange, onImported }: Props) => {
                         <td className="py-2 px-3 text-center">
                           {c.valid
                             ? <CheckCircle2 className="h-3.5 w-3.5 text-sinem-success mx-auto" />
-                            : <span className="text-[10px] text-destructive" title={c.error}><XCircle className="h-3.5 w-3.5 mx-auto" /></span>}
+                            : (
+                              <div className="flex items-center gap-1 justify-center" title={c.error}>
+                                <XCircle className="h-3.5 w-3.5 text-destructive" />
+                                <span className="text-[10px] text-destructive max-w-[120px] truncate hidden sm:inline">{c.error}</span>
+                              </div>
+                            )}
                         </td>
                       </tr>
                     ))}

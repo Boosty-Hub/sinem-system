@@ -90,7 +90,7 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
 
         const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell != null && String(cell).trim() !== ""));
 
-        const prospects: ParsedProspect[] = dataRows.map((row) => {
+        const prospects: ParsedProspect[] = dataRows.map((row, idx) => {
           const code = String(row[0] ?? "").trim();
           const projectName = String(row[1] ?? "").trim();
           const directCustomer = String(row[2] ?? "").trim();
@@ -105,14 +105,19 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
           const status = String(row[11] ?? "prospecto").trim().toLowerCase();
           const comments = String(row[12] ?? "").trim();
 
-          let valid = true;
-          let error: string | undefined;
-          if (!projectName) {
-            valid = false;
-            error = "Nombre de proyecto vacío";
-          }
+          const errors: string[] = [];
+          if (!projectName) errors.push("Nombre de proyecto vacío");
+          if (!directCustomer) errors.push("Cliente directo vacío");
+          if (go < 0 || go > 100) errors.push("GO% debe ser 0-100");
+          if (get_ < 0 || get_ > 100) errors.push("GET% debe ser 0-100");
+          if (costUSD < 0) errors.push("Costo negativo");
+          if (priceUSD < 0) errors.push("Precio negativo");
 
-          return { code, projectName, directCustomer, endCustomer, bu, product, scope, costUSD, priceUSD, go, get: get_, status, comments, valid, error };
+          return {
+            code, projectName, directCustomer, endCustomer, bu, product, scope, costUSD, priceUSD, go, get: get_, status, comments,
+            valid: errors.length === 0,
+            error: errors.length > 0 ? `Fila ${idx + 2}: ${errors.join(", ")}` : undefined,
+          };
         });
 
         if (prospects.length === 0) {
@@ -245,6 +250,16 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
               <span className="text-xs text-muted-foreground ml-auto">Total: {parsed.length} filas</span>
             </div>
 
+            {/* Error details */}
+            {invalidItems.length > 0 && (
+              <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 space-y-1">
+                <p className="text-xs font-semibold text-destructive">Detalle de errores:</p>
+                {invalidItems.map((c, i) => (
+                  <p key={i} className="text-[11px] text-destructive/80">• {c.error}</p>
+                ))}
+              </div>
+            )}
+
             <div className="border rounded-lg overflow-hidden">
               <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                 <table className="w-full text-xs">
@@ -285,7 +300,12 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
                         <td className="py-2 px-3 text-center">
                           {c.valid
                             ? <CheckCircle2 className="h-3.5 w-3.5 text-sinem-success mx-auto" />
-                            : <span className="text-[10px] text-destructive" title={c.error}><XCircle className="h-3.5 w-3.5 mx-auto" /></span>}
+                            : (
+                              <div className="flex items-center gap-1 justify-center" title={c.error}>
+                                <XCircle className="h-3.5 w-3.5 text-destructive" />
+                                <span className="text-[10px] text-destructive max-w-[120px] truncate hidden sm:inline">{c.error}</span>
+                              </div>
+                            )}
                         </td>
                       </tr>
                     ))}
