@@ -216,6 +216,16 @@ const ClientImportDialog = ({ open, onOpenChange, onImported }: Props) => {
               <span className="text-xs text-muted-foreground ml-auto">Total: {parsed.length} filas</span>
             </div>
 
+            {/* Error details */}
+            {invalidClients.length > 0 && (
+              <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 space-y-1">
+                <p className="text-xs font-semibold text-destructive">Detalle de errores:</p>
+                {invalidClients.map((c, i) => (
+                  <p key={i} className="text-[11px] text-destructive/80">• {c.error}</p>
+                ))}
+              </div>
+            )}
+
             {/* Preview table */}
             <div className="border rounded-lg overflow-hidden">
               <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
