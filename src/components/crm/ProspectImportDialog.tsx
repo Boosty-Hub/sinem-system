@@ -290,7 +290,12 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
                         <td className="py-2 px-3 text-center">
                           {c.valid
                             ? <CheckCircle2 className="h-3.5 w-3.5 text-sinem-success mx-auto" />
-                            : <span className="text-[10px] text-destructive" title={c.error}><XCircle className="h-3.5 w-3.5 mx-auto" /></span>}
+                            : (
+                              <div className="flex items-center gap-1 justify-center" title={c.error}>
+                                <XCircle className="h-3.5 w-3.5 text-destructive" />
+                                <span className="text-[10px] text-destructive max-w-[120px] truncate hidden sm:inline">{c.error}</span>
+                              </div>
+                            )}
                         </td>
                       </tr>
                     ))}
