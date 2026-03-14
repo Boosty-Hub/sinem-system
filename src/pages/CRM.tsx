@@ -36,6 +36,7 @@ const CRM = () => {
   const [activityProspect, setActivityProspect] = useState<Prospect | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterStage, setFilterStage] = useState("all");
   const [filterProduct, setFilterProduct] = useState("all");
   const [filterCustomer, setFilterCustomer] = useState("all");
@@ -340,7 +341,7 @@ const CRM = () => {
       {view === "kanban" ? (
         <CRMKanban prospects={filtered} onEdit={handleEdit} onStageChange={handleStageChange} onActivity={setActivityProspect} stages={stages} />
       ) : (
-        <CRMTable prospects={filtered} onEdit={handleEdit} onActivity={setActivityProspect} onStageChange={handleStageChange} stages={stages} />
+        <CRMTable prospects={filtered} onEdit={handleEdit} onActivity={setActivityProspect} onStageChange={handleStageChange} stages={stages} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
       )}
 
       <ProspectDialog

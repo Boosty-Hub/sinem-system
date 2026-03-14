@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import type { Prospect, PipelineStage } from "@/lib/types";
 import {
   Table,
@@ -8,8 +9,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PIPELINE_STAGES } from "@/lib/types";
-import { MessageSquareText, Receipt } from "lucide-react";
+import { MessageSquareText, Receipt, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import UserAvatar from "@/components/UserAvatar";
 
 interface Props {
@@ -18,10 +20,76 @@ interface Props {
   onActivity?: (p: Prospect) => void;
   onStageChange?: (prospectId: string, newStage: string) => void;
   stages?: PipelineStage[];
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
-const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stagesProp }: Props) => {
+type SortKey =
+  | "code" | "projectName" | "directCustomer" | "product"
+  | "costUSD" | "priceUSD" | "go" | "get" | "probability"
+  | "weighted" | "marginPercent" | "marginUSD" | "estimatedOE"
+  | "revenue" | "status";
+
+type SortDir = "asc" | "desc";
+
+const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stagesProp, selectedIds = [], onSelectionChange }: Props) => {
   const stageList = stagesProp ?? PIPELINE_STAGES;
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return prospects;
+    return [...prospects].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (typeof av === "number" && typeof bv === "number") {
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      const as = String(av ?? "").toLowerCase();
+      const bs = String(bv ?? "").toLowerCase();
+      return sortDir === "asc" ? as.localeCompare(bs) : bs.localeCompare(as);
+    });
+  }, [prospects, sortKey, sortDir]);
+
+  const allSelected = prospects.length > 0 && selectedIds.length === prospects.length;
+  const someSelected = selectedIds.length > 0 && !allSelected;
+
+  const toggleAll = () => {
+    onSelectionChange?.(allSelected ? [] : prospects.map(p => p.id));
+  };
+
+  const toggleOne = (id: string) => {
+    onSelectionChange?.(
+      selectedIds.includes(id)
+        ? selectedIds.filter(i => i !== id)
+        : [...selectedIds, id]
+    );
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ChevronsUpDown className="h-3 w-3 opacity-40" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3 w-3 text-primary" />
+      : <ArrowDown className="h-3 w-3 text-primary" />;
+  };
+
+  const SortableHead = ({ col, children, className = "" }: { col: SortKey; children: React.ReactNode; className?: string }) => (
+    <TableHead className={`cursor-pointer select-none hover:bg-muted/70 transition-colors ${className}`} onClick={() => handleSort(col)}>
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <SortIcon col={col} />
+      </span>
+    </TableHead>
+  );
 
   const statusBadge = (status: string) => {
     const stage = stageList.find((s) => s.key === status);
@@ -31,38 +99,53 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
       </span>
     );
   };
+
   return (
     <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                  onCheckedChange={toggleAll}
+                  aria-label="Seleccionar todos"
+                />
+              </TableHead>
               <TableHead className="w-10"></TableHead>
-              <TableHead className="w-10">Código</TableHead>
-              <TableHead>Proyecto</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Producto</TableHead>
-              <TableHead className="text-right">Costo USD</TableHead>
-              <TableHead className="text-right">Precio USD</TableHead>
-              <TableHead className="text-center">Go%</TableHead>
-              <TableHead className="text-center">Get%</TableHead>
-              <TableHead className="text-center">Prob.</TableHead>
-              <TableHead className="text-right">Peso USD</TableHead>
-              <TableHead className="text-right">Margen %</TableHead>
-              <TableHead className="text-right">Margen USD</TableHead>
-              <TableHead>OE Est.</TableHead>
-              <TableHead>Revenue</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableHead col="code">Código</SortableHead>
+              <SortableHead col="projectName">Proyecto</SortableHead>
+              <SortableHead col="directCustomer">Cliente</SortableHead>
+              <SortableHead col="product">Producto</SortableHead>
+              <SortableHead col="costUSD" className="text-right">Costo USD</SortableHead>
+              <SortableHead col="priceUSD" className="text-right">Precio USD</SortableHead>
+              <SortableHead col="go" className="text-center">Go%</SortableHead>
+              <SortableHead col="get" className="text-center">Get%</SortableHead>
+              <SortableHead col="probability" className="text-center">Prob.</SortableHead>
+              <SortableHead col="weighted" className="text-right">Peso USD</SortableHead>
+              <SortableHead col="marginPercent" className="text-right">Margen %</SortableHead>
+              <SortableHead col="marginUSD" className="text-right">Margen USD</SortableHead>
+              <SortableHead col="estimatedOE">OE Est.</SortableHead>
+              <SortableHead col="revenue">Revenue</SortableHead>
+              <SortableHead col="status">Status</SortableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {prospects.map((p) => (
+            {sorted.map((p) => (
               <TableRow
                 key={p.id}
-                className="cursor-pointer hover:bg-muted/30 transition-colors"
+                className={`cursor-pointer hover:bg-muted/30 transition-colors ${selectedIds.includes(p.id) ? "bg-primary/5" : ""}`}
                 onClick={() => onEdit(p)}
               >
+                <TableCell onClick={e => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedIds.includes(p.id)}
+                    onCheckedChange={() => toggleOne(p.id)}
+                    aria-label={`Seleccionar ${p.projectName}`}
+                  />
+                </TableCell>
                 <TableCell><UserAvatar userId={p.createdBy} size="sm" /></TableCell>
                 <TableCell className="text-muted-foreground text-xs font-mono">{p.code || p.cotorta || "—"}</TableCell>
                 <TableCell>
