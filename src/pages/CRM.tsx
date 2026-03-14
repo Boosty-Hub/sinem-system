@@ -137,6 +137,32 @@ const CRM = () => {
     await supabase.from("prospects").delete().eq("id", id);
   };
 
+  // ── Bulk actions ──
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkStageTarget, setBulkStageTarget] = useState<string | null>(null);
+
+  const handleBulkDelete = async () => {
+    const ids = selectedIds;
+    setProspects(prev => prev.filter(p => !ids.includes(p.id)));
+    setSelectedIds([]);
+    for (const id of ids) {
+      await supabase.from("prospects").delete().eq("id", id);
+    }
+    toast({ title: "Eliminados", description: `${ids.length} oportunidad(es) eliminada(s).` });
+  };
+
+  const handleBulkStageChange = async (newStage: string) => {
+    const ids = selectedIds;
+    setProspects(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: newStage } : p));
+    setSelectedIds([]);
+    for (const id of ids) {
+      await supabase.from("prospects").update({ status: newStage }).eq("id", id);
+    }
+    const stageLabel = stages.find(s => s.key === newStage)?.label ?? newStage;
+    toast({ title: "Status actualizado", description: `${ids.length} oportunidad(es) movida(s) a "${stageLabel}".` });
+    setBulkStageTarget(null);
+  };
+
   const handleSaveProspect = async (saved: Prospect) => {
     const exists = prospects.find((p) => p.id === saved.id);
     if (exists) {
