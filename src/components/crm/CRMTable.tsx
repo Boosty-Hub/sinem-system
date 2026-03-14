@@ -9,9 +9,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PIPELINE_STAGES } from "@/lib/types";
-import { MessageSquareText, Receipt, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { MessageSquareText, Receipt, ArrowUp, ArrowDown, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import UserAvatar from "@/components/UserAvatar";
 
 interface Props {
