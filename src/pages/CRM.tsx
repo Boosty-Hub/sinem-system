@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload } from "lucide-react";
+import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload, Trash2, ArrowRightLeft, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
