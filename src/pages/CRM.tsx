@@ -74,10 +74,17 @@ const CRM = () => {
   };
 
   const filtered = prospects.filter((p) => {
+    const s = search.toLowerCase();
     const matchSearch = !search ||
-      p.projectName.toLowerCase().includes(search.toLowerCase()) ||
-      p.directCustomer.toLowerCase().includes(search.toLowerCase()) ||
-      p.product.toLowerCase().includes(search.toLowerCase());
+      p.projectName.toLowerCase().includes(s) ||
+      p.directCustomer.toLowerCase().includes(s) ||
+      p.endCustomer.toLowerCase().includes(s) ||
+      p.product.toLowerCase().includes(s) ||
+      p.code.toLowerCase().includes(s) ||
+      String(p.cotorta).includes(s) ||
+      p.bu.toLowerCase().includes(s) ||
+      p.scope.toLowerCase().includes(s) ||
+      p.proveedor.toLowerCase().includes(s);
     const matchStage = filterStage === "all" || p.status === filterStage;
     const matchProduct = filterProduct === "all" || p.product === filterProduct;
     const matchCustomer = filterCustomer === "all" || p.directCustomer === filterCustomer;
