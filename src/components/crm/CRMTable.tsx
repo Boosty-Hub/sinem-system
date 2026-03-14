@@ -9,9 +9,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PIPELINE_STAGES } from "@/lib/types";
-import { MessageSquareText, Receipt, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { MessageSquareText, Receipt, ArrowUp, ArrowDown, ChevronsUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import UserAvatar from "@/components/UserAvatar";
 
 interface Props {
@@ -36,6 +37,8 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
   const stageList = stagesProp ?? PIPELINE_STAGES;
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -60,11 +63,15 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
     });
   }, [prospects, sortKey, sortDir]);
 
-  const allSelected = prospects.length > 0 && selectedIds.length === prospects.length;
-  const someSelected = selectedIds.length > 0 && !allSelected;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const paginated = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
+
+  const allSelected = paginated.length > 0 && paginated.every(p => selectedIds.includes(p.id));
+  const someSelected = paginated.some(p => selectedIds.includes(p.id)) && !allSelected;
 
   const toggleAll = () => {
-    onSelectionChange?.(allSelected ? [] : prospects.map(p => p.id));
+    onSelectionChange?.(allSelected ? selectedIds.filter(id => !paginated.find(p => p.id === id)) : [...new Set([...selectedIds, ...paginated.map(p => p.id)])]);
   };
 
   const toggleOne = (id: string) => {
@@ -133,7 +140,7 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((p) => (
+            {paginated.map((p) => (
               <TableRow
                 key={p.id}
                 className={`cursor-pointer hover:bg-muted/30 transition-colors ${selectedIds.includes(p.id) ? "bg-primary/5" : ""}`}
@@ -185,6 +192,38 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
             ))}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between px-4 py-3 border-t border-border/60">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>{selectedIds.length > 0 ? `${selectedIds.length} seleccionado(s) · ` : ""}{sorted.length} registro(s)</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Filas por página</span>
+            <Select value={String(pageSize)} onValueChange={v => { setPageSize(Number(v)); setPage(0); }}>
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <span>Página {safePage + 1} de {totalPages}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
