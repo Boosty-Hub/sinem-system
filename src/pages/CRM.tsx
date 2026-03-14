@@ -467,6 +467,7 @@ const CRM = () => {
           onOpenChange={(open) => { if (!open) setBulkStageTarget(null); }}
           title="Cambiar status"
           description={`¿Mover ${selectedIds.length} oportunidad(es) a "${stages.find(s => s.key === bulkStageTarget)?.label ?? bulkStageTarget}"?`}
+          confirmLabel="Confirmar"
           onConfirm={() => handleBulkStageChange(bulkStageTarget)}
         />
       )}
