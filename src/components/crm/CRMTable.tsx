@@ -37,6 +37,8 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
   const stageList = stagesProp ?? PIPELINE_STAGES;
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
