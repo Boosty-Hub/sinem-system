@@ -415,6 +415,61 @@ const CRM = () => {
         onOpenChange={setImportOpen}
         onImported={fetchData}
       />
+
+      {/* Floating bulk actions bar */}
+      {selectedIds.length > 0 && view === "table" && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+          <div className="flex items-center gap-3 bg-foreground text-background rounded-xl px-5 py-3 shadow-2xl">
+            <span className="text-sm font-medium">{selectedIds.length} seleccionado(s)</span>
+            <div className="h-5 w-px bg-background/20" />
+
+            {/* Change stage */}
+            <Select value="" onValueChange={(v) => { setBulkStageTarget(v); }}>
+              <SelectTrigger className="h-8 w-[160px] bg-background/10 border-background/20 text-background text-xs">
+                <div className="flex items-center gap-1.5">
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  <span>Cambiar status</span>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {stages.map(s => (
+                  <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Delete */}
+            {canDeleteCRM && (
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setBulkConfirmOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
+              </Button>
+            )}
+
+            <div className="h-5 w-px bg-background/20" />
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-background hover:bg-background/10" onClick={() => setSelectedIds([])}>
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        onOpenChange={setBulkConfirmOpen}
+        title="Eliminar oportunidades"
+        description={`¿Estás seguro que deseas eliminar ${selectedIds.length} oportunidad(es)? Esta acción no se puede deshacer.`}
+        onConfirm={handleBulkDelete}
+      />
+
+      {bulkStageTarget && (
+        <ConfirmDialog
+          open={!!bulkStageTarget}
+          onOpenChange={(open) => { if (!open) setBulkStageTarget(null); }}
+          title="Cambiar status"
+          description={`¿Mover ${selectedIds.length} oportunidad(es) a "${stages.find(s => s.key === bulkStageTarget)?.label ?? bulkStageTarget}"?`}
+          onConfirm={() => handleBulkStageChange(bulkStageTarget)}
+        />
+      )}
     </div>
   );
 };
