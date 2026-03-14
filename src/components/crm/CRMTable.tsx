@@ -71,7 +71,7 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
   const someSelected = paginated.some(p => selectedIds.includes(p.id)) && !allSelected;
 
   const toggleAll = () => {
-    onSelectionChange?.(allSelected ? [] : prospects.map(p => p.id));
+    onSelectionChange?.(allSelected ? selectedIds.filter(id => !paginated.find(p => p.id === id)) : [...new Set([...selectedIds, ...paginated.map(p => p.id)])]);
   };
 
   const toggleOne = (id: string) => {
