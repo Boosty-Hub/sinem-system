@@ -63,8 +63,12 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
     });
   }, [prospects, sortKey, sortDir]);
 
-  const allSelected = prospects.length > 0 && selectedIds.length === prospects.length;
-  const someSelected = selectedIds.length > 0 && !allSelected;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const paginated = sorted.slice(safePage * pageSize, (safePage + 1) * pageSize);
+
+  const allSelected = paginated.length > 0 && paginated.every(p => selectedIds.includes(p.id));
+  const someSelected = paginated.some(p => selectedIds.includes(p.id)) && !allSelected;
 
   const toggleAll = () => {
     onSelectionChange?.(allSelected ? [] : prospects.map(p => p.id));
