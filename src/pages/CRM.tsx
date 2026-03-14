@@ -341,7 +341,7 @@ const CRM = () => {
       {view === "kanban" ? (
         <CRMKanban prospects={filtered} onEdit={handleEdit} onStageChange={handleStageChange} onActivity={setActivityProspect} stages={stages} />
       ) : (
-        <CRMTable prospects={filtered} onEdit={handleEdit} onActivity={setActivityProspect} onStageChange={handleStageChange} stages={stages} />
+        <CRMTable prospects={filtered} onEdit={handleEdit} onActivity={setActivityProspect} onStageChange={handleStageChange} stages={stages} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
       )}
 
       <ProspectDialog
