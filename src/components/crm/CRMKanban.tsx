@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PIPELINE_STAGES, type Prospect, type PipelineStage } from "@/lib/types";
 import { DollarSign, FileText, GripVertical, MessageSquareText, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -118,16 +118,68 @@ const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prosp
   );
 };
 
-/* ── Droppable Column ── */
-const DroppableColumn = ({ stageKey, isOver, children }: { stageKey: string; isOver: boolean; children: React.ReactNode }) => {
+const INITIAL_VISIBLE = 10;
+const LOAD_MORE_COUNT = 10;
+
+/* ── Droppable Column with infinite scroll ── */
+const DroppableColumn = ({
+  stageKey,
+  isOver,
+  items,
+  children,
+}: {
+  stageKey: string;
+  isOver: boolean;
+  items: Prospect[];
+  children: (visibleItems: Prospect[]) => React.ReactNode;
+}) => {
   const { setNodeRef } = useDroppable({ id: stageKey });
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when items change (e.g. filter/search)
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE);
+  }, [items.length]);
+
+  // Intersection Observer for lazy loading
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && visibleCount < items.length) {
+          setVisibleCount((prev) => Math.min(prev + LOAD_MORE_COUNT, items.length));
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleCount, items.length]);
+
+  const visibleItems = items.slice(0, visibleCount);
+  const hasMore = visibleCount < items.length;
+
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-2.5 min-h-[80px] rounded-lg transition-all duration-200 ${isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-dashed" : ""}`}
+      className={`space-y-2.5 min-h-[80px] max-h-[calc(100vh-280px)] overflow-y-auto rounded-lg transition-all duration-200 scrollbar-thin ${
+        isOver ? "bg-primary/5 ring-2 ring-primary/20 ring-dashed" : ""
+      }`}
       style={{ padding: isOver ? "8px" : "0" }}
     >
-      {children}
+      {children(visibleItems)}
+      {hasMore && (
+        <div ref={sentinelRef} className="flex items-center justify-center py-2">
+          <span className="text-[10px] text-muted-foreground animate-pulse">
+            Cargando más ({visibleCount}/{items.length})…
+          </span>
+        </div>
+      )}
+      {!hasMore && items.length > INITIAL_VISIBLE && (
+        <div ref={sentinelRef} />
+      )}
       {isOver && (
         <div className="border-2 border-dashed border-primary/30 rounded-lg h-[100px] flex items-center justify-center transition-all duration-200 animate-pulse">
           <span className="text-xs text-primary/50 font-medium">Soltar aquí</span>
@@ -191,12 +243,16 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
               <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
                 <DollarSign className="h-3 w-3" />{total.toLocaleString()}
               </p>
-              <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null}>
-                {items.map((prospect) => (
-                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} onMarkInvoiced={onStageChange ? (id) => onStageChange(id, "facturada") : undefined} />
-                ))}
-                {items.length === 0 && !activeId && (
-                  <p className="text-xs text-muted-foreground text-center py-6">Sin oportunidades</p>
+              <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null} items={items}>
+                {(visibleItems) => (
+                  <>
+                    {visibleItems.map((prospect) => (
+                      <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} onMarkInvoiced={onStageChange ? (id) => onStageChange(id, "facturada") : undefined} />
+                    ))}
+                    {items.length === 0 && !activeId && (
+                      <p className="text-xs text-muted-foreground text-center py-6">Sin oportunidades</p>
+                    )}
+                  </>
                 )}
               </DroppableColumn>
             </div>
