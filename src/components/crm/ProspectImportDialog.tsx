@@ -46,17 +46,57 @@ const TEMPLATE_COLUMNS = [
   "Comentarios",
 ];
 
+const VALID_STATUSES = ["prospecto", "propuesta", "negociacion", "seguimiento", "standby", "ganado", "perdido", "cancelado", "calificado", "facturada"];
+
+const STATUS_ALIASES: Record<string, string> = {
+  "prospect": "prospecto",
+  "qualified": "calificado",
+  "proposal": "propuesta",
+  "negotiation": "negociacion",
+  "negociación": "negociacion",
+  "won": "ganado",
+  "lost": "perdido",
+  "cancelled": "cancelado",
+  "canceled": "cancelado",
+  "invoiced": "facturada",
+  "follow up": "seguimiento",
+  "follow-up": "seguimiento",
+};
+
+const normalizeStatus = (raw: string): string => {
+  const s = raw.trim().toLowerCase();
+  if (VALID_STATUSES.includes(s)) return s;
+  return STATUS_ALIASES[s] ?? s;
+};
+
+const parseLocalizedNumber = (value: any): number => {
+  if (value == null || value === "") return 0;
+  if (typeof value === "number") return value;
+  let str = String(value).trim().replace(/[¤$\u20AC£¥\s]/g, "");
+  const lastComma = str.lastIndexOf(",");
+  const lastDot = str.lastIndexOf(".");
+  if (lastComma > lastDot) {
+    str = str.replace(/\./g, "").replace(",", ".");
+  } else {
+    str = str.replace(/,/g, "");
+  }
+  const parsed = parseFloat(str);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [parsed, setParsed] = useState<ParsedProspect[]>([]);
   const [step, setStep] = useState<"upload" | "preview" | "processing">("upload");
   const [processing, setProcessing] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
 
   const reset = () => {
     setParsed([]);
     setStep("upload");
     setProcessing(false);
+    setImportErrors([]);
   };
 
   const handleClose = (v: boolean) => {
@@ -91,6 +131,7 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
         const dataRows = rows.slice(1).filter((row) => row.some((cell) => cell != null && String(cell).trim() !== ""));
 
         const prospects: ParsedProspect[] = dataRows.map((row, idx) => {
+          const rowNum = idx + 2;
           const code = String(row[0] ?? "").trim();
           const projectName = String(row[1] ?? "").trim();
           const directCustomer = String(row[2] ?? "").trim();
@@ -98,37 +139,42 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
           const bu = String(row[4] ?? "").trim();
           const product = String(row[5] ?? "").trim();
           const scope = String(row[6] ?? "").trim();
-          const costUSD = Number(row[7] ?? 0) || 0;
-          const priceUSD = Number(row[8] ?? 0) || 0;
-          const go = Number(row[9] ?? 0) || 0;
-          const get_ = Number(row[10] ?? 0) || 0;
-          const status = String(row[11] ?? "prospecto").trim().toLowerCase();
+          const costUSD = parseLocalizedNumber(row[7]);
+          const priceUSD = parseLocalizedNumber(row[8]);
+          const go = parseLocalizedNumber(row[9]);
+          const get_ = parseLocalizedNumber(row[10]);
+          const rawStatus = String(row[11] ?? "prospecto").trim();
+          const status = normalizeStatus(rawStatus);
           const comments = String(row[12] ?? "").trim();
 
           const errors: string[] = [];
-          if (!projectName) errors.push("Nombre de proyecto vacío");
-          if (!directCustomer) errors.push("Cliente directo vacío");
-          if (go < 0 || go > 100) errors.push("GO% debe ser 0-100");
-          if (get_ < 0 || get_ > 100) errors.push("GET% debe ser 0-100");
-          if (costUSD < 0) errors.push("Costo negativo");
-          if (priceUSD < 0) errors.push("Precio negativo");
+          if (!projectName) errors.push(`Fila ${rowNum}, columna "Nombre del Proyecto": está vacío (campo obligatorio)`);
+          if (!directCustomer) errors.push(`Fila ${rowNum}, columna "Cliente Directo": está vacío (campo obligatorio)`);
+          if (go < 0 || go > 100) errors.push(`Fila ${rowNum}, columna "GO%": valor "${go}" fuera de rango (debe ser 0-100)`);
+          if (get_ < 0 || get_ > 100) errors.push(`Fila ${rowNum}, columna "GET%": valor "${get_}" fuera de rango (debe ser 0-100)`);
+          if (costUSD < 0) errors.push(`Fila ${rowNum}, columna "Costo USD": valor negativo no permitido`);
+          if (priceUSD < 0) errors.push(`Fila ${rowNum}, columna "Precio USD": valor negativo no permitido`);
+          if (!VALID_STATUSES.includes(status)) {
+            errors.push(`Fila ${rowNum}, columna "Etapa": "${rawStatus}" no es válido. Valores permitidos: ${VALID_STATUSES.join(", ")}`);
+          }
 
           return {
             code, projectName, directCustomer, endCustomer, bu, product, scope, costUSD, priceUSD, go, get: get_, status, comments,
             valid: errors.length === 0,
-            error: errors.length > 0 ? `Fila ${idx + 2}: ${errors.join(", ")}` : undefined,
+            error: errors.length > 0 ? errors.join(" | ") : undefined,
           };
         });
 
         if (prospects.length === 0) {
-          toast({ title: "Error", description: "El archivo no contiene datos.", variant: "destructive" });
+          toast({ title: "Error", description: "El archivo no contiene datos. Asegúrate de que los datos empiezan en la fila 2.", variant: "destructive" });
           return;
         }
 
         setParsed(prospects);
+        setImportErrors([]);
         setStep("preview");
       } catch {
-        toast({ title: "Error", description: "No se pudo leer el archivo.", variant: "destructive" });
+        toast({ title: "Error de lectura", description: "No se pudo leer el archivo. Verifica que sea un archivo Excel válido (.xlsx o .xls).", variant: "destructive" });
       }
     };
     reader.readAsArrayBuffer(file);
@@ -142,6 +188,7 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
     if (validItems.length === 0) return;
     setProcessing(true);
     setStep("processing");
+    setImportErrors([]);
 
     const rows = validItems.map((p) => {
       const probability = (p.go / 100) * (p.get / 100) * 100;
@@ -170,13 +217,54 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
       };
     });
 
-    const { error } = await supabase.from("prospects").insert(rows);
+    // Insert in batches for better error reporting
+    const BATCH_SIZE = 20;
+    const errors: string[] = [];
+    let successCount = 0;
 
-    if (error) {
-      toast({ title: "Error al importar", description: error.message, variant: "destructive" });
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from("prospects").insert(batch);
+
+      if (error) {
+        // Try one by one to identify problematic rows
+        for (let j = 0; j < batch.length; j++) {
+          const { error: singleError } = await supabase.from("prospects").insert([batch[j]]);
+          if (singleError) {
+            const rowIdx = i + j;
+            const prospect = validItems[rowIdx];
+            let friendlyMsg = `"${prospect.projectName}"`;
+
+            if (singleError.message.includes("status_check")) {
+              friendlyMsg += `: la etapa "${prospect.status}" no es válida. Valores permitidos: ${VALID_STATUSES.join(", ")}`;
+            } else if (singleError.message.includes("unique") || singleError.message.includes("duplicate")) {
+              friendlyMsg += `: ya existe un registro con el mismo código "${prospect.code}"`;
+            } else if (singleError.message.includes("null value")) {
+              friendlyMsg += `: tiene campos obligatorios vacíos`;
+            } else {
+              friendlyMsg += `: ${singleError.message}`;
+            }
+            errors.push(friendlyMsg);
+          } else {
+            successCount++;
+          }
+        }
+      } else {
+        successCount += batch.length;
+      }
+    }
+
+    if (errors.length > 0) {
+      setImportErrors(errors);
+      if (successCount > 0) {
+        toast({ title: `${successCount} importadas, ${errors.length} con errores`, description: "Revisa los detalles de errores abajo.", variant: "destructive" });
+        onImported();
+      } else {
+        toast({ title: "Error al importar", description: `${errors.length} oportunidades fallaron. Revisa los detalles.`, variant: "destructive" });
+      }
       setStep("preview");
     } else {
-      toast({ title: `${validItems.length} oportunidades importadas exitosamente` });
+      toast({ title: `${successCount} oportunidades importadas exitosamente` });
       onImported();
       handleClose(false);
     }
