@@ -1,0 +1,2 @@
+ALTER TABLE public.prospects DROP CONSTRAINT prospects_status_check;
+ALTER TABLE public.prospects ADD CONSTRAINT prospects_status_check CHECK (status = ANY (ARRAY['prospecto'::text, 'propuesta'::text, 'negociacion'::text, 'seguimiento'::text, 'standby'::text, 'ganado'::text, 'perdido'::text, 'cancelado'::text, 'calificado'::text, 'facturada'::text]));
