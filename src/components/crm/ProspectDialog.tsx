@@ -285,12 +285,34 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     onOpenChange(false);
   };
 
+  const handleSaveAndClose = () => {
+    handleSave();
+    setShowUnsavedWarning(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Oportunidad" : "Nueva Oportunidad"}</DialogTitle>
         </DialogHeader>
+
+        {showUnsavedWarning && (
+          <Alert variant="destructive" className="mt-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 !text-amber-600" />
+            <AlertDescription className="flex items-center justify-between">
+              <span className="text-sm">Tienes cambios sin guardar. ¿Qué deseas hacer?</span>
+              <div className="flex items-center gap-2 ml-4">
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setShowUnsavedWarning(false); onOpenChange(false); }}>
+                  Descartar
+                </Button>
+                <Button size="sm" className="h-7 text-xs" onClick={handleSaveAndClose}>
+                  Guardar
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid grid-cols-2 gap-4 mt-4">
           <div className="col-span-2">
