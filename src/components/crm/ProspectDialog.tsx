@@ -150,8 +150,42 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setComments(prospect?.comments ?? "");
       setQuotationHistoryOpen(null);
       setExpandedSnapVersion(null);
+      setShowUnsavedWarning(false);
+      // Snapshot initial values after a tick so state is settled
+      setTimeout(() => {
+        initialValuesRef.current = "";
+      }, 0);
     }
   }, [open, prospect]);
+
+  // Capture initial snapshot once fields are set
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => {
+      initialValuesRef.current = JSON.stringify({
+        code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [open, prospect?.id]);
+
+  const getCurrentValues = useCallback(() => JSON.stringify({
+    code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
+  }), [code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments]);
+
+  const isDirty = useMemo(() => {
+    if (!initialValuesRef.current || !isEdit) return false;
+    return getCurrentValues() !== initialValuesRef.current;
+  }, [getCurrentValues, isEdit]);
+
+  const handleClose = (openState: boolean) => {
+    if (!openState && isDirty && !showUnsavedWarning) {
+      setShowUnsavedWarning(true);
+      return;
+    }
+    setShowUnsavedWarning(false);
+    onOpenChange(openState);
+  };
 
   // Auto-generate code when BU or client changes (only if not manually edited)
   const resolveCustomerNameForCode = (val: string): string => {
