@@ -243,12 +243,16 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
               <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
                 <DollarSign className="h-3 w-3" />{total.toLocaleString()}
               </p>
-              <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null}>
-                {items.map((prospect) => (
-                  <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} onMarkInvoiced={onStageChange ? (id) => onStageChange(id, "facturada") : undefined} />
-                ))}
-                {items.length === 0 && !activeId && (
-                  <p className="text-xs text-muted-foreground text-center py-6">Sin oportunidades</p>
+              <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null} items={items}>
+                {(visibleItems) => (
+                  <>
+                    {visibleItems.map((prospect) => (
+                      <DraggableCard key={prospect.id} prospect={prospect} onEdit={onEdit} onActivity={onActivity} onMarkInvoiced={onStageChange ? (id) => onStageChange(id, "facturada") : undefined} />
+                    ))}
+                    {items.length === 0 && !activeId && (
+                      <p className="text-xs text-muted-foreground text-center py-6">Sin oportunidades</p>
+                    )}
+                  </>
                 )}
               </DroppableColumn>
             </div>
