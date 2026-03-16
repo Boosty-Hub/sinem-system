@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect, type Product, type PipelineStage, type Client, type Contact, type Quotation } from "@/lib/types";
@@ -90,6 +92,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [comments, setComments] = useState("");
   const [quotationHistoryOpen, setQuotationHistoryOpen] = useState<string | null>(null);
   const [expandedSnapVersion, setExpandedSnapVersion] = useState<number | null>(null);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const initialValuesRef = useRef<string>("");
 
   /** Generate code: SINEM-{BU}-{Client}-{consecutive} */
   const generateCode = async (buVal: string, clientName: string) => {
@@ -146,8 +150,42 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setComments(prospect?.comments ?? "");
       setQuotationHistoryOpen(null);
       setExpandedSnapVersion(null);
+      setShowUnsavedWarning(false);
+      // Snapshot initial values after a tick so state is settled
+      setTimeout(() => {
+        initialValuesRef.current = "";
+      }, 0);
     }
   }, [open, prospect]);
+
+  // Capture initial snapshot once fields are set
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => {
+      initialValuesRef.current = JSON.stringify({
+        code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [open, prospect?.id]);
+
+  const getCurrentValues = useCallback(() => JSON.stringify({
+    code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
+  }), [code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments]);
+
+  const isDirty = useMemo(() => {
+    if (!initialValuesRef.current || !isEdit) return false;
+    return getCurrentValues() !== initialValuesRef.current;
+  }, [getCurrentValues, isEdit]);
+
+  const handleClose = (openState: boolean) => {
+    if (!openState && isDirty && !showUnsavedWarning) {
+      setShowUnsavedWarning(true);
+      return;
+    }
+    setShowUnsavedWarning(false);
+    onOpenChange(openState);
+  };
 
   // Auto-generate code when BU or client changes (only if not manually edited)
   const resolveCustomerNameForCode = (val: string): string => {
@@ -247,12 +285,34 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     onOpenChange(false);
   };
 
+  const handleSaveAndClose = () => {
+    handleSave();
+    setShowUnsavedWarning(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar Oportunidad" : "Nueva Oportunidad"}</DialogTitle>
         </DialogHeader>
+
+        {showUnsavedWarning && (
+          <Alert variant="destructive" className="mt-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 !text-amber-600" />
+            <AlertDescription className="flex items-center justify-between">
+              <span className="text-sm">Tienes cambios sin guardar. ¿Qué deseas hacer?</span>
+              <div className="flex items-center gap-2 ml-4">
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setShowUnsavedWarning(false); onOpenChange(false); }}>
+                  Descartar
+                </Button>
+                <Button size="sm" className="h-7 text-xs" onClick={handleSaveAndClose}>
+                  Guardar
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid grid-cols-2 gap-4 mt-4">
           <div className="col-span-2">
@@ -477,7 +537,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!projectName.trim()}>
               {isEdit ? "Guardar Cambios" : "Crear Oportunidad"}
             </Button>
