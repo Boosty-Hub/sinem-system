@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PIPELINE_STAGES, type Prospect, type PipelineStage } from "@/lib/types";
 import { DollarSign, FileText, GripVertical, MessageSquareText, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
