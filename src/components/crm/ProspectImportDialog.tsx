@@ -338,10 +338,20 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
               <span className="text-xs text-muted-foreground ml-auto">Total: {parsed.length} filas</span>
             </div>
 
-            {/* Error details */}
+            {/* Import errors from Supabase */}
+            {importErrors.length > 0 && (
+              <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 space-y-1">
+                <p className="text-xs font-semibold text-destructive">Errores al importar en base de datos:</p>
+                {importErrors.map((err, i) => (
+                  <p key={i} className="text-[11px] text-destructive/80">• {err}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Validation errors */}
             {invalidItems.length > 0 && (
               <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 space-y-1">
-                <p className="text-xs font-semibold text-destructive">Detalle de errores:</p>
+                <p className="text-xs font-semibold text-destructive">Errores de validación ({invalidItems.length} filas):</p>
                 {invalidItems.map((c, i) => (
                   <p key={i} className="text-[11px] text-destructive/80">• {c.error}</p>
                 ))}
