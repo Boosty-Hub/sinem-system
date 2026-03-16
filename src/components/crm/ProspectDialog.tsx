@@ -537,7 +537,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!projectName.trim()}>
               {isEdit ? "Guardar Cambios" : "Crear Oportunidad"}
             </Button>
