@@ -19,6 +19,7 @@ interface ProjectRow {
   value: number;
   current_step: number;
   status: string;
+  start_date: string | null;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
