@@ -188,7 +188,9 @@ const RichText = ({ text }: { text: string }) => {
 
 /* ── Main Component ── */
 const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => {
+  const { user } = useAuth();
   const [entries, setEntries] = useLocalStorage<ActivityEntry[]>("sinem:crm:activities", []);
+  const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
   const [appUsers, setAppUsers] = useState<AppUserInfo[]>([]);
   const [text, setText] = useState("");
   const [pendingFiles, setPendingFiles] = useState<ActivityAttachment[]>([]);
