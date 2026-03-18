@@ -510,10 +510,11 @@ const Tareas = () => {
                     </div>
                   </div>
 
-                  {(clientName || projectName) && (
-                    <div className="flex gap-4 text-xs">
+                  {(clientName || projectName || prospectLabel) && (
+                    <div className="flex gap-4 text-xs flex-wrap">
                       {clientName && <span className="flex items-center gap-1 text-muted-foreground"><Building2 className="h-3 w-3" /> {clientName}</span>}
                       {projectName && <span className="flex items-center gap-1 text-muted-foreground"><FolderKanban className="h-3 w-3" /> {projectName}</span>}
+                      {prospectLabel && <span className="flex items-center gap-1 text-muted-foreground"><Target className="h-3 w-3" /> {prospectLabel}</span>}
                     </div>
                   )}
 
