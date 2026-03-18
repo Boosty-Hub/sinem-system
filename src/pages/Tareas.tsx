@@ -130,6 +130,7 @@ const Tareas = () => {
       assignee: form.assignee,
       client_id: form.clientId || null,
       project_id: form.projectId || null,
+      prospect_id: form.prospectId || null,
       due_date: form.dueDate || null,
     };
     if (editId) {
