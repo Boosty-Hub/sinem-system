@@ -190,7 +190,8 @@ const Analitica = () => {
 
   // ── Pipeline KPIs ──
   const totalPipeline = prospects.reduce((s, p) => s + p.priceUSD, 0);
-  const totalWeighted = prospects.reduce((s, p) => s + p.weighted, 0);
+  const openForWeighted = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
+  const totalWeighted = openForWeighted.reduce((s, p) => s + p.weighted, 0);
   const totalMargin = prospects.reduce((s, p) => s + p.marginUSD, 0);
   const avgMarginPct = prospects.length > 0 ? Math.round(prospects.reduce((s, p) => s + p.marginPercent, 0) / prospects.length) : 0;
   const winRate = prospects.length > 0
@@ -272,13 +273,25 @@ const Analitica = () => {
     toast({ title: "Budget actualizado" });
   };
 
-  const KpiCard = ({ icon: Icon, label, value, sub, color }: { icon: any; label: string; value: string; sub?: string; color: string }) => (
+  const KpiCard = ({ icon: Icon, label, value, sub, color, tooltip }: { icon: any; label: string; value: string; sub?: string; color: string; tooltip?: string }) => (
     <div className="stat-card p-4">
       <div className="flex items-center gap-2 mb-2">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
           <Icon className="h-4 w-4 text-primary-foreground" />
         </div>
         <span className="text-xs text-muted-foreground uppercase tracking-wider">{label}</span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors ml-auto">
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[260px] text-xs leading-relaxed">
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
       <p className="text-xl font-bold">{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
@@ -413,7 +426,7 @@ const Analitica = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard icon={DollarSign} label="Pipeline Total" value={fmt(totalPipeline)} sub={`${prospects.length} oportunidades`} color="bg-primary" />
-        <KpiCard icon={TrendingUp} label="Ponderado" value={fmt(totalWeighted)} color="bg-sinem-info" />
+        <KpiCard icon={TrendingUp} label="Ponderado" value={fmt(totalWeighted)} color="bg-sinem-info" tooltip={`Suma del valor ponderado (precio × probabilidad) de ${openForWeighted.length} oportunidades abiertas. Excluye oportunidades ganadas, facturadas y perdidas.`} />
         <KpiCard icon={Target} label="Ganados" value={fmt(wonTotal)} sub={`Win rate: ${winRate}%`} color="bg-sinem-success" />
         <KpiCard icon={BarChart3} label="Margen Total" value={fmt(totalMargin)} sub={`Promedio: ${avgMarginPct}%`} color="bg-sinem-teal" />
         <KpiCard icon={Target} label={`Budget ${currentYear}`} value={fmt(budget.annualTarget)} sub={`${previousYear}: ${fmt(budget.previousYearWon)}`} color="bg-violet-600" />
