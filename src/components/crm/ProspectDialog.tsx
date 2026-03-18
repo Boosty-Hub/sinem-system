@@ -168,7 +168,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     if (!open) return;
     const timer = setTimeout(() => {
       initialValuesRef.current = JSON.stringify({
-        code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
+        code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
       });
     }, 100);
     return () => clearTimeout(timer);
