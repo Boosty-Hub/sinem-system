@@ -43,12 +43,14 @@ const Tareas = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [prospects, setProspects] = useState<ProspectRow[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [search, setSearch] = useState("");
   const [view, setView] = useLocalStorage<"board" | "list">("sinem:tasks:view", "board");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterProspect, setFilterProspect] = useState<string>("all");
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
   const fetchData = async () => {
