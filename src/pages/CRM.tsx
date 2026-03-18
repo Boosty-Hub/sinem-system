@@ -160,13 +160,15 @@ const CRM = () => {
 
   const executeStageChange = async (prospectId: string, newStage: string) => {
     const oldProspect = prospects.find((p) => p.id === prospectId);
+    if (!oldProspect) return;
+
     setProspects((prev) =>
       prev.map((p) => (p.id === prospectId ? { ...p, status: newStage } : p))
     );
     const { error } = await supabase.from("prospects").update({ status: newStage }).eq("id", prospectId);
     if (error) {
       setProspects((prev) =>
-        prev.map((p) => (p.id === prospectId ? { ...p, status: oldProspect?.status ?? p.status } : p))
+        prev.map((p) => (p.id === prospectId ? { ...p, status: oldProspect.status } : p))
       );
       toast({ title: "Error al mover oportunidad", description: `No se pudo cambiar la etapa: ${error.message}`, variant: "destructive" });
       return;
@@ -174,21 +176,25 @@ const CRM = () => {
 
     // Auto-create project when opportunity is won
     if (newStage === "ganado") {
-      const prospect = prospects.find((p) => p.id === prospectId);
-      if (!prospect) return;
+      // Check if project already exists
       const { data: existingProj } = await supabase.from("projects").select("id").eq("origin_prospect_id", prospectId).maybeSingle();
       if (existingProj) return;
 
-      await supabase.from("projects").insert({
-        name: prospect.projectName,
-        client: prospect.directCustomer,
-        value: prospect.priceUSD,
+      const { error: projError } = await supabase.from("projects").insert({
+        name: oldProspect.projectName,
+        client: oldProspect.directCustomer,
+        value: oldProspect.priceUSD,
         current_step: 1,
         status: "activo",
         origin_prospect_id: prospectId,
-        client_id: prospect.clientId ?? null,
+        client_id: oldProspect.clientId ?? null,
       });
-      toast({ title: "Proyecto creado", description: `Se creó el proyecto "${prospect.projectName}" automáticamente.` });
+      if (projError) {
+        console.error("Error creating project:", projError);
+        toast({ title: "Error al crear proyecto", description: projError.message, variant: "destructive" });
+      } else {
+        toast({ title: "Proyecto creado", description: `Se creó el proyecto "${oldProspect.projectName}" automáticamente.` });
+      }
     }
   };
 
