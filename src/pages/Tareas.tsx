@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useAuth } from "@/lib/AuthContext";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { createNotification } from "@/lib/notifications";
 
 const priorityIcon = { alta: AlertCircle, media: Clock, baja: CheckCircle2 };
 const priorityColor = { alta: "text-destructive", media: "text-sinem-warning", baja: "text-muted-foreground" };
@@ -39,7 +40,14 @@ interface ProspectRow { id: string; code: string; project_name: string; }
 const Tareas = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("app_users").select("id").eq("auth_user_id", user.id).single()
+      .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
+  }, [user]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -137,8 +145,25 @@ const Tareas = () => {
       await supabase.from("tasks").update(payload).eq("id", editId);
       toast({ title: "Tarea actualizada" });
     } else {
-      await supabase.from("tasks").insert(payload);
+      const { data } = await supabase.from("tasks").insert(payload).select("id").single();
       toast({ title: "Tarea creada" });
+
+      // Notify assigned user
+      if (form.assignee && currentAppUserId) {
+        const assignedUser = systemUsers.find((u) => u.name === form.assignee);
+        if (assignedUser && assignedUser.id !== currentAppUserId) {
+          createNotification({
+            userId: assignedUser.id,
+            type: "task",
+            title: "Nueva tarea asignada",
+            message: `Se te ha asignado la tarea "${form.title.trim()}".`,
+            link: "/tareas",
+            referenceId: data?.id,
+            referenceType: "task",
+            triggeredBy: currentAppUserId,
+          });
+        }
+      }
     }
     setDialogOpen(false);
     fetchData();
