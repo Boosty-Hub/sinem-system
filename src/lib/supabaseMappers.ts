@@ -31,6 +31,7 @@ export const dbToProspect = (row: DbProspect): Prospect => ({
   assignedTo: row.assigned_to ?? undefined,
   clientId: row.client_id ?? undefined,
   contactId: row.contact_id ?? undefined,
+  invoicedAt: (row as any).invoiced_at ?? undefined,
 });
 
 export const prospectToDb = (p: Prospect): Omit<DbProspect, "created_at" | "updated_at"> => ({
