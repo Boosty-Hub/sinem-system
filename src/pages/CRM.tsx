@@ -106,10 +106,19 @@ const CRM = () => {
   };
 
   const handleStageChange = async (prospectId: string, newStage: string) => {
+    const oldProspect = prospects.find((p) => p.id === prospectId);
     setProspects((prev) =>
       prev.map((p) => (p.id === prospectId ? { ...p, status: newStage } : p))
     );
-    await supabase.from("prospects").update({ status: newStage }).eq("id", prospectId);
+    const { error } = await supabase.from("prospects").update({ status: newStage }).eq("id", prospectId);
+    if (error) {
+      // Revert optimistic update
+      setProspects((prev) =>
+        prev.map((p) => (p.id === prospectId ? { ...p, status: oldProspect?.status ?? p.status } : p))
+      );
+      toast({ title: "Error al mover oportunidad", description: `No se pudo cambiar la etapa: ${error.message}`, variant: "destructive" });
+      return;
+    }
 
     // Auto-create project when opportunity is won
     if (newStage === "ganado") {
