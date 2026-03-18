@@ -28,6 +28,7 @@ const CRM = () => {
   const [search, setSearch] = useState("");
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [appUsers, setAppUsers] = useState<{ id: string; name: string }[]>([]);
   const [stages, setStages] = useState<PipelineStage[]>(DEFAULT_PIPELINE_STAGES);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
