@@ -78,6 +78,7 @@ const Projects = () => {
       value: String(project.value),
       currentStep: String(project.current_step),
       status: project.status,
+      startDate: project.start_date ?? "",
     });
     setDialogOpen(true);
   };
