@@ -528,6 +528,13 @@ const CRM = () => {
         onImported={fetchData}
       />
 
+      <InvoiceDateDialog
+        open={invoiceDialogOpen}
+        onOpenChange={(open) => { setInvoiceDialogOpen(open); if (!open) setInvoiceProspectId(null); }}
+        prospectName={invoiceProspect?.projectName ?? ""}
+        onConfirm={handleInvoiceConfirm}
+      />
+
       {/* Floating bulk actions bar */}
       {selectedIds.length > 0 && view === "table" && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
