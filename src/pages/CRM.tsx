@@ -22,6 +22,7 @@ import { notifyAllExcept, createNotification } from "@/lib/notifications";
 
 const CRM = () => {
   const { toast } = useToast();
+  const { user: authUser } = useAuth();
   const { canCreate, canEdit, canDelete } = usePermissions();
   const canCreateCRM = canCreate("CRM");
   const canEditCRM = canEdit("CRM");
@@ -33,6 +34,14 @@ const CRM = () => {
   const [appUsers, setAppUsers] = useState<{ id: string; name: string }[]>([]);
   const [stages, setStages] = useState<PipelineStage[]>(DEFAULT_PIPELINE_STAGES);
   const [loading, setLoading] = useState(true);
+  const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
+
+  // Resolve current auth user to app_users id
+  useEffect(() => {
+    if (!authUser) return;
+    supabase.from("app_users").select("id").eq("auth_user_id", authUser.id).single()
+      .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
+  }, [authUser]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [productsDialogOpen, setProductsDialogOpen] = useState(false);
   const [stagesDialogOpen, setStagesDialogOpen] = useState(false);
