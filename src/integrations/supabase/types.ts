@@ -683,6 +683,7 @@ export type Database = {
           get_percent: number
           go_percent: number
           id: string
+          invoiced_at: string | null
           margin_percent: number
           margin_usd: number
           price_usd: number
@@ -713,6 +714,7 @@ export type Database = {
           get_percent?: number
           go_percent?: number
           id?: string
+          invoiced_at?: string | null
           margin_percent?: number
           margin_usd?: number
           price_usd?: number
@@ -743,6 +745,7 @@ export type Database = {
           get_percent?: number
           go_percent?: number
           id?: string
+          invoiced_at?: string | null
           margin_percent?: number
           margin_usd?: number
           price_usd?: number
