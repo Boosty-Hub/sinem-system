@@ -50,12 +50,14 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   useEffect(() => {
     if (!open) return;
     const fetch = async () => {
-      const [{ data: dbClients }, { data: dbContacts }] = await Promise.all([
+      const [{ data: dbClients }, { data: dbContacts }, { data: dbUsers }] = await Promise.all([
         supabase.from("clients").select("*").order("name"),
         supabase.from("contacts").select("*").order("first_name"),
+        supabase.from("app_users").select("id, name, avatar_url").eq("status", "activo").order("name"),
       ]);
       if (dbClients) setClients(dbClients.map(dbToClient));
       if (dbContacts) setContacts(dbContacts.map(dbToContact));
+      if (dbUsers) setAppUsers(dbUsers.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatar_url })));
     };
     fetch();
   }, [open]);
