@@ -72,7 +72,7 @@ const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[
       <PopoverContent className="w-[380px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Buscar por código o nombre..." />
-          <CommandList>
+          <CommandList className="max-h-[240px] overflow-y-auto">
             <CommandEmpty>No se encontraron oportunidades.</CommandEmpty>
             <CommandGroup>
               <CommandItem value="sin-oportunidad" onSelect={() => { onChange("none"); setOpen(false); }}>
