@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useAuth } from "@/lib/AuthContext";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { createNotification } from "@/lib/notifications";
 
 const priorityIcon = { alta: AlertCircle, media: Clock, baja: CheckCircle2 };
 const priorityColor = { alta: "text-destructive", media: "text-sinem-warning", baja: "text-muted-foreground" };
