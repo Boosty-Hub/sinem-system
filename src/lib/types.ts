@@ -96,6 +96,7 @@ export interface Client {
   totalRevenue: number;
   status: "activo" | "inactivo";
   originProspectId?: string;
+  primaryContactId?: string;
 }
 
 export interface Contact {
