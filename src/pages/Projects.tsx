@@ -91,7 +91,8 @@ const Projects = () => {
       value: Number(form.value) || 0,
       current_step: Number(form.currentStep) || 1,
       status: form.status,
-    };
+      start_date: form.startDate || null,
+    } as any;
     if (editId) {
       await supabase.from("projects").update(payload).eq("id", editId);
       toast({ title: "Proyecto actualizado" });
