@@ -243,17 +243,15 @@ const Projects = () => {
                 <SelectContent>
                   <SelectItem value="activo">Activo</SelectItem>
                   <SelectItem value="completado">Completado</SelectItem>
-                <SelectItem value="pausado">Pausado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Fecha de Inicio</Label>
-            <Input type="date" value={form.startDate} onChange={(e) => u("startDate", e.target.value)} />
-          </div>
+                  <SelectItem value="pausado">Pausado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Fecha de Inicio</Label>
+              <Input type="date" value={form.startDate} onChange={(e) => u("startDate", e.target.value)} />
+            </div>
+          </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
