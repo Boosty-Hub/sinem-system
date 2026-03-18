@@ -4,15 +4,16 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Crown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect, type Product, type PipelineStage, type Client, type Contact, type Quotation } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { usePartners } from "@/hooks/usePartners";
 import { useBusinessUnits } from "@/hooks/useBusinessUnits";
-import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp, X, Search } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -80,7 +81,6 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [code, setCode] = useState("");
   const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const [projectName, setProjectName] = useState("");
-  const [directCustomer, setDirectCustomer] = useState("none");
   const [endCustomer, setEndCustomer] = useState("none");
   const [proveedor, setProveedor] = useState("Siemens");
   const [bu, setBu] = useState("");
@@ -98,6 +98,11 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [assignedTo, setAssignedTo] = useState("none");
   const initialValuesRef = useRef<string>("");
+
+  // ── Multi-client direct ──
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [primaryClientId, setPrimaryClientId] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState("");
 
   /** Generate code: SINEM-{BU}-{Client}-{consecutive} */
   const generateCode = async (buVal: string, clientName: string) => {
@@ -123,24 +128,48 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     return `${prefix}${next}`;
   };
 
-  const nameToSelectValue = (name: string | undefined, cId?: string, ctId?: string): string => {
-    if (!name || name === "none" || name === "") return "none";
-    if (cId) return `client:${cId}`;
-    if (ctId) return `contact:${ctId}`;
-    const cl = clients.find((c) => c.name === name);
-    if (cl) return `client:${cl.id}`;
-    const ct = contacts.find((c) => `${c.firstName} ${c.lastName}` === name);
-    if (ct) return `contact:${ct.id}`;
-    return "none";
-  };
+  // Load prospect_clients for this prospect
+  useEffect(() => {
+    if (!open) return;
+    if (!prospect) {
+      setSelectedClientIds([]);
+      setPrimaryClientId(null);
+      return;
+    }
+    const load = async () => {
+      const { data } = await supabase
+        .from("prospect_clients" as any)
+        .select("client_id, is_primary")
+        .eq("prospect_id", prospect.id);
+      if (data && (data as any[]).length > 0) {
+        setSelectedClientIds((data as any[]).map((r: any) => r.client_id));
+        const primary = (data as any[]).find((r: any) => r.is_primary);
+        setPrimaryClientId(primary?.client_id ?? (data as any[])[0]?.client_id ?? null);
+      } else if (prospect.clientId) {
+        // Fallback: use legacy single client_id
+        setSelectedClientIds([prospect.clientId]);
+        setPrimaryClientId(prospect.clientId);
+      } else {
+        setSelectedClientIds([]);
+        setPrimaryClientId(null);
+      }
+    };
+    load();
+  }, [open, prospect]);
 
   useEffect(() => {
     if (open) {
       setCode(prospect?.code ?? "");
       setCodeManuallyEdited(!!prospect?.code);
       setProjectName(prospect?.projectName ?? "");
-      setDirectCustomer(nameToSelectValue(prospect?.directCustomer, prospect?.clientId, prospect?.contactId));
-      setEndCustomer(nameToSelectValue(prospect?.endCustomer));
+      setEndCustomer((() => {
+        if (!prospect?.endCustomer || prospect.endCustomer === "none" || prospect.endCustomer === "") return "none";
+        const cl = clients.find((c) => c.name === prospect.endCustomer);
+        if (cl) return `client:${cl.id}`;
+        const ct = contacts.find((c) => `${c.firstName} ${c.lastName}` === prospect.endCustomer);
+        if (ct) return `contact:${ct.id}`;
+        return "none";
+      })());
       setProveedor(prospect?.proveedor ?? "Siemens");
       setBu(prospect?.bu ?? "");
       setProduct(prospect?.product ?? "");
@@ -156,10 +185,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setExpandedSnapVersion(null);
       setAssignedTo(prospect?.assignedTo ?? "none");
       setShowUnsavedWarning(false);
-      // Snapshot initial values after a tick so state is settled
-      setTimeout(() => {
-        initialValuesRef.current = "";
-      }, 0);
+      setClientSearch("");
+      setTimeout(() => { initialValuesRef.current = ""; }, 0);
     }
   }, [open, prospect]);
 
@@ -168,15 +195,15 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     if (!open) return;
     const timer = setTimeout(() => {
       initialValuesRef.current = JSON.stringify({
-        code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
+        code, projectName, selectedClientIds, primaryClientId, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
       });
     }, 100);
     return () => clearTimeout(timer);
   }, [open, prospect?.id]);
 
   const getCurrentValues = useCallback(() => JSON.stringify({
-    code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
-  }), [code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo]);
+    code, projectName, selectedClientIds, primaryClientId, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
+  }), [code, projectName, selectedClientIds, primaryClientId, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo]);
 
   const isDirty = useMemo(() => {
     if (!initialValuesRef.current || !isEdit) return false;
@@ -192,27 +219,16 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     onOpenChange(openState);
   };
 
-  // Auto-generate code when BU or client changes (only if not manually edited)
-  const resolveCustomerNameForCode = (val: string): string => {
-    if (val === "none") return "";
-    if (val.startsWith("client:")) {
-      const cl = clients.find((c) => c.id === val.replace("client:", ""));
-      return cl?.name ?? "";
-    }
-    if (val.startsWith("contact:")) {
-      const ct = contacts.find((c) => c.id === val.replace("contact:", ""));
-      return ct ? `${ct.firstName} ${ct.lastName}` : "";
-    }
-    return val;
-  };
+  // Auto-generate code when BU or primary client changes
+  const primaryClient = clients.find((c) => c.id === primaryClientId);
 
   useEffect(() => {
     if (!open || codeManuallyEdited) return;
-    const clientName = resolveCustomerNameForCode(directCustomer);
+    const clientName = primaryClient?.name ?? "";
     if (bu && clientName) {
       generateCode(bu, clientName).then(setCode);
     }
-  }, [bu, directCustomer, open, codeManuallyEdited, clients, contacts]);
+  }, [bu, primaryClientId, open, codeManuallyEdited, clients]);
 
   const probability = Math.round((go * get_) / 100);
   const weighted = Math.round(priceUSD * probability / 100);
@@ -257,17 +273,32 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     return {};
   };
 
-  const handleSave = () => {
+  // Save prospect_clients junction
+  const saveProspectClients = async (prospectId: string) => {
+    // Delete existing
+    await supabase.from("prospect_clients" as any).delete().eq("prospect_id", prospectId);
+    // Insert new
+    if (selectedClientIds.length > 0) {
+      const rows = selectedClientIds.map((cid) => ({
+        prospect_id: prospectId,
+        client_id: cid,
+        is_primary: cid === primaryClientId,
+      }));
+      await supabase.from("prospect_clients" as any).insert(rows);
+    }
+  };
+
+  const handleSave = async () => {
     if (!projectName.trim()) return;
-    const directIds = resolveIds(directCustomer);
+    const directCustomerName = primaryClient?.name ?? "";
     const saved: Prospect = {
       id: prospect?.id ?? crypto.randomUUID(),
       code,
       cotorta: prospect?.cotorta ?? 0,
       projectName: projectName.trim(),
-      clientId: directIds.clientId ?? prospect?.clientId,
-      contactId: directIds.contactId ?? prospect?.contactId,
-      directCustomer: resolveCustomerName(directCustomer),
+      clientId: primaryClientId ?? undefined,
+      contactId: prospect?.contactId,
+      directCustomer: directCustomerName,
       endCustomer: resolveCustomerName(endCustomer),
       proveedor: proveedor.trim(),
       bu,
@@ -289,6 +320,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       assignedTo: assignedTo === "none" ? undefined : assignedTo,
     };
     onSave?.(saved);
+    // Save junction table after prospect is saved
+    await saveProspectClients(saved.id);
     onOpenChange(false);
   };
 
@@ -296,6 +329,28 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     handleSave();
     setShowUnsavedWarning(false);
   };
+
+  // Client multi-select helpers
+  const toggleClient = (id: string) => {
+    setSelectedClientIds((prev) => {
+      if (prev.includes(id)) {
+        const next = prev.filter((x) => x !== id);
+        if (primaryClientId === id) setPrimaryClientId(next[0] ?? null);
+        return next;
+      }
+      const next = [...prev, id];
+      if (!primaryClientId) setPrimaryClientId(id);
+      return next;
+    });
+  };
+
+  const filteredClients = clients.filter((c) => {
+    if (!clientSearch.trim()) return true;
+    return c.name.toLowerCase().includes(clientSearch.toLowerCase());
+  });
+
+  const unselectedClients = filteredClients.filter((c) => !selectedClientIds.includes(c.id));
+  const selectedClients = clients.filter((c) => selectedClientIds.includes(c.id));
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -331,31 +386,72 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Label>Nombre del Proyecto</Label>
             <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Ej: Transformadores ABB" />
           </div>
-          <div>
+
+          {/* ── Multi-client direct ── */}
+          <div className="col-span-2 space-y-2">
             <Label>Cliente Directo</Label>
-            <Select value={directCustomer} onValueChange={setDirectCustomer}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin asignar</SelectItem>
-                {clients.length > 0 && (
-                  <>
-                    <SelectItem value="__clients_header" disabled className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Clientes</SelectItem>
-                    {clients.map((cl) => (
-                      <SelectItem key={`cl-${cl.id}`} value={`client:${cl.id}`}>{cl.name}</SelectItem>
-                    ))}
-                  </>
-                )}
-                {contacts.length > 0 && (
-                  <>
-                    <SelectItem value="__contacts_header" disabled className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Contactos</SelectItem>
-                    {contacts.map((ct) => (
-                      <SelectItem key={`ct-${ct.id}`} value={`contact:${ct.id}`}>{ct.firstName} {ct.lastName}{ct.clientId ? ` (${clients.find(c => c.id === ct.clientId)?.name ?? ''})` : ''}</SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
+
+            {/* Selected clients as badges */}
+            {selectedClients.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedClients.map((c) => {
+                  const isPrimary = primaryClientId === c.id;
+                  return (
+                    <Badge
+                      key={c.id}
+                      variant={isPrimary ? "default" : "secondary"}
+                      className="flex items-center gap-1.5 py-1 px-2 cursor-pointer"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPrimaryClientId(c.id)}
+                        title={isPrimary ? "Cliente principal" : "Marcar como principal"}
+                        className="hover:scale-110 transition-transform"
+                      >
+                        <Crown className={`h-3.5 w-3.5 ${isPrimary ? "text-yellow-300 fill-yellow-300" : "text-muted-foreground/50"}`} />
+                      </button>
+                      <span className="text-xs">{c.name}</span>
+                      <button type="button" onClick={() => toggleClient(c.id)} className="hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Search & add */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar cliente para agregar..."
+                value={clientSearch}
+                onChange={(e) => setClientSearch(e.target.value)}
+                className="text-sm pl-8 h-8"
+              />
+            </div>
+
+            {unselectedClients.length > 0 ? (
+              <div className="max-h-[120px] overflow-y-auto border rounded-md divide-y">
+                {unselectedClients.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleClient(c.id)}
+                    className="w-full text-left px-3 py-1.5 hover:bg-accent text-sm flex justify-between items-center"
+                  >
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{c.industry}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">
+                {clientSearch ? "Sin resultados" : "No hay más clientes disponibles"}
+              </p>
+            )}
           </div>
+
           <div>
             <Label>Cliente Final</Label>
             <Select value={endCustomer} onValueChange={setEndCustomer}>
