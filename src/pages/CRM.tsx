@@ -17,6 +17,8 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { usePermissions } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, prospectToDb, dbToProduct, dbToStage } from "@/lib/supabaseMappers";
+import { useAuth } from "@/lib/AuthContext";
+import { notifyAllExcept, createNotification } from "@/lib/notifications";
 
 const CRM = () => {
   const { toast } = useToast();
