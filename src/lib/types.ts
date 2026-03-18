@@ -36,6 +36,7 @@ export interface Prospect {
   revenue: string;
   comments: string;
   status: string;
+  invoicedAt?: string;
 }
 
 export interface Project {
