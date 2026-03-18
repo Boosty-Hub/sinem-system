@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
 import {
   Search, Plus, ListTodo, LayoutGrid, Calendar, AlertCircle, Clock, CheckCircle2,
-  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2,
+  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2, Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,12 +27,14 @@ const emptyForm = {
   assignee: "",
   clientId: "",
   projectId: "",
+  prospectId: "",
   dueDate: "",
 };
 
 interface SystemUser { id: string; name: string; email: string; status: string; }
 interface ClientRow { id: string; name: string; }
 interface ProjectRow { id: string; name: string; }
+interface ProspectRow { id: string; code: string; project_name: string; }
 
 const Tareas = () => {
   const { toast } = useToast();
@@ -41,22 +43,25 @@ const Tareas = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [prospects, setProspects] = useState<ProspectRow[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [search, setSearch] = useState("");
   const [view, setView] = useLocalStorage<"board" | "list">("sinem:tasks:view", "board");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterProspect, setFilterProspect] = useState<string>("all");
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
-    const [{ data: tasksData }, { data: commentsData }, { data: clientsData }, { data: projectsData }, { data: usersData }] = await Promise.all([
+    const [{ data: tasksData }, { data: commentsData }, { data: clientsData }, { data: projectsData }, { data: usersData }, { data: prospectsData }] = await Promise.all([
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
       supabase.from("task_comments").select("*").order("created_at"),
       supabase.from("clients").select("id, name").order("name"),
       supabase.from("projects").select("id, name").order("name"),
       supabase.from("app_users").select("id, name, email, status").eq("status", "activo").order("name"),
+      supabase.from("prospects").select("id, code, project_name").order("code"),
     ]);
 
     const commentsByTask = new Map<string, TaskComment[]>();
@@ -75,12 +80,14 @@ const Tareas = () => {
       assignee: t.assignee,
       clientId: t.client_id ?? undefined,
       projectId: t.project_id ?? undefined,
+      prospectId: (t as any).prospect_id ?? undefined,
       dueDate: t.due_date ?? "",
       createdAt: t.created_at,
       comments: commentsByTask.get(t.id) ?? [],
     })));
     setClients(clientsData ?? []);
     setProjects(projectsData ?? []);
+    setProspects(prospectsData ?? []);
     setSystemUsers(usersData ?? []);
     setLoading(false);
   };
@@ -100,7 +107,8 @@ const Tareas = () => {
     const matchAssignee = filterAssignee === "all" || t.assignee === filterAssignee;
     const matchClient = filterClient === "all" || t.clientId === filterClient;
     const matchPriority = filterPriority === "all" || t.priority === filterPriority;
-    return matchSearch && matchAssignee && matchClient && matchPriority;
+    const matchProspect = filterProspect === "all" || t.prospectId === filterProspect;
+    return matchSearch && matchAssignee && matchClient && matchPriority && matchProspect;
   });
 
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
@@ -109,7 +117,7 @@ const Tareas = () => {
 
   const openEdit = (task: Task) => {
     setEditId(task.id);
-    setForm({ title: task.title, description: task.description, priority: task.priority, assignee: task.assignee, clientId: task.clientId || "", projectId: task.projectId || "", dueDate: task.dueDate });
+    setForm({ title: task.title, description: task.description, priority: task.priority, assignee: task.assignee, clientId: task.clientId || "", projectId: task.projectId || "", prospectId: task.prospectId || "", dueDate: task.dueDate });
     setDialogOpen(true);
   };
 
@@ -122,6 +130,7 @@ const Tareas = () => {
       assignee: form.assignee,
       client_id: form.clientId || null,
       project_id: form.projectId || null,
+      prospect_id: form.prospectId || null,
       due_date: form.dueDate || null,
     };
     if (editId) {
@@ -169,6 +178,12 @@ const Tareas = () => {
 
   const getClientName = (clientId?: string) => clientId ? clients.find((c) => c.id === clientId)?.name : undefined;
   const getProjectName = (projectId?: string) => projectId ? projects.find((p) => p.id === projectId)?.name : undefined;
+  const getProspectCode = (prospectId?: string) => prospectId ? prospects.find((p) => p.id === prospectId)?.code : undefined;
+  const getProspectLabel = (prospectId?: string) => {
+    if (!prospectId) return undefined;
+    const p = prospects.find((pr) => pr.id === prospectId);
+    return p ? `${p.code} – ${p.project_name}` : undefined;
+  };
   const isOverdue = (task: Task) => task.status !== "completada" && task.dueDate && new Date(task.dueDate) < new Date();
 
   const pendingCount = tasks.filter((t) => t.status === "pendiente").length;
@@ -178,6 +193,7 @@ const Tareas = () => {
   const TaskCard = ({ task }: { task: Task }) => {
     const PriorityIcon = priorityIcon[task.priority];
     const clientName = getClientName(task.clientId);
+    const prospectCode = getProspectCode(task.prospectId);
     const overdue = isOverdue(task);
     return (
       <div className="stat-card p-3 group cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailTask(task)}>
@@ -194,6 +210,11 @@ const Tareas = () => {
         {clientName && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
             <Building2 className="h-3 w-3" /> {clientName}
+          </div>
+        )}
+        {prospectCode && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+            <Target className="h-3 w-3" /> {prospectCode}
           </div>
         )}
         <div className="flex items-center justify-between mt-2">
@@ -258,6 +279,15 @@ const Tareas = () => {
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterProspect} onValueChange={setFilterProspect}>
+            <SelectTrigger className="w-[180px] h-9 text-xs">
+              <Target className="h-3 w-3 mr-1" /><SelectValue placeholder="Oportunidad" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[240px]">
+              <SelectItem value="all">Todas</SelectItem>
+              {prospects.map((p) => <SelectItem key={p.id} value={p.id}>{p.code} – {p.project_name}</SelectItem>)}
             </SelectContent>
           </Select>
           <div className="flex border rounded-lg overflow-hidden">
@@ -407,6 +437,16 @@ const Tareas = () => {
                 </Select>
               </div>
               <div>
+                <Label>Oportunidad CRM</Label>
+                <Select value={form.prospectId || "none"} onValueChange={(v) => u("prospectId", v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-[240px]">
+                    <SelectItem value="none">Sin oportunidad</SelectItem>
+                    {prospects.map((p) => <SelectItem key={p.id} value={p.id}>{p.code} – {p.project_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Fecha límite</Label>
                 <Input type="date" value={form.dueDate} onChange={(e) => u("dueDate", e.target.value)} />
               </div>
@@ -429,6 +469,7 @@ const Tareas = () => {
             const priorityCfg = TASK_PRIORITIES.find((p) => p.key === detailTask.priority)!;
             const clientName = getClientName(detailTask.clientId);
             const projectName = getProjectName(detailTask.projectId);
+            const prospectLabel = getProspectLabel(detailTask.prospectId);
             const overdue = isOverdue(detailTask);
             const freshTask = tasks.find((t) => t.id === detailTask.id) || detailTask;
 
@@ -475,10 +516,11 @@ const Tareas = () => {
                     </div>
                   </div>
 
-                  {(clientName || projectName) && (
-                    <div className="flex gap-4 text-xs">
+                  {(clientName || projectName || prospectLabel) && (
+                    <div className="flex gap-4 text-xs flex-wrap">
                       {clientName && <span className="flex items-center gap-1 text-muted-foreground"><Building2 className="h-3 w-3" /> {clientName}</span>}
                       {projectName && <span className="flex items-center gap-1 text-muted-foreground"><FolderKanban className="h-3 w-3" /> {projectName}</span>}
+                      {prospectLabel && <span className="flex items-center gap-1 text-muted-foreground"><Target className="h-3 w-3" /> {prospectLabel}</span>}
                     </div>
                   )}
 

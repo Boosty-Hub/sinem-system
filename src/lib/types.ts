@@ -305,6 +305,7 @@ export interface Task {
   assignee: string;
   clientId?: string;
   projectId?: string;
+  prospectId?: string;
   dueDate: string;
   createdAt: string;
   comments: TaskComment[];
