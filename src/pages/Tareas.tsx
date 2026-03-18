@@ -463,6 +463,7 @@ const Tareas = () => {
             const priorityCfg = TASK_PRIORITIES.find((p) => p.key === detailTask.priority)!;
             const clientName = getClientName(detailTask.clientId);
             const projectName = getProjectName(detailTask.projectId);
+            const prospectLabel = getProspectLabel(detailTask.prospectId);
             const overdue = isOverdue(detailTask);
             const freshTask = tasks.find((t) => t.id === detailTask.id) || detailTask;
 
