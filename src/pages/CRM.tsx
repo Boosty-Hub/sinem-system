@@ -47,6 +47,7 @@ const CRM = () => {
   const [filterProbMax, setFilterProbMax] = useState("");
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
+  const [filterResponsible, setFilterResponsible] = useState("all");
 
   // ── Fetch data ──
   const fetchData = useCallback(async () => {
