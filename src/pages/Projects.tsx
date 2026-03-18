@@ -2,15 +2,18 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { PROJECT_STEPS } from "@/lib/types";
-import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2 } from "lucide-react";
+import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { cn } from "@/lib/utils";
 
 interface ProjectRow {
   id: string;
@@ -20,6 +23,15 @@ interface ProjectRow {
   current_step: number;
   status: string;
   start_date: string | null;
+  origin_prospect_id: string | null;
+}
+
+interface WonProspect {
+  id: string;
+  code: string;
+  project_name: string;
+  direct_customer: string;
+  price_usd: number;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
@@ -35,6 +47,7 @@ const emptyForm = {
   currentStep: "1",
   status: "activo",
   startDate: "",
+  prospectId: "",
 };
 
 const Projects = () => {
@@ -50,12 +63,32 @@ const Projects = () => {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState<ProjectRow | null>(null);
+  const [wonProspects, setWonProspects] = useState<WonProspect[]>([]);
+  const [prospectPopoverOpen, setProspectPopoverOpen] = useState(false);
 
   const fetchProjects = async () => {
     setLoading(true);
-    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date").order("created_at", { ascending: false });
+    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date, origin_prospect_id").order("created_at", { ascending: false });
     setAllProjects(data ?? []);
     setLoading(false);
+  };
+
+  const fetchWonProspects = async () => {
+    // Get won prospects that don't already have a project linked
+    const { data: prospects } = await supabase
+      .from("prospects")
+      .select("id, code, project_name, direct_customer, price_usd")
+      .in("status", ["ganado", "facturada"])
+      .order("code");
+
+    // Filter out prospects that already have a project
+    const { data: linkedIds } = await supabase
+      .from("projects")
+      .select("origin_prospect_id")
+      .not("origin_prospect_id", "is", null);
+
+    const linkedSet = new Set((linkedIds ?? []).map(r => r.origin_prospect_id));
+    setWonProspects((prospects ?? []).filter(p => !linkedSet.has(p.id)));
   };
 
   useEffect(() => { fetchProjects(); }, []);
@@ -67,6 +100,7 @@ const Projects = () => {
   const openCreate = () => {
     setEditId(null);
     setForm(emptyForm);
+    fetchWonProspects();
     setDialogOpen(true);
   };
 
@@ -79,12 +113,28 @@ const Projects = () => {
       currentStep: String(project.current_step),
       status: project.status,
       startDate: project.start_date ?? "",
+      prospectId: project.origin_prospect_id ?? "",
     });
     setDialogOpen(true);
   };
 
+  const selectProspect = (prospect: WonProspect) => {
+    setForm(f => ({
+      ...f,
+      prospectId: prospect.id,
+      name: prospect.project_name,
+      client: prospect.direct_customer,
+      value: String(prospect.price_usd),
+    }));
+    setProspectPopoverOpen(false);
+  };
+
   const handleSave = async () => {
     if (!form.name.trim()) return;
+    if (!editId && !form.prospectId) {
+      toast({ title: "Selecciona una oportunidad ganada", variant: "destructive" });
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       client: form.client.trim(),
@@ -92,6 +142,7 @@ const Projects = () => {
       current_step: Number(form.currentStep) || 1,
       status: form.status,
       start_date: form.startDate || null,
+      origin_prospect_id: form.prospectId || null,
     } as any;
     if (editId) {
       await supabase.from("projects").update(payload).eq("id", editId);
@@ -115,6 +166,8 @@ const Projects = () => {
   };
 
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  const selectedProspect = wonProspects.find(p => p.id === form.prospectId);
 
   if (loading) {
     return (
@@ -213,6 +266,46 @@ const Projects = () => {
             <DialogTitle>{editId ? "Editar Proyecto" : "Nuevo Proyecto"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 mt-2">
+            {/* Opportunity selector — only for creation */}
+            {!editId && (
+              <div className="col-span-2">
+                <Label className="flex items-center gap-1.5">
+                  <Target className="h-4 w-4" /> Oportunidad Ganada <span className="text-destructive">*</span>
+                </Label>
+                <Popover open={prospectPopoverOpen} onOpenChange={setProspectPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-10 mt-1">
+                      {selectedProspect
+                        ? `${selectedProspect.code} – ${selectedProspect.project_name}`
+                        : "Seleccionar oportunidad ganada..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[460px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar oportunidad..." />
+                      <CommandList>
+                        <CommandEmpty>No hay oportunidades ganadas disponibles.</CommandEmpty>
+                        <CommandGroup>
+                          {wonProspects.map((p) => (
+                            <CommandItem key={p.id} value={`${p.code} ${p.project_name} ${p.direct_customer}`} onSelect={() => selectProspect(p)}>
+                              <Check className={cn("mr-2 h-4 w-4", form.prospectId === p.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex flex-col">
+                                <span className="font-medium">{p.code} – {p.project_name}</span>
+                                <span className="text-xs text-muted-foreground">{p.direct_customer} · ${p.price_usd.toLocaleString()}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {wonProspects.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">No hay oportunidades ganadas sin proyecto vinculado.</p>
+                )}
+              </div>
+            )}
             <div className="col-span-2">
               <Label>Nombre del Proyecto</Label>
               <Input value={form.name} onChange={(e) => u("name", e.target.value)} placeholder="Ej: Subestación Compacta CEMEX" />
@@ -254,7 +347,7 @@ const Projects = () => {
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.name.trim()}>
+            <Button onClick={handleSave} disabled={!form.name.trim() || (!editId && !form.prospectId)}>
               {editId ? "Guardar Cambios" : "Crear Proyecto"}
             </Button>
           </div>
