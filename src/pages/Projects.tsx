@@ -32,6 +32,7 @@ interface WonProspect {
   project_name: string;
   direct_customer: string;
   price_usd: number;
+  client_id: string | null;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
@@ -77,7 +78,7 @@ const Projects = () => {
     // Get won prospects that don't already have a project linked
     const { data: prospects } = await supabase
       .from("prospects")
-      .select("id, code, project_name, direct_customer, price_usd")
+      .select("id, code, project_name, direct_customer, price_usd, client_id")
       .in("status", ["ganado", "facturada"])
       .order("code");
 
@@ -135,6 +136,7 @@ const Projects = () => {
       toast({ title: "Selecciona una oportunidad ganada", variant: "destructive" });
       return;
     }
+    const selectedWonProspect = wonProspects.find(p => p.id === form.prospectId);
     const payload = {
       name: form.name.trim(),
       client: form.client.trim(),
@@ -143,6 +145,7 @@ const Projects = () => {
       status: form.status,
       start_date: form.startDate || null,
       origin_prospect_id: form.prospectId || null,
+      client_id: selectedWonProspect?.client_id || null,
     } as any;
     if (editId) {
       await supabase.from("projects").update(payload).eq("id", editId);
