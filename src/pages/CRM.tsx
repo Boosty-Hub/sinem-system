@@ -430,6 +430,9 @@ const CRM = () => {
               <Package className="h-4 w-4 mr-1" /> Productos
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
+            <Download className="h-4 w-4 mr-1" /> Exportar
+          </Button>
           {canCreateCRM && (
             <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="h-4 w-4 mr-1" /> Importar
