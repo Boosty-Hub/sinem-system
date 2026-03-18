@@ -213,17 +213,16 @@ const Analitica = () => {
     .sort((a, b) => b.value - a.value)
     .slice(0, 6);
 
-  const probRanges = [
-    { range: "0-20%", min: 0, max: 20 },
-    { range: "21-40%", min: 21, max: 40 },
-    { range: "41-60%", min: 41, max: 60 },
-    { range: "61-80%", min: 61, max: 80 },
-    { range: "81-100%", min: 81, max: 100 },
-  ];
-  const radarData = probRanges.map((r) => {
-    const matching = prospects.filter((p) => p.probability >= r.min && p.probability <= r.max);
-    return { subject: r.range, count: matching.length, value: matching.reduce((s, p) => s + p.priceUSD, 0) / 1000 };
+  // ── Top Clientes por Proyectos Ganados ──
+  const clientWonMap = new Map<string, { count: number; value: number }>();
+  wonDeals.forEach((p) => {
+    const e = clientWonMap.get(p.directCustomer) || { count: 0, value: 0 };
+    clientWonMap.set(p.directCustomer, { count: e.count + 1, value: e.value + p.priceUSD });
   });
+  const topClientsByProjects = Array.from(clientWonMap.entries())
+    .map(([name, d]) => ({ name, count: d.count, value: d.value }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
 
   const currentYearProspects = prospects.filter((p) => {
     const createdYear = new Date((p as any).createdAt || "").getFullYear();
