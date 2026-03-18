@@ -1,0 +1,1 @@
+ALTER TABLE public.prospects ADD COLUMN assigned_to uuid REFERENCES public.app_users(id) ON DELETE SET NULL DEFAULT NULL;
