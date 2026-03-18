@@ -668,6 +668,45 @@ export type Database = {
         }
         Relationships: []
       }
+      prospect_clients: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          is_primary: boolean
+          prospect_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          prospect_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          prospect_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_clients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_clients_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prospects: {
         Row: {
           assigned_to: string | null
