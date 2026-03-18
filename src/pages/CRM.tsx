@@ -236,6 +236,24 @@ const CRM = () => {
       const { id, ...rest } = prospectToDb(saved);
       await supabase.from("prospects").update(rest).eq("id", saved.id);
 
+      // Auto-create project when status changed to "ganado" via dialog
+      if (exists.status !== saved.status && saved.status === "ganado") {
+        const { data: existingProj } = await supabase.from("projects").select("id").eq("origin_prospect_id", saved.id).maybeSingle();
+        if (!existingProj) {
+          await supabase.from("projects").insert({
+            name: saved.projectName,
+            client: saved.directCustomer,
+            value: saved.priceUSD,
+            current_step: 1,
+            status: "activo",
+            origin_prospect_id: saved.id,
+            client_id: saved.clientId ?? null,
+            start_date: new Date().toISOString().split("T")[0],
+          } as any);
+          toast({ title: "Proyecto creado", description: `Se creó el proyecto "${saved.projectName}" automáticamente.` });
+        }
+      }
+
       // Notify if status changed to "ganado"
       if (exists.status !== saved.status && saved.status === "ganado" && currentAppUserId) {
         notifyAllExcept(currentAppUserId, {

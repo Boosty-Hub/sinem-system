@@ -521,6 +521,7 @@ export type Database = {
           id: string
           name: string
           origin_prospect_id: string | null
+          start_date: string | null
           status: string
           updated_at: string
           value: number
@@ -533,6 +534,7 @@ export type Database = {
           id?: string
           name: string
           origin_prospect_id?: string | null
+          start_date?: string | null
           status?: string
           updated_at?: string
           value?: number
@@ -545,6 +547,7 @@ export type Database = {
           id?: string
           name?: string
           origin_prospect_id?: string | null
+          start_date?: string | null
           status?: string
           updated_at?: string
           value?: number
