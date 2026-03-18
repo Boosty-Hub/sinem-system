@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Crown, X, UserPlus } from "lucide-react";
+import { Crown, X, UserPlus, Plus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Contact } from "@/lib/types";
 import { dbToContact } from "@/lib/supabaseMappers";
+import { useToast } from "@/hooks/use-toast";
 
 interface ClientForm {
   name: string;
@@ -25,18 +26,25 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   editId: string | null;
   initialForm: ClientForm;
-  /** IDs of contacts already assigned to this client (edit mode) */
   initialContactIds?: string[];
   initialPrimaryContactId?: string;
   onSave: (form: ClientForm, selectedContactIds: string[], primaryContactId: string | null) => void;
 }
 
+const emptyNewContact = { firstName: "", lastName: "", email: "", phone: "", position: "" };
+
 const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactIds, initialPrimaryContactId, onSave }: Props) => {
+  const { toast } = useToast();
   const [form, setForm] = useState<ClientForm>(initialForm);
   const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [primaryContactId, setPrimaryContactId] = useState<string | null>(null);
   const [contactSearch, setContactSearch] = useState("");
+
+  // Inline create contact
+  const [showNewContact, setShowNewContact] = useState(false);
+  const [newContact, setNewContact] = useState(emptyNewContact);
+  const [creatingContact, setCreatingContact] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -44,20 +52,18 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
       setSelectedContactIds(initialContactIds ?? []);
       setPrimaryContactId(initialPrimaryContactId ?? null);
       setContactSearch("");
+      setShowNewContact(false);
+      setNewContact(emptyNewContact);
       fetchContacts();
     }
   }, [open]);
 
   const fetchContacts = async () => {
-    // Get contacts that are free (no client) OR belong to the current client being edited
     let query = supabase.from("contacts").select("*").eq("status", "activo");
     const { data } = await query;
     if (!data) return;
     const all = data.map(dbToContact);
-    // Filter: show only free contacts + contacts already on this client
-    const filtered = all.filter(
-      (c) => !c.clientId || c.clientId === editId
-    );
+    const filtered = all.filter((c) => !c.clientId || c.clientId === editId);
     setAvailableContacts(filtered);
   };
 
@@ -74,22 +80,43 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
     });
   };
 
-  const makePrimary = (id: string) => {
-    setPrimaryContactId(id);
-  };
+  const makePrimary = (id: string) => setPrimaryContactId(id);
 
   const handleSave = () => {
     if (!form.name.trim()) return;
     onSave(form, selectedContactIds, primaryContactId);
   };
 
+  const handleCreateContact = async () => {
+    if (!newContact.firstName.trim() || !newContact.lastName.trim()) return;
+    setCreatingContact(true);
+    const { data, error } = await supabase.from("contacts").insert({
+      first_name: newContact.firstName.trim(),
+      last_name: newContact.lastName.trim(),
+      email: newContact.email.trim(),
+      phone: newContact.phone.trim(),
+      position: newContact.position.trim(),
+    }).select("*").single();
+    setCreatingContact(false);
+    if (error || !data) {
+      toast({ title: "Error al crear contacto", description: error?.message, variant: "destructive" });
+      return;
+    }
+    const created = dbToContact(data);
+    setAvailableContacts((prev) => [...prev, created]);
+    setSelectedContactIds((prev) => [...prev, created.id]);
+    if (selectedContactIds.length === 0 && !primaryContactId) {
+      setPrimaryContactId(created.id);
+    }
+    setNewContact(emptyNewContact);
+    setShowNewContact(false);
+    toast({ title: "Contacto creado", description: `${created.firstName} ${created.lastName} fue creado y vinculado.` });
+  };
+
   const filteredContacts = availableContacts.filter((c) => {
     if (!contactSearch.trim()) return true;
     const q = contactSearch.toLowerCase();
-    return (
-      `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q)
-    );
+    return `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
   });
 
   const selectedContacts = availableContacts.filter((c) => selectedContactIds.includes(c.id));
@@ -140,10 +167,73 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
 
         {/* Contact selection */}
         <div className="mt-4 space-y-3">
-          <Label className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4" />
-            Contactos del Cliente
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              Contactos del Cliente
+            </Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setShowNewContact(!showNewContact)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              {showNewContact ? "Cancelar" : "Crear Contacto"}
+            </Button>
+          </div>
+
+          {/* Inline create contact form */}
+          {showNewContact && (
+            <div className="border rounded-lg p-3 space-y-2 bg-muted/30 animate-fade-in">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nuevo Contacto</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Nombre *"
+                  value={newContact.firstName}
+                  onChange={(e) => setNewContact((p) => ({ ...p, firstName: e.target.value }))}
+                  className="text-sm h-8"
+                />
+                <Input
+                  placeholder="Apellido *"
+                  value={newContact.lastName}
+                  onChange={(e) => setNewContact((p) => ({ ...p, lastName: e.target.value }))}
+                  className="text-sm h-8"
+                />
+                <Input
+                  placeholder="Email"
+                  type="email"
+                  value={newContact.email}
+                  onChange={(e) => setNewContact((p) => ({ ...p, email: e.target.value }))}
+                  className="text-sm h-8"
+                />
+                <Input
+                  placeholder="Teléfono"
+                  value={newContact.phone}
+                  onChange={(e) => setNewContact((p) => ({ ...p, phone: e.target.value }))}
+                  className="text-sm h-8"
+                />
+                <Input
+                  placeholder="Cargo / Posición"
+                  value={newContact.position}
+                  onChange={(e) => setNewContact((p) => ({ ...p, position: e.target.value }))}
+                  className="text-sm h-8 col-span-2"
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleCreateContact}
+                  disabled={!newContact.firstName.trim() || !newContact.lastName.trim() || creatingContact}
+                >
+                  {creatingContact && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                  Crear y Vincular
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Selected contacts */}
           {selectedContacts.length > 0 && (
@@ -165,11 +255,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
                       <Crown className={`h-3.5 w-3.5 ${isPrimary ? "text-yellow-300 fill-yellow-300" : "text-muted-foreground/50"}`} />
                     </button>
                     <span>{c.firstName} {c.lastName}</span>
-                    <button
-                      type="button"
-                      onClick={() => toggleContact(c.id)}
-                      className="hover:text-destructive"
-                    >
+                    <button type="button" onClick={() => toggleContact(c.id)} className="hover:text-destructive">
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
