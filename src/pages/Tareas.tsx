@@ -27,12 +27,14 @@ const emptyForm = {
   assignee: "",
   clientId: "",
   projectId: "",
+  prospectId: "",
   dueDate: "",
 };
 
 interface SystemUser { id: string; name: string; email: string; status: string; }
 interface ClientRow { id: string; name: string; }
 interface ProjectRow { id: string; name: string; }
+interface ProspectRow { id: string; code: string; project_name: string; }
 
 const Tareas = () => {
   const { toast } = useToast();
