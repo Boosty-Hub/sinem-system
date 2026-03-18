@@ -121,7 +121,7 @@ const Analitica = () => {
         supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle() as any,
       ]);
 
-      setProspects((prospectsData ?? []).map(dbToProspect));
+      setProspects((prospectsData ?? []).map((row: any) => ({ ...dbToProspect(row), createdAt: row.created_at })));
       setStages((stagesData ?? []).map(dbToStage));
 
       if (fyData) {
