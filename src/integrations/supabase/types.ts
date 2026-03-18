@@ -154,6 +154,7 @@ export type Database = {
           industry: string
           name: string
           origin_prospect_id: string | null
+          primary_contact_id: string | null
           status: string
           total_projects: number
           total_revenue: number
@@ -169,6 +170,7 @@ export type Database = {
           industry?: string
           name: string
           origin_prospect_id?: string | null
+          primary_contact_id?: string | null
           status?: string
           total_projects?: number
           total_revenue?: number
@@ -184,12 +186,20 @@ export type Database = {
           industry?: string
           name?: string
           origin_prospect_id?: string | null
+          primary_contact_id?: string | null
           status?: string
           total_projects?: number
           total_revenue?: number
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "clients_primary_contact_id_fkey"
+            columns: ["primary_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_clients_origin_prospect"
             columns: ["origin_prospect_id"]
