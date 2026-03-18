@@ -431,6 +431,16 @@ const Tareas = () => {
                 </Select>
               </div>
               <div>
+                <Label>Oportunidad CRM</Label>
+                <Select value={form.prospectId || "none"} onValueChange={(v) => u("prospectId", v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-[240px]">
+                    <SelectItem value="none">Sin oportunidad</SelectItem>
+                    {prospects.map((p) => <SelectItem key={p.id} value={p.id}>{p.code} – {p.project_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Fecha límite</Label>
                 <Input type="date" value={form.dueDate} onChange={(e) => u("dueDate", e.target.value)} />
               </div>
