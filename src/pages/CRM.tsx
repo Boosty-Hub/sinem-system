@@ -194,9 +194,49 @@ const CRM = () => {
       setProspects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
       const { id, ...rest } = prospectToDb(saved);
       await supabase.from("prospects").update(rest).eq("id", saved.id);
+
+      // Notify if status changed to "ganado"
+      if (exists.status !== saved.status && saved.status === "ganado" && currentAppUserId) {
+        notifyAllExcept(currentAppUserId, {
+          type: "crm",
+          title: "🎉 Oportunidad ganada",
+          message: `La oportunidad ${saved.code} – ${saved.projectName} ha sido marcada como ganada.`,
+          link: "/crm",
+          referenceId: saved.id,
+          referenceType: "prospect",
+          triggeredBy: currentAppUserId,
+        });
+      }
+
+      // Notify assigned user if assignment changed
+      if (exists.assignedTo !== saved.assignedTo && saved.assignedTo && saved.assignedTo !== currentAppUserId) {
+        createNotification({
+          userId: saved.assignedTo,
+          type: "crm",
+          title: "Oportunidad asignada",
+          message: `Se te ha asignado la oportunidad ${saved.code} – ${saved.projectName}.`,
+          link: "/crm",
+          referenceId: saved.id,
+          referenceType: "prospect",
+          triggeredBy: currentAppUserId ?? undefined,
+        });
+      }
     } else {
       setProspects((prev) => [saved, ...prev]);
       await supabase.from("prospects").insert(prospectToDb(saved));
+
+      // Notify all users about new opportunity
+      if (currentAppUserId) {
+        notifyAllExcept(currentAppUserId, {
+          type: "crm",
+          title: "Nueva oportunidad",
+          message: `Se ha creado la oportunidad ${saved.code} – ${saved.projectName}.`,
+          link: "/crm",
+          referenceId: saved.id,
+          referenceType: "prospect",
+          triggeredBy: currentAppUserId,
+        });
+      }
     }
   };
 
