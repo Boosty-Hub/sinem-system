@@ -40,7 +40,14 @@ interface ProspectRow { id: string; code: string; project_name: string; }
 const Tareas = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("app_users").select("id").eq("auth_user_id", user.id).single()
+      .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
+  }, [user]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
