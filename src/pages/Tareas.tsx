@@ -275,6 +275,15 @@ const Tareas = () => {
               {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={filterProspect} onValueChange={setFilterProspect}>
+            <SelectTrigger className="w-[180px] h-9 text-xs">
+              <Target className="h-3 w-3 mr-1" /><SelectValue placeholder="Oportunidad" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[240px]">
+              <SelectItem value="all">Todas</SelectItem>
+              {prospects.map((p) => <SelectItem key={p.id} value={p.id}>{p.code} – {p.project_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <div className="flex border rounded-lg overflow-hidden">
             <Button variant={view === "board" ? "default" : "ghost"} size="sm" className="rounded-none h-9" onClick={() => setView("board")}>
               <LayoutGrid className="h-4 w-4" />
