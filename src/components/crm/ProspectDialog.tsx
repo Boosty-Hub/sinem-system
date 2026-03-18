@@ -154,6 +154,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setComments(prospect?.comments ?? "");
       setQuotationHistoryOpen(null);
       setExpandedSnapVersion(null);
+      setAssignedTo(prospect?.assignedTo ?? "none");
       setShowUnsavedWarning(false);
       // Snapshot initial values after a tick so state is settled
       setTimeout(() => {
