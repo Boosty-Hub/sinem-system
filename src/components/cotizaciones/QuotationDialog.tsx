@@ -54,8 +54,55 @@ interface ClientData {
 const emptyClientData: ClientData = { company: "", attention: "", address: "", rnc: "", phone: "", email: "" };
 
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000 };
+/* ── Searchable Prospect Combobox ── */
+const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[]; value: string; onChange: (v: string) => void }) => {
+  const [open, setOpen] = useState(false);
+  const selected = prospects.find((p) => p.id === value);
 
-const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between h-9 font-normal text-sm">
+          <span className="truncate">
+            {selected ? `${selected.code ? selected.code + " — " : ""}${selected.projectName}` : "Sin oportunidad"}
+          </span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[380px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar por código o nombre..." />
+          <CommandList>
+            <CommandEmpty>No se encontraron oportunidades.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="sin-oportunidad" onSelect={() => { onChange("none"); setOpen(false); }}>
+                <Check className={cn("mr-2 h-3.5 w-3.5", value === "none" ? "opacity-100" : "opacity-0")} />
+                Sin oportunidad
+              </CommandItem>
+              {prospects.map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={`${p.code} ${p.projectName} ${p.directCustomer}`}
+                  onSelect={() => { onChange(p.id); setOpen(false); }}
+                >
+                  <Check className={cn("mr-2 h-3.5 w-3.5", value === p.id ? "opacity-100" : "opacity-0")} />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm truncate">{p.projectName}</span>
+                    <span className="text-[10px] text-muted-foreground truncate">
+                      {p.code && `${p.code} · `}{p.directCustomer}
+                    </span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+
   const isEdit = !!quotation;
   const [generalSettings] = useLocalStorage<GeneralSettings>("sinem:general-settings", DEFAULT_GENERAL_SETTINGS);
   const [prospects, setProspects] = useState<Prospect[]>([]);
