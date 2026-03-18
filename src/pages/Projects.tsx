@@ -19,6 +19,7 @@ interface ProjectRow {
   value: number;
   current_step: number;
   status: string;
+  start_date: string | null;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
@@ -33,6 +34,7 @@ const emptyForm = {
   value: "",
   currentStep: "1",
   status: "activo",
+  startDate: "",
 };
 
 const Projects = () => {
@@ -51,7 +53,7 @@ const Projects = () => {
 
   const fetchProjects = async () => {
     setLoading(true);
-    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status").order("created_at", { ascending: false });
+    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date").order("created_at", { ascending: false });
     setAllProjects(data ?? []);
     setLoading(false);
   };
@@ -76,6 +78,7 @@ const Projects = () => {
       value: String(project.value),
       currentStep: String(project.current_step),
       status: project.status,
+      startDate: project.start_date ?? "",
     });
     setDialogOpen(true);
   };
@@ -88,7 +91,8 @@ const Projects = () => {
       value: Number(form.value) || 0,
       current_step: Number(form.currentStep) || 1,
       status: form.status,
-    };
+      start_date: form.startDate || null,
+    } as any;
     if (editId) {
       await supabase.from("projects").update(payload).eq("id", editId);
       toast({ title: "Proyecto actualizado" });
@@ -242,6 +246,10 @@ const Projects = () => {
                   <SelectItem value="pausado">Pausado</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Fecha de Inicio</Label>
+              <Input type="date" value={form.startDate} onChange={(e) => u("startDate", e.target.value)} />
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
