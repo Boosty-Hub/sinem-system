@@ -474,19 +474,29 @@ const Analitica = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="stat-card p-5">
           <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <Target className="h-4 w-4 text-muted-foreground" /> Distribución por Probabilidad
+            <Target className="h-4 w-4 text-muted-foreground" /> Top Clientes por Proyectos Ganados
           </h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <RadarChart data={radarData}>
-              <PolarGrid stroke="hsl(var(--border))" />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
-              <PolarRadiusAxis tick={{ fontSize: 10 }} />
-              <Radar name="Oportunidades" dataKey="count" stroke="hsl(199 89% 48%)" fill="hsl(199 89% 48%)" fillOpacity={0.3} />
-              <Radar name="Valor ($k)" dataKey="value" stroke="hsl(142 71% 45%)" fill="hsl(142 71% 45%)" fillOpacity={0.2} />
-              <Legend />
-              <RechartsTooltip contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
-            </RadarChart>
-          </ResponsiveContainer>
+          <div className="space-y-3">
+            {topClientsByProjects.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">No hay datos</p>}
+            {topClientsByProjects.map((client, i) => {
+              const maxCount = topClientsByProjects[0]?.count || 1;
+              const pct = (client.count / maxCount) * 100;
+              return (
+                <div key={client.name}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium">{client.name}</span>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold">{client.count} proyectos</span>
+                      <span className="text-xs text-muted-foreground ml-2">({fmt(client.value)})</span>
+                    </div>
+                  </div>
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: COLORS[i % COLORS.length] }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="stat-card p-5">
