@@ -51,14 +51,16 @@ const CRM = () => {
 
   // ── Fetch data ──
   const fetchData = useCallback(async () => {
-    const [{ data: dbProspects }, { data: dbProducts }, { data: dbStages }] = await Promise.all([
+    const [{ data: dbProspects }, { data: dbProducts }, { data: dbStages }, { data: dbUsers }] = await Promise.all([
       supabase.from("prospects").select("*").order("cotorta", { ascending: true }),
       supabase.from("products").select("*").order("name"),
       supabase.from("pipeline_stages").select("*").order("sort_order"),
+      supabase.from("app_users").select("id, name").eq("status", "activo").order("name"),
     ]);
     if (dbProspects) setProspects(dbProspects.map(dbToProspect));
     if (dbProducts) setProducts(dbProducts.map(dbToProduct));
     if (dbStages && dbStages.length > 0) setStages(dbStages.map(dbToStage));
+    if (dbUsers) setAppUsers(dbUsers);
     setLoading(false);
   }, []);
 
