@@ -190,7 +190,8 @@ const Analitica = () => {
 
   // ── Pipeline KPIs ──
   const totalPipeline = prospects.reduce((s, p) => s + p.priceUSD, 0);
-  const totalWeighted = prospects.reduce((s, p) => s + p.weighted, 0);
+  const openForWeighted = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
+  const totalWeighted = openForWeighted.reduce((s, p) => s + p.weighted, 0);
   const totalMargin = prospects.reduce((s, p) => s + p.marginUSD, 0);
   const avgMarginPct = prospects.length > 0 ? Math.round(prospects.reduce((s, p) => s + p.marginPercent, 0) / prospects.length) : 0;
   const winRate = prospects.length > 0
