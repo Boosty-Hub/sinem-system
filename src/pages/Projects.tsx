@@ -32,6 +32,7 @@ interface WonProspect {
   project_name: string;
   direct_customer: string;
   price_usd: number;
+  client_id: string | null;
 }
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
