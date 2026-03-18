@@ -34,6 +34,7 @@ const emptyForm = {
   value: "",
   currentStep: "1",
   status: "activo",
+  startDate: "",
 };
 
 const Projects = () => {
