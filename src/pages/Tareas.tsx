@@ -178,6 +178,12 @@ const Tareas = () => {
 
   const getClientName = (clientId?: string) => clientId ? clients.find((c) => c.id === clientId)?.name : undefined;
   const getProjectName = (projectId?: string) => projectId ? projects.find((p) => p.id === projectId)?.name : undefined;
+  const getProspectCode = (prospectId?: string) => prospectId ? prospects.find((p) => p.id === prospectId)?.code : undefined;
+  const getProspectLabel = (prospectId?: string) => {
+    if (!prospectId) return undefined;
+    const p = prospects.find((pr) => pr.id === prospectId);
+    return p ? `${p.code} – ${p.project_name}` : undefined;
+  };
   const isOverdue = (task: Task) => task.status !== "completada" && task.dueDate && new Date(task.dueDate) < new Date();
 
   const pendingCount = tasks.filter((t) => t.status === "pendiente").length;
