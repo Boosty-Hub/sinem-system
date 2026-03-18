@@ -121,7 +121,7 @@ const Analitica = () => {
         supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle() as any,
       ]);
 
-      setProspects((prospectsData ?? []).map(dbToProspect));
+      setProspects((prospectsData ?? []).map((row: any) => ({ ...dbToProspect(row), createdAt: row.created_at })));
       setStages((stagesData ?? []).map(dbToStage));
 
       if (fyData) {
@@ -225,8 +225,12 @@ const Analitica = () => {
     return { subject: r.range, count: matching.length, value: matching.reduce((s, p) => s + p.priceUSD, 0) / 1000 };
   });
 
+  const currentYearProspects = prospects.filter((p) => {
+    const createdYear = new Date((p as any).createdAt || "").getFullYear();
+    return createdYear === currentYear;
+  });
   const clientPipeline = new Map<string, number>();
-  prospects.forEach((p) => clientPipeline.set(p.directCustomer, (clientPipeline.get(p.directCustomer) || 0) + p.priceUSD));
+  currentYearProspects.forEach((p) => clientPipeline.set(p.directCustomer, (clientPipeline.get(p.directCustomer) || 0) + p.priceUSD));
   const topClients = Array.from(clientPipeline.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
@@ -488,12 +492,13 @@ const Analitica = () => {
 
         <div className="stat-card p-5">
           <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" /> Top Clientes por Pipeline
+            <Users className="h-4 w-4 text-muted-foreground" /> Top Clientes por Pipeline ({currentYear})
           </h3>
           <div className="space-y-3">
             {topClients.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">No hay datos</p>}
             {topClients.map((client, i) => {
-              const pct = totalPipeline > 0 ? (client.value / totalPipeline) * 100 : 0;
+              const yearPipeline = currentYearProspects.reduce((s, p) => s + p.priceUSD, 0);
+              const pct = yearPipeline > 0 ? (client.value / yearPipeline) * 100 : 0;
               return (
                 <div key={client.name}>
                   <div className="flex items-center justify-between mb-1">
