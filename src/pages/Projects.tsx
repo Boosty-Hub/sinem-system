@@ -78,7 +78,7 @@ const Projects = () => {
     // Get won prospects that don't already have a project linked
     const { data: prospects } = await supabase
       .from("prospects")
-      .select("id, code, project_name, direct_customer, price_usd")
+      .select("id, code, project_name, direct_customer, price_usd, client_id")
       .in("status", ["ganado", "facturada"])
       .order("code");
 
