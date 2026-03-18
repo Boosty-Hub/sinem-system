@@ -382,7 +382,6 @@ const CRM = () => {
                 <Input type="number" placeholder="Max" value={filterPriceMax} onChange={(e) => setFilterPriceMax(e.target.value)} className="h-8 text-xs" min={0} />
               </div>
             </div>
-            </div>
             <div>
               <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Responsable</label>
               <Select value={filterResponsible} onValueChange={setFilterResponsible}>
