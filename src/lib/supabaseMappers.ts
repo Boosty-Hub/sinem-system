@@ -28,6 +28,7 @@ export const dbToProspect = (row: DbProspect): Prospect => ({
   comments: row.comments,
   status: row.status,
   createdBy: row.created_by ?? undefined,
+  assignedTo: row.assigned_to ?? undefined,
   clientId: row.client_id ?? undefined,
   contactId: row.contact_id ?? undefined,
 });
