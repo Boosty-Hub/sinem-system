@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
 import {
   Search, Plus, ListTodo, LayoutGrid, Calendar, AlertCircle, Clock, CheckCircle2,
-  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2, Target,
+  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2, Target, Check, ChevronsUpDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useAuth } from "@/lib/AuthContext";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { createNotification } from "@/lib/notifications";
+import { cn } from "@/lib/utils";
 
 const priorityIcon = { alta: AlertCircle, media: Clock, baja: CheckCircle2 };
 const priorityColor = { alta: "text-destructive", media: "text-sinem-warning", baja: "text-muted-foreground" };
