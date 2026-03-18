@@ -80,12 +80,14 @@ const Tareas = () => {
       assignee: t.assignee,
       clientId: t.client_id ?? undefined,
       projectId: t.project_id ?? undefined,
+      prospectId: (t as any).prospect_id ?? undefined,
       dueDate: t.due_date ?? "",
       createdAt: t.created_at,
       comments: commentsByTask.get(t.id) ?? [],
     })));
     setClients(clientsData ?? []);
     setProjects(projectsData ?? []);
+    setProspects(prospectsData ?? []);
     setSystemUsers(usersData ?? []);
     setLoading(false);
   };
