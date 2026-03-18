@@ -448,15 +448,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Oportunidad CRM</Label>
-                <Select value={selectedProspectId} onValueChange={handleProspectChange}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar oportunidad" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin oportunidad</SelectItem>
-                    {prospects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.projectName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ProspectCombobox
+                  prospects={prospects}
+                  value={selectedProspectId}
+                  onChange={handleProspectChange}
+                />
               </div>
               <div>
                 <Label>Cliente</Label>
