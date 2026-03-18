@@ -1,0 +1,1 @@
+ALTER TABLE public.prospects DROP CONSTRAINT IF EXISTS prospects_status_check;
