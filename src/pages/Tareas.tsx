@@ -117,7 +117,7 @@ const Tareas = () => {
 
   const openEdit = (task: Task) => {
     setEditId(task.id);
-    setForm({ title: task.title, description: task.description, priority: task.priority, assignee: task.assignee, clientId: task.clientId || "", projectId: task.projectId || "", dueDate: task.dueDate });
+    setForm({ title: task.title, description: task.description, priority: task.priority, assignee: task.assignee, clientId: task.clientId || "", projectId: task.projectId || "", prospectId: task.prospectId || "", dueDate: task.dueDate });
     setDialogOpen(true);
   };
 
