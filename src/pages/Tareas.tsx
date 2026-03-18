@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
 import {
   Search, Plus, ListTodo, LayoutGrid, Calendar, AlertCircle, Clock, CheckCircle2,
-  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2,
+  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2, Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
