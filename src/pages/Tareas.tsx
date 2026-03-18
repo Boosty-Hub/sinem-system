@@ -466,13 +466,36 @@ const Tareas = () => {
               </div>
               <div>
                 <Label>Oportunidad CRM</Label>
-                <Select value={form.prospectId || "none"} onValueChange={(v) => u("prospectId", v === "none" ? "" : v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-[240px]">
-                    <SelectItem value="none">Sin oportunidad</SelectItem>
-                    {prospects.map((p) => <SelectItem key={p.id} value={p.id}>{p.code} – {p.project_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-10">
+                      {form.prospectId
+                        ? (() => { const p = prospects.find(pr => pr.id === form.prospectId); return p ? `${p.code} – ${p.project_name}` : "Sin oportunidad"; })()
+                        : "Sin oportunidad"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Buscar oportunidad..." />
+                      <CommandList>
+                        <CommandEmpty>No se encontró oportunidad.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem value="sin-oportunidad" onSelect={() => u("prospectId", "")}>
+                            <Check className={cn("mr-2 h-4 w-4", !form.prospectId ? "opacity-100" : "opacity-0")} />
+                            Sin oportunidad
+                          </CommandItem>
+                          {prospects.map((p) => (
+                            <CommandItem key={p.id} value={`${p.code} ${p.project_name}`} onSelect={() => u("prospectId", p.id)}>
+                              <Check className={cn("mr-2 h-4 w-4", form.prospectId === p.id ? "opacity-100" : "opacity-0")} />
+                              {p.code} – {p.project_name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <Label>Fecha límite</Label>
