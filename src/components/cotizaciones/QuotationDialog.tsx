@@ -102,7 +102,7 @@ const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[
   );
 };
 
-
+const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
   const [generalSettings] = useLocalStorage<GeneralSettings>("sinem:general-settings", DEFAULT_GENERAL_SETTINGS);
   const [prospects, setProspects] = useState<Prospect[]>([]);
