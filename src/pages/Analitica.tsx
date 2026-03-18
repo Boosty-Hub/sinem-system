@@ -192,8 +192,8 @@ const Analitica = () => {
   const totalPipeline = prospects.reduce((s, p) => s + p.priceUSD, 0);
   const openForWeighted = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
   const totalWeighted = openForWeighted.reduce((s, p) => s + p.weighted, 0);
-  const totalMargin = prospects.reduce((s, p) => s + p.marginUSD, 0);
-  const avgMarginPct = prospects.length > 0 ? Math.round(prospects.reduce((s, p) => s + p.marginPercent, 0) / prospects.length) : 0;
+  const wonMarginTotal = wonDeals.reduce((s, p) => s + p.marginUSD, 0);
+  const wonAvgMarginPct = wonDeals.length > 0 ? Math.round(wonDeals.reduce((s, p) => s + p.marginPercent, 0) / wonDeals.length) : 0;
   const winRate = prospects.length > 0
     ? Math.round((wonDeals.length / Math.max(prospects.filter((p) => p.status !== "prospecto").length, 1)) * 100)
     : 0;
@@ -428,7 +428,7 @@ const Analitica = () => {
         <KpiCard icon={DollarSign} label="Pipeline Total" value={fmt(totalPipeline)} sub={`${prospects.length} oportunidades`} color="bg-primary" />
         <KpiCard icon={TrendingUp} label="Ponderado" value={fmt(totalWeighted)} color="bg-sinem-info" tooltip={`Suma del valor ponderado (precio × probabilidad) de ${openForWeighted.length} oportunidades abiertas. Excluye oportunidades ganadas, facturadas y perdidas.`} />
         <KpiCard icon={Target} label="Ganados" value={fmt(wonTotal)} sub={`Win rate: ${winRate}%`} color="bg-sinem-success" />
-        <KpiCard icon={BarChart3} label="Margen Total" value={fmt(totalMargin)} sub={`Promedio: ${avgMarginPct}%`} color="bg-sinem-teal" />
+        <KpiCard icon={BarChart3} label="Margen Total" value={fmt(wonMarginTotal)} sub={`Promedio: ${wonAvgMarginPct}%`} color="bg-sinem-teal" tooltip={`Suma del margen USD de ${wonDeals.length} oportunidades ganadas/facturadas en ${currentYear}.`} />
         <KpiCard icon={Target} label={`Budget ${currentYear}`} value={fmt(budget.annualTarget)} sub={`${previousYear}: ${fmt(budget.previousYearWon)}`} color="bg-violet-600" />
       </div>
 
