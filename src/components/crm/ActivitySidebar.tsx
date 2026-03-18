@@ -269,7 +269,7 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
     const entry: ActivityEntry = {
       id: crypto.randomUUID(),
       prospectId,
-      authorId: appUsers[0]?.id ?? "u1",
+      authorId: currentAppUserId ?? appUsers[0]?.id ?? "u1",
       text: text.trim(),
       mentions,
       attachments: pendingFiles,
@@ -277,10 +277,31 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
       createdAt: new Date().toISOString(),
     };
     setEntries((prev) => [...prev, entry]);
+
+    // Notify mentioned users
+    if (mentions.length > 0 && currentAppUserId) {
+      const mentionedUsers = appUsers.filter((u) =>
+        mentions.some((m) => u.name.toLowerCase().includes(m.toLowerCase())) && u.id !== currentAppUserId
+      );
+      const authorName = appUsers.find((u) => u.id === currentAppUserId)?.name ?? "Alguien";
+      mentionedUsers.forEach((mu) => {
+        createNotification({
+          userId: mu.id,
+          type: "mention",
+          title: "Te mencionaron en una conversación",
+          message: `${authorName} te mencionó en la oportunidad "${prospectName}": ${text.trim().slice(0, 100)}`,
+          link: "/crm",
+          referenceId: prospectId,
+          referenceType: "prospect",
+          triggeredBy: currentAppUserId,
+        });
+      });
+    }
+
     setText("");
     setPendingFiles([]);
     setPendingVoice(null);
-  }, [text, pendingFiles, pendingVoice, prospectId, setEntries, appUsers]);
+  }, [text, pendingFiles, pendingVoice, prospectId, setEntries, appUsers, currentAppUserId, prospectName]);
 
   if (!open) return null;
 
