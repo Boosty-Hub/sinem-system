@@ -492,7 +492,7 @@ const Analitica = () => {
 
         <div className="stat-card p-5">
           <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" /> Top Clientes por Pipeline
+            <Users className="h-4 w-4 text-muted-foreground" /> Top Clientes por Pipeline ({currentYear})
           </h3>
           <div className="space-y-3">
             {topClients.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">No hay datos</p>}
