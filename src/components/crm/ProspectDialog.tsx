@@ -175,8 +175,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   }, [open, prospect?.id]);
 
   const getCurrentValues = useCallback(() => JSON.stringify({
-    code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
-  }), [code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments]);
+    code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
+  }), [code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo]);
 
   const isDirty = useMemo(() => {
     if (!initialValuesRef.current || !isEdit) return false;
