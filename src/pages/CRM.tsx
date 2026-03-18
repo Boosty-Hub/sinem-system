@@ -312,7 +312,7 @@ const CRM = () => {
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             <div>
               <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Etapa</label>
               <Select value={filterStage} onValueChange={setFilterStage}>
