@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Send, Paperclip, Mic, Square, Play, Pause, File, FileImage, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/AuthContext";
+import { createNotification } from "@/lib/notifications";
 import UserAvatar from "@/components/UserAvatar";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
