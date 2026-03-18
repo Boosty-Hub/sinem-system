@@ -478,7 +478,7 @@ const Tareas = () => {
                   <PopoverContent className="w-[400px] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Buscar oportunidad..." />
-                      <CommandList>
+                      <CommandList className="max-h-[240px] overflow-y-auto">
                         <CommandEmpty>No se encontró oportunidad.</CommandEmpty>
                         <CommandGroup>
                           <CommandItem value="sin-oportunidad" onSelect={() => u("prospectId", "")}>
