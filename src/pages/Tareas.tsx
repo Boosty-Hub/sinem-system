@@ -193,6 +193,7 @@ const Tareas = () => {
   const TaskCard = ({ task }: { task: Task }) => {
     const PriorityIcon = priorityIcon[task.priority];
     const clientName = getClientName(task.clientId);
+    const prospectCode = getProspectCode(task.prospectId);
     const overdue = isOverdue(task);
     return (
       <div className="stat-card p-3 group cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailTask(task)}>
@@ -209,6 +210,11 @@ const Tareas = () => {
         {clientName && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
             <Building2 className="h-3 w-3" /> {clientName}
+          </div>
+        )}
+        {prospectCode && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+            <Target className="h-3 w-3" /> {prospectCode}
           </div>
         )}
         <div className="flex items-center justify-between mt-2">
