@@ -28,6 +28,7 @@ const CRM = () => {
   const [search, setSearch] = useState("");
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [appUsers, setAppUsers] = useState<{ id: string; name: string }[]>([]);
   const [stages, setStages] = useState<PipelineStage[]>(DEFAULT_PIPELINE_STAGES);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -46,17 +47,20 @@ const CRM = () => {
   const [filterProbMax, setFilterProbMax] = useState("");
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
+  const [filterResponsible, setFilterResponsible] = useState("all");
 
   // ── Fetch data ──
   const fetchData = useCallback(async () => {
-    const [{ data: dbProspects }, { data: dbProducts }, { data: dbStages }] = await Promise.all([
+    const [{ data: dbProspects }, { data: dbProducts }, { data: dbStages }, { data: dbUsers }] = await Promise.all([
       supabase.from("prospects").select("*").order("cotorta", { ascending: true }),
       supabase.from("products").select("*").order("name"),
       supabase.from("pipeline_stages").select("*").order("sort_order"),
+      supabase.from("app_users").select("id, name").eq("status", "activo").order("name"),
     ]);
     if (dbProspects) setProspects(dbProspects.map(dbToProspect));
     if (dbProducts) setProducts(dbProducts.map(dbToProduct));
     if (dbStages && dbStages.length > 0) setStages(dbStages.map(dbToStage));
+    if (dbUsers) setAppUsers(dbUsers);
     setLoading(false);
   }, []);
 
@@ -67,11 +71,11 @@ const CRM = () => {
   const uniqueCustomers = useMemo(() => [...new Set(prospects.map((p) => p.directCustomer).filter(Boolean))].sort(), [prospects]);
   const uniqueBUs = useMemo(() => [...new Set(prospects.map((p) => p.bu).filter(Boolean))].sort(), [prospects]);
 
-  const activeFilterCount = [filterStage !== "all", filterProduct !== "all", filterCustomer !== "all", filterBU !== "all", filterProbMin !== "", filterProbMax !== "", filterPriceMin !== "", filterPriceMax !== ""].filter(Boolean).length;
+  const activeFilterCount = [filterStage !== "all", filterProduct !== "all", filterCustomer !== "all", filterBU !== "all", filterProbMin !== "", filterProbMax !== "", filterPriceMin !== "", filterPriceMax !== "", filterResponsible !== "all"].filter(Boolean).length;
 
   const clearFilters = () => {
     setFilterStage("all"); setFilterProduct("all"); setFilterCustomer("all"); setFilterBU("all");
-    setFilterProbMin(""); setFilterProbMax(""); setFilterPriceMin(""); setFilterPriceMax("");
+    setFilterProbMin(""); setFilterProbMax(""); setFilterPriceMin(""); setFilterPriceMax(""); setFilterResponsible("all");
   };
 
   const filtered = prospects.filter((p) => {
@@ -94,7 +98,8 @@ const CRM = () => {
     const matchProbMax = !filterProbMax || p.probability <= Number(filterProbMax);
     const matchPriceMin = !filterPriceMin || p.priceUSD >= Number(filterPriceMin);
     const matchPriceMax = !filterPriceMax || p.priceUSD <= Number(filterPriceMax);
-    return matchSearch && matchStage && matchProduct && matchCustomer && matchBU && matchProbMin && matchProbMax && matchPriceMin && matchPriceMax;
+    const matchResponsible = filterResponsible === "all" || p.assignedTo === filterResponsible;
+    return matchSearch && matchStage && matchProduct && matchCustomer && matchBU && matchProbMin && matchProbMax && matchPriceMin && matchPriceMax && matchResponsible;
   });
 
   const totalPipeline = filtered.reduce((sum, p) => sum + p.priceUSD, 0);
@@ -307,7 +312,7 @@ const CRM = () => {
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             <div>
               <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Etapa</label>
               <Select value={filterStage} onValueChange={setFilterStage}>
@@ -376,6 +381,18 @@ const CRM = () => {
                 <span className="text-muted-foreground text-xs">-</span>
                 <Input type="number" placeholder="Max" value={filterPriceMax} onChange={(e) => setFilterPriceMax(e.target.value)} className="h-8 text-xs" min={0} />
               </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Responsable</label>
+              <Select value={filterResponsible} onValueChange={setFilterResponsible}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {appUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

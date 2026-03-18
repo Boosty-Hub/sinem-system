@@ -28,6 +28,7 @@ export const dbToProspect = (row: DbProspect): Prospect => ({
   comments: row.comments,
   status: row.status,
   createdBy: row.created_by ?? undefined,
+  assignedTo: row.assigned_to ?? undefined,
   clientId: row.client_id ?? undefined,
   contactId: row.contact_id ?? undefined,
 });
@@ -56,6 +57,7 @@ export const prospectToDb = (p: Prospect): Omit<DbProspect, "created_at" | "upda
   comments: p.comments,
   status: p.status,
   created_by: p.createdBy ?? null,
+  assigned_to: p.assignedTo ?? null,
   client_id: p.clientId ?? null,
   contact_id: p.contactId ?? null,
 });

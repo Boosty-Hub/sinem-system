@@ -600,6 +600,7 @@ export type Database = {
       }
       prospects: {
         Row: {
+          assigned_to: string | null
           bu: string
           client_id: string | null
           code: string
@@ -629,6 +630,7 @@ export type Database = {
           weighted: number
         }
         Insert: {
+          assigned_to?: string | null
           bu?: string
           client_id?: string | null
           code?: string
@@ -658,6 +660,7 @@ export type Database = {
           weighted?: number
         }
         Update: {
+          assigned_to?: string | null
           bu?: string
           client_id?: string | null
           code?: string
@@ -687,6 +690,13 @@ export type Database = {
           weighted?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "prospects_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "prospects_client_id_fkey"
             columns: ["client_id"]

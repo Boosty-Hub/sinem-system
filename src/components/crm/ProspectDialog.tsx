@@ -41,6 +41,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [appUsers, setAppUsers] = useState<{ id: string; name: string; avatarUrl: string }[]>([]);
   const { partners } = usePartners();
   const { businessUnits } = useBusinessUnits();
   const [linkedQuotations, setLinkedQuotations] = useState<any[]>([]);
@@ -49,12 +50,14 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   useEffect(() => {
     if (!open) return;
     const fetch = async () => {
-      const [{ data: dbClients }, { data: dbContacts }] = await Promise.all([
+      const [{ data: dbClients }, { data: dbContacts }, { data: dbUsers }] = await Promise.all([
         supabase.from("clients").select("*").order("name"),
         supabase.from("contacts").select("*").order("first_name"),
+        supabase.from("app_users").select("id, name, avatar_url").eq("status", "activo").order("name"),
       ]);
       if (dbClients) setClients(dbClients.map(dbToClient));
       if (dbContacts) setContacts(dbContacts.map(dbToContact));
+      if (dbUsers) setAppUsers(dbUsers.map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatar_url })));
     };
     fetch();
   }, [open]);
@@ -93,6 +96,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [quotationHistoryOpen, setQuotationHistoryOpen] = useState<string | null>(null);
   const [expandedSnapVersion, setExpandedSnapVersion] = useState<number | null>(null);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [assignedTo, setAssignedTo] = useState("none");
   const initialValuesRef = useRef<string>("");
 
   /** Generate code: SINEM-{BU}-{Client}-{consecutive} */
@@ -150,6 +154,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setComments(prospect?.comments ?? "");
       setQuotationHistoryOpen(null);
       setExpandedSnapVersion(null);
+      setAssignedTo(prospect?.assignedTo ?? "none");
       setShowUnsavedWarning(false);
       // Snapshot initial values after a tick so state is settled
       setTimeout(() => {
@@ -163,15 +168,15 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     if (!open) return;
     const timer = setTimeout(() => {
       initialValuesRef.current = JSON.stringify({
-        code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
+        code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
       });
     }, 100);
     return () => clearTimeout(timer);
   }, [open, prospect?.id]);
 
   const getCurrentValues = useCallback(() => JSON.stringify({
-    code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments,
-  }), [code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments]);
+    code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo,
+  }), [code, projectName, directCustomer, endCustomer, proveedor, bu, product, status, scope, costUSD, priceUSD, go, get_, estimatedOE, comments, assignedTo]);
 
   const isDirty = useMemo(() => {
     if (!initialValuesRef.current || !isEdit) return false;
@@ -280,6 +285,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       revenue,
       comments: comments.trim(),
       status,
+      createdBy: prospect?.createdBy,
+      assignedTo: assignedTo === "none" ? undefined : assignedTo,
     };
     onSave?.(saved);
     onOpenChange(false);
@@ -425,6 +432,23 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
               <SelectContent>
                 {stageList.map((s) => (
                   <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Responsable</Label>
+            <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar responsable" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin asignar</SelectItem>
+                {appUsers.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    <div className="flex items-center gap-2">
+                      <UserAvatar userId={u.id} size="xs" />
+                      {u.name}
+                    </div>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
