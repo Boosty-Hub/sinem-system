@@ -78,6 +78,7 @@ export const dbToClient = (row: DbClient): Client => ({
   totalRevenue: Number(row.total_revenue),
   status: row.status as Client["status"],
   originProspectId: row.origin_prospect_id ?? undefined,
+  primaryContactId: (row as any).primary_contact_id ?? undefined,
 });
 
 export const clientToDb = (c: Client) => ({
@@ -92,6 +93,7 @@ export const clientToDb = (c: Client) => ({
   total_revenue: c.totalRevenue,
   status: c.status,
   origin_prospect_id: c.originProspectId ?? null,
+  primary_contact_id: c.primaryContactId ?? null,
 });
 
 // ── Contact ──
