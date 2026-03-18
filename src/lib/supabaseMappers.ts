@@ -61,7 +61,8 @@ export const prospectToDb = (p: Prospect): Omit<DbProspect, "created_at" | "upda
   assigned_to: p.assignedTo ?? null,
   client_id: p.clientId ?? null,
   contact_id: p.contactId ?? null,
-});
+  invoiced_at: p.invoicedAt ?? null,
+} as any);
 
 // ── Client ──
 type DbClient = Tables<"clients">;
