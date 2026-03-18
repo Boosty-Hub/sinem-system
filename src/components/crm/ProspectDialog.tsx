@@ -436,6 +436,23 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label>Responsable</Label>
+            <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar responsable" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin asignar</SelectItem>
+                {appUsers.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    <div className="flex items-center gap-2">
+                      <UserAvatar userId={u.id} size="xs" />
+                      {u.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="col-span-2">
             <Label>Alcance</Label>
             <Textarea value={scope} onChange={(e) => setScope(e.target.value)} rows={2} />
