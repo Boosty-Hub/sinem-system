@@ -212,6 +212,13 @@ const ActivitySidebar = ({ prospectId, prospectName, open, onClose }: Props) => 
       .then(({ data }) => { if (data) setAppUsers(data); });
   }, [open]);
 
+  // Resolve current app user id
+  useEffect(() => {
+    if (!user) { setCurrentAppUserId(null); return; }
+    supabase.from("app_users").select("id").eq("auth_user_id", user.id).single()
+      .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
+  }, [user]);
+
   const prospectEntries = entries.filter((e) => e.prospectId === prospectId);
 
   useEffect(() => {
