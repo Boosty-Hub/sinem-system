@@ -136,6 +136,7 @@ const Projects = () => {
       toast({ title: "Selecciona una oportunidad ganada", variant: "destructive" });
       return;
     }
+    const selectedWonProspect = wonProspects.find(p => p.id === form.prospectId);
     const payload = {
       name: form.name.trim(),
       client: form.client.trim(),
@@ -144,6 +145,7 @@ const Projects = () => {
       status: form.status,
       start_date: form.startDate || null,
       origin_prospect_id: form.prospectId || null,
+      client_id: selectedWonProspect?.client_id || null,
     } as any;
     if (editId) {
       await supabase.from("projects").update(payload).eq("id", editId);
