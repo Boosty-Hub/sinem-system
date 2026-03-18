@@ -41,6 +41,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [appUsers, setAppUsers] = useState<{ id: string; name: string; avatarUrl: string }[]>([]);
   const { partners } = usePartners();
   const { businessUnits } = useBusinessUnits();
   const [linkedQuotations, setLinkedQuotations] = useState<any[]>([]);
