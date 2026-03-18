@@ -497,7 +497,8 @@ const Analitica = () => {
           <div className="space-y-3">
             {topClients.length === 0 && <p className="text-sm text-muted-foreground py-4 text-center">No hay datos</p>}
             {topClients.map((client, i) => {
-              const pct = totalPipeline > 0 ? (client.value / totalPipeline) * 100 : 0;
+              const yearPipeline = currentYearProspects.reduce((s, p) => s + p.priceUSD, 0);
+              const pct = yearPipeline > 0 ? (client.value / yearPipeline) * 100 : 0;
               return (
                 <div key={client.name}>
                   <div className="flex items-center justify-between mb-1">
