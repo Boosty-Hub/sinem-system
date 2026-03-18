@@ -252,7 +252,6 @@ const Projects = () => {
               <Input type="date" value={form.startDate} onChange={(e) => u("startDate", e.target.value)} />
             </div>
           </div>
-          </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!form.name.trim()}>
