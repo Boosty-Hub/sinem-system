@@ -273,13 +273,25 @@ const Analitica = () => {
     toast({ title: "Budget actualizado" });
   };
 
-  const KpiCard = ({ icon: Icon, label, value, sub, color }: { icon: any; label: string; value: string; sub?: string; color: string }) => (
+  const KpiCard = ({ icon: Icon, label, value, sub, color, tooltip }: { icon: any; label: string; value: string; sub?: string; color: string; tooltip?: string }) => (
     <div className="stat-card p-4">
       <div className="flex items-center gap-2 mb-2">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
           <Icon className="h-4 w-4 text-primary-foreground" />
         </div>
         <span className="text-xs text-muted-foreground uppercase tracking-wider">{label}</span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors ml-auto">
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[260px] text-xs leading-relaxed">
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
       <p className="text-xl font-bold">{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
