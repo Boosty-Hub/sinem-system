@@ -122,14 +122,49 @@ const CRM = () => {
     setDialogOpen(true);
   };
 
+  // ── Invoice date dialog state ──
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [invoiceProspectId, setInvoiceProspectId] = useState<string | null>(null);
+  const invoiceProspect = prospects.find((p) => p.id === invoiceProspectId);
+
   const handleStageChange = async (prospectId: string, newStage: string) => {
+    // Intercept facturada transition — show date picker
+    if (newStage === "facturada") {
+      const prospect = prospects.find((p) => p.id === prospectId);
+      if (prospect?.status === "ganado") {
+        setInvoiceProspectId(prospectId);
+        setInvoiceDialogOpen(true);
+        return;
+      }
+    }
+
+    await executeStageChange(prospectId, newStage);
+  };
+
+  const handleInvoiceConfirm = async (dateStr: string) => {
+    if (!invoiceProspectId) return;
+    // Update status + invoiced_at
+    const oldProspect = prospects.find((p) => p.id === invoiceProspectId);
+    setProspects((prev) =>
+      prev.map((p) => (p.id === invoiceProspectId ? { ...p, status: "facturada", invoicedAt: dateStr } : p))
+    );
+    const { error } = await supabase.from("prospects").update({ status: "facturada", invoiced_at: dateStr } as any).eq("id", invoiceProspectId);
+    if (error) {
+      setProspects((prev) =>
+        prev.map((p) => (p.id === invoiceProspectId ? { ...p, status: oldProspect?.status ?? p.status } : p))
+      );
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+    setInvoiceProspectId(null);
+  };
+
+  const executeStageChange = async (prospectId: string, newStage: string) => {
     const oldProspect = prospects.find((p) => p.id === prospectId);
     setProspects((prev) =>
       prev.map((p) => (p.id === prospectId ? { ...p, status: newStage } : p))
     );
     const { error } = await supabase.from("prospects").update({ status: newStage }).eq("id", prospectId);
     if (error) {
-      // Revert optimistic update
       setProspects((prev) =>
         prev.map((p) => (p.id === prospectId ? { ...p, status: oldProspect?.status ?? p.status } : p))
       );
@@ -141,7 +176,6 @@ const CRM = () => {
     if (newStage === "ganado") {
       const prospect = prospects.find((p) => p.id === prospectId);
       if (!prospect) return;
-      // Check if project already exists
       const { data: existingProj } = await supabase.from("projects").select("id").eq("origin_prospect_id", prospectId).maybeSingle();
       if (existingProj) return;
 
