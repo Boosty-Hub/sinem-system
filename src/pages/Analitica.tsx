@@ -427,7 +427,7 @@ const Analitica = () => {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KpiCard icon={DollarSign} label="Pipeline Total" value={fmt(totalPipeline)} sub={`${prospects.length} oportunidades`} color="bg-primary" />
         <KpiCard icon={TrendingUp} label="Ponderado" value={fmt(totalWeighted)} color="bg-sinem-info" tooltip={`Suma del valor ponderado (precio × probabilidad) de ${openForWeighted.length} oportunidades abiertas. Excluye oportunidades ganadas, facturadas y perdidas.`} />
-        <KpiCard icon={Target} label="Ganados" value={fmt(wonTotal)} sub={`Win rate: ${winRate}%`} color="bg-sinem-success" />
+        <KpiCard icon={Target} label="Ganados" value={fmt(wonTotal)} sub={`Ponderado: ${fmt(totalWeighted + wonTotal)} · Win rate: ${winRate}%`} color="bg-sinem-success" tooltip={`Suma del precio USD de ${wonDeals.length} oportunidades ganadas/facturadas en ${currentYear}. El ponderado incluye ganados + valor esperado de oportunidades abiertas.`} />
         <KpiCard icon={BarChart3} label="Margen Total" value={fmt(wonMarginTotal)} sub={`Promedio: ${wonAvgMarginPct}%`} color="bg-sinem-teal" tooltip={`Suma del margen USD de ${wonDeals.length} oportunidades ganadas/facturadas en ${currentYear}.`} />
         <KpiCard icon={Target} label={`Budget ${currentYear}`} value={fmt(budget.annualTarget)} sub={`${previousYear}: ${fmt(budget.previousYearWon)}`} color="bg-violet-600" />
       </div>
