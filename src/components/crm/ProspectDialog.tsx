@@ -96,6 +96,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [quotationHistoryOpen, setQuotationHistoryOpen] = useState<string | null>(null);
   const [expandedSnapVersion, setExpandedSnapVersion] = useState<number | null>(null);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [assignedTo, setAssignedTo] = useState("none");
   const initialValuesRef = useRef<string>("");
 
   /** Generate code: SINEM-{BU}-{Client}-{consecutive} */
