@@ -107,7 +107,8 @@ const Tareas = () => {
     const matchAssignee = filterAssignee === "all" || t.assignee === filterAssignee;
     const matchClient = filterClient === "all" || t.clientId === filterClient;
     const matchPriority = filterPriority === "all" || t.priority === filterPriority;
-    return matchSearch && matchAssignee && matchClient && matchPriority;
+    const matchProspect = filterProspect === "all" || t.prospectId === filterProspect;
+    return matchSearch && matchAssignee && matchClient && matchPriority && matchProspect;
   });
 
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
