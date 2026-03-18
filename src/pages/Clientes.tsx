@@ -1,18 +1,16 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Client } from "@/lib/types";
-import { dbToClient, clientToDb } from "@/lib/supabaseMappers";
+import type { Client, Contact } from "@/lib/types";
+import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { Search, Plus, Building2, Mail, Phone, Pencil, Trash2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Link } from "react-router-dom";
 import ClientImportDialog from "@/components/clientes/ClientImportDialog";
+import ClientDialog from "@/components/clientes/ClientDialog";
 
 const emptyForm = {
   name: "",
@@ -38,6 +36,8 @@ const Clientes = () => {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [importOpen, setImportOpen] = useState(false);
+  const [editContactIds, setEditContactIds] = useState<string[]>([]);
+  const [editPrimaryContactId, setEditPrimaryContactId] = useState<string | undefined>(undefined);
 
   const fetchClients = async () => {
     setLoading(true);
@@ -58,10 +58,12 @@ const Clientes = () => {
   const openCreate = () => {
     setEditId(null);
     setForm(emptyForm);
+    setEditContactIds([]);
+    setEditPrimaryContactId(undefined);
     setDialogOpen(true);
   };
 
-  const openEdit = (client: Client) => {
+  const openEdit = async (client: Client) => {
     setEditId(client.id);
     setForm({
       name: client.name,
@@ -72,34 +74,63 @@ const Clientes = () => {
       address: client.address,
       status: client.status,
     });
+    // Fetch contacts assigned to this client
+    const { data } = await supabase.from("contacts").select("id").eq("client_id", client.id);
+    setEditContactIds((data ?? []).map((r) => r.id));
+    setEditPrimaryContactId(client.primaryContactId);
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim()) return;
+  const handleSave = async (
+    formData: typeof emptyForm,
+    selectedContactIds: string[],
+    primaryContactId: string | null
+  ) => {
+    if (!formData.name.trim()) return;
+    let clientId = editId;
+
     if (editId) {
       const { error } = await supabase.from("clients").update({
-        name: form.name.trim(),
-        contact_name: form.contactName.trim(),
-        contact_email: form.contactEmail.trim(),
-        contact_phone: form.contactPhone.trim(),
-        industry: form.industry.trim(),
-        address: form.address.trim(),
-        status: form.status,
-      }).eq("id", editId);
+        name: formData.name.trim(),
+        contact_name: formData.contactName.trim(),
+        contact_email: formData.contactEmail.trim(),
+        contact_phone: formData.contactPhone.trim(),
+        industry: formData.industry.trim(),
+        address: formData.address.trim(),
+        status: formData.status,
+        primary_contact_id: primaryContactId,
+      } as any).eq("id", editId);
       if (!error) toast({ title: "Cliente actualizado" });
     } else {
-      const { error } = await supabase.from("clients").insert({
-        name: form.name.trim(),
-        contact_name: form.contactName.trim(),
-        contact_email: form.contactEmail.trim(),
-        contact_phone: form.contactPhone.trim(),
-        industry: form.industry.trim(),
-        address: form.address.trim(),
-        status: form.status,
-      });
-      if (!error) toast({ title: "Cliente creado" });
+      const { data, error } = await supabase.from("clients").insert({
+        name: formData.name.trim(),
+        contact_name: formData.contactName.trim(),
+        contact_email: formData.contactEmail.trim(),
+        contact_phone: formData.contactPhone.trim(),
+        industry: formData.industry.trim(),
+        address: formData.address.trim(),
+        status: formData.status,
+        primary_contact_id: primaryContactId,
+      } as any).select("id").single();
+      if (!error && data) {
+        clientId = data.id;
+        toast({ title: "Cliente creado" });
+      }
     }
+
+    if (clientId) {
+      // Unassign contacts that were removed
+      const previousIds = editContactIds;
+      const removedIds = previousIds.filter((id) => !selectedContactIds.includes(id));
+      if (removedIds.length > 0) {
+        await supabase.from("contacts").update({ client_id: null }).in("id", removedIds);
+      }
+      // Assign selected contacts to this client
+      if (selectedContactIds.length > 0) {
+        await supabase.from("contacts").update({ client_id: clientId }).in("id", selectedContactIds);
+      }
+    }
+
     setDialogOpen(false);
     fetchClients();
   };
@@ -108,13 +139,13 @@ const Clientes = () => {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    // Unlink contacts before deleting
+    await supabase.from("contacts").update({ client_id: null }).eq("client_id", deleteTarget.id);
     await supabase.from("clients").delete().eq("id", deleteTarget.id);
     toast({ title: "Cliente eliminado" });
     setDeleteTarget(null);
     fetchClients();
   };
-
-  const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   if (loading) {
     return (
@@ -216,55 +247,15 @@ const Clientes = () => {
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editId ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 mt-2">
-            <div className="col-span-2">
-              <Label>Nombre / Empresa</Label>
-              <Input value={form.name} onChange={(e) => u("name", e.target.value)} placeholder="Ej: AES Dominicana" />
-            </div>
-            <div>
-              <Label>Persona de Contacto</Label>
-              <Input value={form.contactName} onChange={(e) => u("contactName", e.target.value)} placeholder="Nombre completo" />
-            </div>
-            <div>
-              <Label>Email</Label>
-              <Input type="email" value={form.contactEmail} onChange={(e) => u("contactEmail", e.target.value)} placeholder="email@empresa.com" />
-            </div>
-            <div>
-              <Label>Teléfono</Label>
-              <Input value={form.contactPhone} onChange={(e) => u("contactPhone", e.target.value)} placeholder="+1 809 000-0000" />
-            </div>
-            <div>
-              <Label>Industria</Label>
-              <Input value={form.industry} onChange={(e) => u("industry", e.target.value)} placeholder="Ej: Energía" />
-            </div>
-            <div className="col-span-2">
-              <Label>Dirección</Label>
-              <Input value={form.address} onChange={(e) => u("address", e.target.value)} placeholder="Dirección completa" />
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Select value={form.status} onValueChange={(v) => u("status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="activo">Activo</SelectItem>
-                  <SelectItem value="inactivo">Inactivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.name.trim()}>
-              {editId ? "Guardar Cambios" : "Crear Cliente"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ClientDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editId={editId}
+        initialForm={form}
+        initialContactIds={editContactIds}
+        initialPrimaryContactId={editPrimaryContactId}
+        onSave={handleSave}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
