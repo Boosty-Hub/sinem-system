@@ -9,7 +9,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
-import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload } from "lucide-react";
+import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { usePartners } from "@/hooks/usePartners";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import UserAvatar from "@/components/UserAvatar";
@@ -51,6 +54,53 @@ interface ClientData {
 const emptyClientData: ClientData = { company: "", attention: "", address: "", rnc: "", phone: "", email: "" };
 
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000 };
+/* ── Searchable Prospect Combobox ── */
+const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[]; value: string; onChange: (v: string) => void }) => {
+  const [open, setOpen] = useState(false);
+  const selected = prospects.find((p) => p.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between h-9 font-normal text-sm">
+          <span className="truncate">
+            {selected ? `${selected.code ? selected.code + " — " : ""}${selected.projectName}` : "Sin oportunidad"}
+          </span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[380px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar por código o nombre..." />
+          <CommandList>
+            <CommandEmpty>No se encontraron oportunidades.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="sin-oportunidad" onSelect={() => { onChange("none"); setOpen(false); }}>
+                <Check className={cn("mr-2 h-3.5 w-3.5", value === "none" ? "opacity-100" : "opacity-0")} />
+                Sin oportunidad
+              </CommandItem>
+              {prospects.map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={`${p.code} ${p.projectName} ${p.directCustomer}`}
+                  onSelect={() => { onChange(p.id); setOpen(false); }}
+                >
+                  <Check className={cn("mr-2 h-3.5 w-3.5", value === p.id ? "opacity-100" : "opacity-0")} />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm truncate">{p.projectName}</span>
+                    <span className="text-[10px] text-muted-foreground truncate">
+                      {p.code && `${p.code} · `}{p.directCustomer}
+                    </span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
@@ -445,15 +495,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Oportunidad CRM</Label>
-                <Select value={selectedProspectId} onValueChange={handleProspectChange}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar oportunidad" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin oportunidad</SelectItem>
-                    {prospects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.projectName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ProspectCombobox
+                  prospects={prospects}
+                  value={selectedProspectId}
+                  onChange={handleProspectChange}
+                />
               </div>
               <div>
                 <Label>Cliente</Label>
