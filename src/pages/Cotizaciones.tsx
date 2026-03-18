@@ -139,6 +139,17 @@ const Cotizaciones = () => {
   };
 
   const handleSave = async (updated: Quotation) => {
+    // Resolve app_users.id from the auth user id
+    let appUserId: string | null = null;
+    if (user) {
+      const { data: appUser } = await supabase
+        .from("app_users")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+      appUserId = appUser?.id ?? null;
+    }
+
     // Persist to Supabase
     const quotationRow = {
       id: updated.id,
@@ -176,23 +187,31 @@ const Cotizaciones = () => {
       approved_at: updated.approvedAt ?? null,
       currency: updated.currency ?? "USD",
       exchange_rate: updated.exchangeRate ?? 1,
-      created_by: updated.createdBy ?? user?.id ?? null,
+      created_by: appUserId,
     };
 
     const exists = quotations.find((q) => q.id === updated.id);
     if (exists) {
-      await supabase.from("quotations").update(quotationRow).eq("id", updated.id);
+      const { error } = await supabase.from("quotations").update(quotationRow).eq("id", updated.id);
+      if (error) {
+        toast({ title: "Error al actualizar cotización", description: error.message, variant: "destructive" });
+        return;
+      }
     } else {
       // For new quotations, generate a proper UUID
       quotationRow.id = crypto.randomUUID();
       updated = { ...updated, id: quotationRow.id };
-      await supabase.from("quotations").insert(quotationRow);
+      const { error } = await supabase.from("quotations").insert(quotationRow);
+      if (error) {
+        toast({ title: "Error al crear cotización", description: error.message, variant: "destructive" });
+        return;
+      }
     }
 
     // Sync line items: delete old, insert new
     await supabase.from("quotation_line_items").delete().eq("quotation_id", quotationRow.id);
     if (updated.lineItems.length > 0) {
-      await supabase.from("quotation_line_items").insert(
+      const { error: liError } = await supabase.from("quotation_line_items").insert(
         updated.lineItems.map((li, idx) => ({
           id: crypto.randomUUID(),
           quotation_id: quotationRow.id,
@@ -203,6 +222,9 @@ const Cotizaciones = () => {
           sort_order: idx,
         }))
       );
+      if (liError) {
+        toast({ title: "Error al guardar partidas", description: liError.message, variant: "destructive" });
+      }
     }
 
     // Update local state
