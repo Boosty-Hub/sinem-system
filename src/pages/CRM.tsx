@@ -123,6 +123,36 @@ const CRM = () => {
     setDialogOpen(true);
   };
 
+  const handleExport = () => {
+    const rows = filtered.map((p) => ({
+      Código: p.code,
+      "Nombre del Proyecto": p.projectName,
+      "Cliente Directo": p.directCustomer,
+      "Cliente Final": p.endCustomer,
+      Proveedor: p.proveedor,
+      BU: p.bu,
+      Producto: p.product,
+      Alcance: p.scope,
+      "Costo USD": p.costUSD,
+      "Precio USD": p.priceUSD,
+      "GO%": p.go,
+      "GET%": p.get,
+      "Probabilidad%": p.probability,
+      "Ponderado USD": p.weighted,
+      "Margen%": p.marginPercent,
+      "Margen USD": p.marginUSD,
+      "OE Estimado": p.estimatedOE,
+      Revenue: p.revenue,
+      Estado: p.status,
+      Comentarios: p.comments,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Oportunidades");
+    XLSX.writeFile(wb, `CRM_Oportunidades_${new Date().toISOString().split("T")[0]}.xlsx`);
+    toast({ title: "Exportación completada", description: `${rows.length} oportunidades exportadas.` });
+  };
+
   // ── Invoice date dialog state ──
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const [invoiceProspectId, setInvoiceProspectId] = useState<string | null>(null);
