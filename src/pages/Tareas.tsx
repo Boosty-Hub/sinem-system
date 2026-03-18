@@ -145,8 +145,25 @@ const Tareas = () => {
       await supabase.from("tasks").update(payload).eq("id", editId);
       toast({ title: "Tarea actualizada" });
     } else {
-      await supabase.from("tasks").insert(payload);
+      const { data } = await supabase.from("tasks").insert(payload).select("id").single();
       toast({ title: "Tarea creada" });
+
+      // Notify assigned user
+      if (form.assignee && currentAppUserId) {
+        const assignedUser = systemUsers.find((u) => u.name === form.assignee);
+        if (assignedUser && assignedUser.id !== currentAppUserId) {
+          createNotification({
+            userId: assignedUser.id,
+            type: "task",
+            title: "Nueva tarea asignada",
+            message: `Se te ha asignado la tarea "${form.title.trim()}".`,
+            link: "/tareas",
+            referenceId: data?.id,
+            referenceType: "task",
+            triggeredBy: currentAppUserId,
+          });
+        }
+      }
     }
     setDialogOpen(false);
     fetchData();
