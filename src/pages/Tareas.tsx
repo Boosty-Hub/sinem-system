@@ -55,12 +55,13 @@ const Tareas = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    const [{ data: tasksData }, { data: commentsData }, { data: clientsData }, { data: projectsData }, { data: usersData }] = await Promise.all([
+    const [{ data: tasksData }, { data: commentsData }, { data: clientsData }, { data: projectsData }, { data: usersData }, { data: prospectsData }] = await Promise.all([
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
       supabase.from("task_comments").select("*").order("created_at"),
       supabase.from("clients").select("id, name").order("name"),
       supabase.from("projects").select("id, name").order("name"),
       supabase.from("app_users").select("id, name, email, status").eq("status", "activo").order("name"),
+      supabase.from("prospects").select("id, code, project_name").order("code"),
     ]);
 
     const commentsByTask = new Map<string, TaskComment[]>();
