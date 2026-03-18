@@ -98,7 +98,8 @@ const CRM = () => {
     const matchProbMax = !filterProbMax || p.probability <= Number(filterProbMax);
     const matchPriceMin = !filterPriceMin || p.priceUSD >= Number(filterPriceMin);
     const matchPriceMax = !filterPriceMax || p.priceUSD <= Number(filterPriceMax);
-    return matchSearch && matchStage && matchProduct && matchCustomer && matchBU && matchProbMin && matchProbMax && matchPriceMin && matchPriceMax;
+    const matchResponsible = filterResponsible === "all" || p.assignedTo === filterResponsible;
+    return matchSearch && matchStage && matchProduct && matchCustomer && matchBU && matchProbMin && matchProbMax && matchPriceMin && matchPriceMax && matchResponsible;
   });
 
   const totalPipeline = filtered.reduce((sum, p) => sum + p.priceUSD, 0);
