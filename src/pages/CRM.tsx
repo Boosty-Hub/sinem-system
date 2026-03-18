@@ -71,11 +71,11 @@ const CRM = () => {
   const uniqueCustomers = useMemo(() => [...new Set(prospects.map((p) => p.directCustomer).filter(Boolean))].sort(), [prospects]);
   const uniqueBUs = useMemo(() => [...new Set(prospects.map((p) => p.bu).filter(Boolean))].sort(), [prospects]);
 
-  const activeFilterCount = [filterStage !== "all", filterProduct !== "all", filterCustomer !== "all", filterBU !== "all", filterProbMin !== "", filterProbMax !== "", filterPriceMin !== "", filterPriceMax !== ""].filter(Boolean).length;
+  const activeFilterCount = [filterStage !== "all", filterProduct !== "all", filterCustomer !== "all", filterBU !== "all", filterProbMin !== "", filterProbMax !== "", filterPriceMin !== "", filterPriceMax !== "", filterResponsible !== "all"].filter(Boolean).length;
 
   const clearFilters = () => {
     setFilterStage("all"); setFilterProduct("all"); setFilterCustomer("all"); setFilterBU("all");
-    setFilterProbMin(""); setFilterProbMax(""); setFilterPriceMin(""); setFilterPriceMax("");
+    setFilterProbMin(""); setFilterProbMax(""); setFilterPriceMin(""); setFilterPriceMax(""); setFilterResponsible("all");
   };
 
   const filtered = prospects.filter((p) => {
