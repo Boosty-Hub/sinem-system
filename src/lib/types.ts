@@ -15,6 +15,7 @@ export interface Prospect {
   cotorta: number;
   projectName: string;
   createdBy?: string;
+  assignedTo?: string;
   clientId?: string;
   contactId?: string;
   directCustomer: string;

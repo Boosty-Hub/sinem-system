@@ -57,6 +57,7 @@ export const prospectToDb = (p: Prospect): Omit<DbProspect, "created_at" | "upda
   comments: p.comments,
   status: p.status,
   created_by: p.createdBy ?? null,
+  assigned_to: p.assignedTo ?? null,
   client_id: p.clientId ?? null,
   contact_id: p.contactId ?? null,
 });
