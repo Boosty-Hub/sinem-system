@@ -225,8 +225,12 @@ const Analitica = () => {
     return { subject: r.range, count: matching.length, value: matching.reduce((s, p) => s + p.priceUSD, 0) / 1000 };
   });
 
+  const currentYearProspects = prospects.filter((p) => {
+    const createdYear = new Date((p as any).createdAt || "").getFullYear();
+    return createdYear === currentYear;
+  });
   const clientPipeline = new Map<string, number>();
-  prospects.forEach((p) => clientPipeline.set(p.directCustomer, (clientPipeline.get(p.directCustomer) || 0) + p.priceUSD));
+  currentYearProspects.forEach((p) => clientPipeline.set(p.directCustomer, (clientPipeline.get(p.directCustomer) || 0) + p.priceUSD));
   const topClients = Array.from(clientPipeline.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
