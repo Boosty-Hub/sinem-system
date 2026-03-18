@@ -285,6 +285,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       revenue,
       comments: comments.trim(),
       status,
+      createdBy: prospect?.createdBy,
+      assignedTo: assignedTo === "none" ? undefined : assignedTo,
     };
     onSave?.(saved);
     onOpenChange(false);
