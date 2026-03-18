@@ -188,7 +188,8 @@ const CRM = () => {
         status: "activo",
         origin_prospect_id: prospectId,
         client_id: oldProspect.clientId ?? null,
-      });
+        start_date: new Date().toISOString().split("T")[0],
+      } as any);
       if (projError) {
         console.error("Error creating project:", projError);
         toast({ title: "Error al crear proyecto", description: projError.message, variant: "destructive" });
