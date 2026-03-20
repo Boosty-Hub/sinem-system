@@ -184,21 +184,23 @@ const ClienteDetail = () => {
             <Building2 className="h-4 w-4" /> Información del Cliente
           </h2>
           <div className="space-y-3">
+            {client.industry && (
+              <div>
+                <p className="text-xs text-muted-foreground">Industria</p>
+                <p className="text-sm font-medium">{client.industry}</p>
+              </div>
+            )}
+            {client.address && (
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>{client.address}</span>
+              </div>
+            )}
             <div>
-              <p className="text-xs text-muted-foreground">Contacto</p>
-              <p className="text-sm font-medium">{client.contactName}</p>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{client.contactEmail}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{client.contactPhone}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{client.address}</span>
+              <p className="text-xs text-muted-foreground">Estado</p>
+              <span className={`inline-flex text-xs px-2 py-0.5 rounded-full ${client.status === "activo" ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
+                {client.status === "activo" ? "Activo" : "Inactivo"}
+              </span>
             </div>
           </div>
         </div>
@@ -209,14 +211,15 @@ const ClienteDetail = () => {
               <UserCircle className="h-4 w-4" /> Contactos <span className="text-xs text-muted-foreground font-normal">({contacts.length})</span>
             </h2>
             <div className="flex items-center gap-1">
-              {unlinkedContacts.length > 0 && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLinkDialogOpen(true)}>
-                  <Link2 className="h-3 w-3 mr-1" /> Vincular
+              {unlinkedContacts.length > 0 ? (
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setLinkDialogOpen(true)}>
+                  <Link2 className="h-3 w-3 mr-1" /> Vincular existente
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setContactForm(emptyContactForm); setContactDialogOpen(true); }}>
+                  <Plus className="h-3 w-3 mr-1" /> Crear contacto
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setContactForm(emptyContactForm); setContactDialogOpen(true); }}>
-                <Plus className="h-3 w-3 mr-1" /> Nuevo
-              </Button>
             </div>
           </div>
           {contacts.length > 0 ? (
