@@ -103,6 +103,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [primaryClientId, setPrimaryClientId] = useState<string | null>(null);
   const [clientSearch, setClientSearch] = useState("");
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
 
   /** Generate code: SINEM-{BU}-{Client}-{consecutive} */
   const generateCode = async (buVal: string, clientName: string) => {
