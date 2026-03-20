@@ -134,24 +134,8 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
             <Input value={form.name} onChange={(e) => u("name", e.target.value)} placeholder="Ej: AES Dominicana" />
           </div>
           <div>
-            <Label>Persona de Contacto</Label>
-            <Input value={form.contactName} onChange={(e) => u("contactName", e.target.value)} placeholder="Nombre completo" />
-          </div>
-          <div>
-            <Label>Email</Label>
-            <Input type="email" value={form.contactEmail} onChange={(e) => u("contactEmail", e.target.value)} placeholder="email@empresa.com" />
-          </div>
-          <div>
-            <Label>Teléfono</Label>
-            <Input value={form.contactPhone} onChange={(e) => u("contactPhone", e.target.value)} placeholder="+1 809 000-0000" />
-          </div>
-          <div>
             <Label>Industria</Label>
             <Input value={form.industry} onChange={(e) => u("industry", e.target.value)} placeholder="Ej: Energía" />
-          </div>
-          <div className="col-span-2">
-            <Label>Dirección</Label>
-            <Input value={form.address} onChange={(e) => u("address", e.target.value)} placeholder="Dirección completa" />
           </div>
           <div>
             <Label>Estado</Label>
@@ -162,6 +146,10 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
                 <SelectItem value="inactivo">Inactivo</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="col-span-2">
+            <Label>Dirección</Label>
+            <Input value={form.address} onChange={(e) => u("address", e.target.value)} placeholder="Dirección completa" />
           </div>
         </div>
 
