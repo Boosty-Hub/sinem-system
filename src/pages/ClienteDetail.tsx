@@ -211,15 +211,12 @@ const ClienteDetail = () => {
               <UserCircle className="h-4 w-4" /> Contactos <span className="text-xs text-muted-foreground font-normal">({contacts.length})</span>
             </h2>
             <div className="flex items-center gap-1">
-              {unlinkedContacts.length > 0 ? (
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setLinkDialogOpen(true)}>
-                  <Link2 className="h-3 w-3 mr-1" /> Vincular existente
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setContactForm(emptyContactForm); setContactDialogOpen(true); }}>
-                  <Plus className="h-3 w-3 mr-1" /> Crear contacto
-                </Button>
-              )}
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLinkDialogOpen(true)} disabled={unlinkedContacts.length === 0} title={unlinkedContacts.length === 0 ? "No hay contactos sin vincular" : ""}>
+                <Link2 className="h-3 w-3 mr-1" /> Vincular
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setContactForm(emptyContactForm); setContactDialogOpen(true); }}>
+                <Plus className="h-3 w-3 mr-1" /> Crear
+              </Button>
             </div>
           </div>
           {contacts.length > 0 ? (
