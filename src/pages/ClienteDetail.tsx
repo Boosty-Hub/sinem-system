@@ -184,21 +184,23 @@ const ClienteDetail = () => {
             <Building2 className="h-4 w-4" /> Información del Cliente
           </h2>
           <div className="space-y-3">
+            {client.industry && (
+              <div>
+                <p className="text-xs text-muted-foreground">Industria</p>
+                <p className="text-sm font-medium">{client.industry}</p>
+              </div>
+            )}
+            {client.address && (
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>{client.address}</span>
+              </div>
+            )}
             <div>
-              <p className="text-xs text-muted-foreground">Contacto</p>
-              <p className="text-sm font-medium">{client.contactName}</p>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{client.contactEmail}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{client.contactPhone}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{client.address}</span>
+              <p className="text-xs text-muted-foreground">Estado</p>
+              <span className={`inline-flex text-xs px-2 py-0.5 rounded-full ${client.status === "activo" ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
+                {client.status === "activo" ? "Activo" : "Inactivo"}
+              </span>
             </div>
           </div>
         </div>
