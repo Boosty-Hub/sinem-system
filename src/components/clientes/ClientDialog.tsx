@@ -158,7 +158,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              Contactos del Cliente
+              Contactos del Cliente <span className="text-destructive">*</span>
             </Label>
             <Button
               type="button"
