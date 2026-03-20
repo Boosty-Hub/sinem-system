@@ -231,9 +231,9 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   }, [bu, primaryClientId, open, codeManuallyEdited, clients]);
 
   const probability = Math.round((go * get_) / 100 * 100) / 100;
-  const weighted = Math.round(priceUSD * probability / 100);
+  const weighted = Math.round(priceUSD * probability / 100 * 100) / 100;
   const marginPercent = priceUSD > 0 ? Math.round((1 - costUSD / priceUSD) * 10000) / 100 : 0;
-  const marginUSD = Math.round(weighted * marginPercent / 100);
+  const marginUSD = Math.round(weighted * marginPercent / 100 * 100) / 100;
 
   const revenue = useMemo(() => {
     if (!estimatedOE) return "";
