@@ -57,7 +57,7 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const handleSave = () => {
-    if (!form.firstName.trim() || !form.lastName.trim()) return;
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) return;
     const saved: Contact = {
       id: contact?.id ?? crypto.randomUUID(),
       firstName: form.firstName.trim(),
