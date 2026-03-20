@@ -83,7 +83,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
   const makePrimary = (id: string) => setPrimaryContactId(id);
 
   const handleSave = () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || selectedContactIds.length === 0) return;
     onSave(form, selectedContactIds, primaryContactId);
   };
 
