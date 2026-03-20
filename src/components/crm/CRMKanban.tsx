@@ -72,6 +72,9 @@ const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prosp
 
   return (
     <>
+      {prospect.code && (
+        <p className="text-[10px] font-mono text-muted-foreground mb-1">{prospect.code}</p>
+      )}
       <p className="text-sm font-medium mb-1 leading-snug pr-5">{prospect.projectName}</p>
       <p className="text-xs text-muted-foreground mb-2">{prospect.directCustomer}</p>
       <div className="flex items-center justify-between">
