@@ -110,7 +110,7 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
             </Select>
           </div>
           <div>
-            <Label>Email</Label>
+            <Label>Email <span className="text-destructive">*</span></Label>
             <Input type="email" value={form.email} onChange={(e) => u("email", e.target.value)} placeholder="email@empresa.com" />
           </div>
           <div>
