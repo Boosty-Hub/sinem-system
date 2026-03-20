@@ -83,7 +83,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
   const makePrimary = (id: string) => setPrimaryContactId(id);
 
   const handleSave = () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || selectedContactIds.length === 0) return;
     onSave(form, selectedContactIds, primaryContactId);
   };
 
@@ -158,7 +158,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              Contactos del Cliente
+              Contactos del Cliente <span className="text-destructive">*</span>
             </Label>
             <Button
               type="button"
@@ -286,7 +286,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={!form.name.trim()}>
+          <Button onClick={handleSave} disabled={!form.name.trim() || selectedContactIds.length === 0}>
             {editId ? "Guardar Cambios" : "Crear Cliente"}
           </Button>
         </div>

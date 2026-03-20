@@ -57,7 +57,7 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const handleSave = () => {
-    if (!form.firstName.trim() || !form.lastName.trim()) return;
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) return;
     const saved: Contact = {
       id: contact?.id ?? crypto.randomUUID(),
       firstName: form.firstName.trim(),
@@ -110,7 +110,7 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
             </Select>
           </div>
           <div>
-            <Label>Email</Label>
+            <Label>Email <span className="text-destructive">*</span></Label>
             <Input type="email" value={form.email} onChange={(e) => u("email", e.target.value)} placeholder="email@empresa.com" />
           </div>
           <div>
@@ -139,7 +139,7 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={!form.firstName.trim() || !form.lastName.trim()}>
+          <Button onClick={handleSave} disabled={!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()}>
             {isEdit ? "Guardar Cambios" : "Crear Contacto"}
           </Button>
         </div>
