@@ -1,14 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { mockClients } from "@/lib/mockData";
-import type { Contact } from "@/lib/types";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import type { Client } from "@/lib/types";
+import { Search, X, Building2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { dbToClient } from "@/lib/supabaseMappers";
+import type { Contact, Client } from "@/lib/types";
 
 interface Props {
   open: boolean;
@@ -31,8 +30,18 @@ const emptyForm = {
 
 const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
   const isEdit = !!contact;
-  const [clients] = useLocalStorage<Client[]>("sinem:clients", mockClients);
+  const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      supabase.from("clients").select("*").order("name").then(({ data }) => {
+        setClients((data ?? []).map(dbToClient));
+      });
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -51,10 +60,28 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
       } else {
         setForm(emptyForm);
       }
+      setClientSearch("");
+      setClientDropdownOpen(false);
     }
   }, [open, contact]);
 
   const u = (key: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  const selectedClient = useMemo(() => {
+    if (form.clientId === "none") return null;
+    return clients.find((c) => c.id === form.clientId) ?? null;
+  }, [form.clientId, clients]);
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearch.trim()) return clients;
+    return clients.filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()));
+  }, [clients, clientSearch]);
+
+  const handleSelectClient = (clientId: string) => {
+    u("clientId", clientId);
+    setClientSearch("");
+    setClientDropdownOpen(false);
+  };
 
   const handleSave = () => {
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) return;
@@ -99,15 +126,54 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
           </div>
           <div>
             <Label>Cliente Asociado</Label>
-            <Select value={form.clientId} onValueChange={(v) => u("clientId", v)}>
-              <SelectTrigger><SelectValue placeholder="Sin cliente" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin cliente asignado</SelectItem>
-                {clients.map((cl) => (
-                  <SelectItem key={cl.id} value={cl.id}>{cl.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {selectedClient ? (
+              <div className="flex items-center gap-2 h-9 px-3 border rounded-md bg-muted/30">
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium flex-1 truncate">{selectedClient.name}</span>
+                <button type="button" onClick={() => u("clientId", "none")} className="text-muted-foreground hover:text-destructive">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar cliente..."
+                    value={clientSearch}
+                    onChange={(e) => { setClientSearch(e.target.value); setClientDropdownOpen(true); }}
+                    onFocus={() => setClientDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
+                    className="text-sm pl-8 h-9"
+                  />
+                </div>
+                {clientDropdownOpen && (
+                  <div className="max-h-[140px] overflow-y-auto border rounded-md divide-y">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectClient("none")}
+                      className="w-full text-left px-3 py-1.5 hover:bg-accent text-sm text-muted-foreground"
+                    >
+                      Sin cliente asignado
+                    </button>
+                    {filteredClients.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handleSelectClient(c.id)}
+                        className="w-full text-left px-3 py-1.5 hover:bg-accent text-sm flex justify-between items-center"
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{c.industry}</span>
+                      </button>
+                    ))}
+                    {filteredClients.length === 0 && clientSearch.trim() && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Sin resultados</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <Label>Email <span className="text-destructive">*</span></Label>
@@ -123,13 +189,26 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
           </div>
           <div>
             <Label>Estado</Label>
-            <Select value={form.status} onValueChange={(v) => u("status", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="activo">Activo</SelectItem>
-                <SelectItem value="inactivo">Inactivo</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 h-9">
+              <Button
+                type="button"
+                variant={form.status === "activo" ? "default" : "outline"}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => u("status", "activo")}
+              >
+                Activo
+              </Button>
+              <Button
+                type="button"
+                variant={form.status === "inactivo" ? "destructive" : "outline"}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => u("status", "inactivo")}
+              >
+                Inactivo
+              </Button>
+            </div>
           </div>
           <div className="col-span-2">
             <Label>Notas</Label>
