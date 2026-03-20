@@ -427,29 +427,31 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
               <Input
                 placeholder="Buscar cliente para agregar..."
                 value={clientSearch}
-                onChange={(e) => setClientSearch(e.target.value)}
+                onChange={(e) => { setClientSearch(e.target.value); setClientDropdownOpen(true); }}
+                onFocus={() => setClientDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
                 className="text-sm pl-8 h-8"
               />
             </div>
 
-            {unselectedClients.length > 0 ? (
-              <div className="max-h-[120px] overflow-y-auto border rounded-md divide-y">
-                {unselectedClients.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => toggleClient(c.id)}
-                    className="w-full text-left px-3 py-1.5 hover:bg-accent text-sm flex justify-between items-center"
-                  >
-                    <span className="font-medium">{c.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{c.industry}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[10px] text-muted-foreground">
-                {clientSearch ? "Sin resultados" : "No hay más clientes disponibles"}
-              </p>
+            {clientDropdownOpen && clientSearch.trim() && (
+              unselectedClients.length > 0 ? (
+                <div className="max-h-[120px] overflow-y-auto border rounded-md divide-y">
+                  {unselectedClients.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { toggleClient(c.id); setClientSearch(""); setClientDropdownOpen(false); }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-accent text-sm flex justify-between items-center"
+                    >
+                      <span className="font-medium">{c.name}</span>
+                      <span className="text-[10px] text-muted-foreground">{c.industry}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-muted-foreground">Sin resultados</p>
+              )
             )}
           </div>
 
