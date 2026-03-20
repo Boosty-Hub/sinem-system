@@ -286,7 +286,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={!form.name.trim()}>
+          <Button onClick={handleSave} disabled={!form.name.trim() || selectedContactIds.length === 0}>
             {editId ? "Guardar Cambios" : "Crear Cliente"}
           </Button>
         </div>

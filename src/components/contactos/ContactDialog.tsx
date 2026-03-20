@@ -139,7 +139,7 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={!form.firstName.trim() || !form.lastName.trim()}>
+          <Button onClick={handleSave} disabled={!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()}>
             {isEdit ? "Guardar Cambios" : "Crear Contacto"}
           </Button>
         </div>
