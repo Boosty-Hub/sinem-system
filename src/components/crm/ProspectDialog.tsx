@@ -559,11 +559,29 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
 
           <div>
             <Label>Costo USD</Label>
-            <Input type="number" value={costUSD || ""} onChange={(e) => setCostUSD(Number(e.target.value) || 0)} placeholder="0" />
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={costUSD ? costUSD.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : ""}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/,/g, "");
+                setCostUSD(Number(raw) || 0);
+              }}
+              placeholder="0"
+            />
           </div>
           <div>
             <Label>Precio USD</Label>
-            <Input type="number" value={priceUSD || ""} onChange={(e) => setPriceUSD(Number(e.target.value) || 0)} placeholder="0" />
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={priceUSD ? priceUSD.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : ""}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/,/g, "");
+                setPriceUSD(Number(raw) || 0);
+              }}
+              placeholder="0"
+            />
           </div>
           <div>
             <Label>Go %</Label>
