@@ -89,6 +89,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [scope, setScope] = useState("");
   const [costUSD, setCostUSD] = useState(0);
   const [priceUSD, setPriceUSD] = useState(0);
+  const [costUSDText, setCostUSDText] = useState("");
+  const [priceUSDText, setPriceUSDText] = useState("");
   const [go, setGo] = useState(0);
   const [get_, setGet] = useState(0);
   const [estimatedOE, setEstimatedOE] = useState("");
@@ -178,8 +180,12 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setProduct(prospect?.product ?? "");
       setStatus(prospect?.status ?? "prospecto");
       setScope(prospect?.scope ?? "");
-      setCostUSD(prospect?.costUSD ?? 0);
-      setPriceUSD(prospect?.priceUSD ?? 0);
+      const costVal = prospect?.costUSD ?? 0;
+      const priceVal = prospect?.priceUSD ?? 0;
+      setCostUSD(costVal);
+      setPriceUSD(priceVal);
+      setCostUSDText(costVal > 0 ? costVal.toFixed(2) : "");
+      setPriceUSDText(priceVal > 0 ? priceVal.toFixed(2) : "");
       setGo(prospect?.go ?? 0);
       setGet(prospect?.get ?? 0);
       setEstimatedOE(prospect?.estimatedOE ?? "");
@@ -576,12 +582,21 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Input
               type="text"
               inputMode="decimal"
-              value={costUSD ? costUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
+              value={costUSDText}
               onChange={(e) => {
-                const raw = e.target.value.replace(/,/g, "");
-                setCostUSD(Number(raw) || 0);
+                const val = e.target.value.replace(/[^0-9.]/g, "");
+                setCostUSDText(val);
+                const num = parseFloat(val);
+                setCostUSD(isNaN(num) ? 0 : num);
               }}
-              placeholder="0"
+              onBlur={() => {
+                const formatted = costUSD.toFixed(2);
+                setCostUSDText(formatted);
+              }}
+              onFocus={() => {
+                if (costUSD === 0) setCostUSDText("");
+              }}
+              placeholder="0.00"
             />
           </div>
           <div>
@@ -589,12 +604,21 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Input
               type="text"
               inputMode="decimal"
-              value={priceUSD ? priceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
+              value={priceUSDText}
               onChange={(e) => {
-                const raw = e.target.value.replace(/,/g, "");
-                setPriceUSD(Number(raw) || 0);
+                const val = e.target.value.replace(/[^0-9.]/g, "");
+                setPriceUSDText(val);
+                const num = parseFloat(val);
+                setPriceUSD(isNaN(num) ? 0 : num);
               }}
-              placeholder="0"
+              onBlur={() => {
+                const formatted = priceUSD.toFixed(2);
+                setPriceUSDText(formatted);
+              }}
+              onFocus={() => {
+                if (priceUSD === 0) setPriceUSDText("");
+              }}
+              placeholder="0.00"
             />
           </div>
           <div>
