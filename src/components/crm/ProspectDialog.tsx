@@ -184,8 +184,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       const priceVal = prospect?.priceUSD ?? 0;
       setCostUSD(costVal);
       setPriceUSD(priceVal);
-      setCostUSDText(costVal > 0 ? costVal.toFixed(2) : "");
-      setPriceUSDText(priceVal > 0 ? priceVal.toFixed(2) : "");
+      setCostUSDText(costVal > 0 ? costVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
+      setPriceUSDText(priceVal > 0 ? priceVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
       setGo(prospect?.go ?? 0);
       setGet(prospect?.get ?? 0);
       setEstimatedOE(prospect?.estimatedOE ?? "");
@@ -584,13 +584,13 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
               inputMode="decimal"
               value={costUSDText}
               onChange={(e) => {
-                const val = e.target.value.replace(/[^0-9.]/g, "");
+                const val = e.target.value.replace(/[^0-9.,]/g, "");
                 setCostUSDText(val);
-                const num = parseFloat(val);
+                const num = parseFloat(val.replace(/,/g, ""));
                 setCostUSD(isNaN(num) ? 0 : num);
               }}
               onBlur={() => {
-                const formatted = costUSD.toFixed(2);
+                const formatted = costUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 setCostUSDText(formatted);
               }}
               onFocus={() => {
@@ -606,13 +606,13 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
               inputMode="decimal"
               value={priceUSDText}
               onChange={(e) => {
-                const val = e.target.value.replace(/[^0-9.]/g, "");
+                const val = e.target.value.replace(/[^0-9.,]/g, "");
                 setPriceUSDText(val);
-                const num = parseFloat(val);
+                const num = parseFloat(val.replace(/,/g, ""));
                 setPriceUSD(isNaN(num) ? 0 : num);
               }}
               onBlur={() => {
-                const formatted = priceUSD.toFixed(2);
+                const formatted = priceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 setPriceUSDText(formatted);
               }}
               onFocus={() => {
