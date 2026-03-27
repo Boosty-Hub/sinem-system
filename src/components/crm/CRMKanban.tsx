@@ -73,12 +73,12 @@ const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prosp
   return (
     <>
       {prospect.code && (
-        <p className="text-[10px] font-mono text-muted-foreground mb-1">{prospect.code}</p>
+        <p className="text-[10px] font-mono font-semibold text-primary mb-1">{prospect.code}</p>
       )}
       <p className="text-sm font-medium mb-1 leading-snug pr-5">{prospect.projectName}</p>
       <p className="text-xs text-muted-foreground mb-2">{prospect.directCustomer}</p>
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-primary">${prospect.priceUSD.toLocaleString()}</span>
+        <span className="text-sm font-semibold text-primary">${prospect.priceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         <span className="text-[10px] text-muted-foreground">{prospect.probability}% prob.</span>
       </div>
       <div className="mt-2 flex items-center gap-2">
@@ -244,7 +244,7 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
-                <DollarSign className="h-3 w-3" />{total.toLocaleString()}
+                <DollarSign className="h-3 w-3" />{total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <DroppableColumn stageKey={stage.key} isOver={overColumnId === stage.key && activeId !== null} items={items}>
                 {(visibleItems) => (

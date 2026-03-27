@@ -1,7 +1,6 @@
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
-import { mockQuotations } from "@/lib/mockData";
-import { CURRENCIES, type ProposalSettings } from "@/lib/types";
+import { CURRENCIES, type ProposalSettings, type Quotation } from "@/lib/types";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import html2pdf from "html2pdf.js";
@@ -60,34 +59,96 @@ const dbToSettings = (row: any): ProposalSettings => ({
 
 const OfertaPublica = () => {
   const { id } = useParams();
-  const allQuotations = JSON.parse(localStorage.getItem("sinem:quotations") ?? "null") ?? mockQuotations;
-  const quotation = allQuotations.find((q: any) => q.id === id);
   const contentRef = useRef<HTMLDivElement>(null);
-  const isApproved = quotation?.approvalStatus === "approved";
-  const qCurrency = quotation?.currency ?? "USD";
-  const qRate = quotation?.exchangeRate ?? 1;
-  const currCfg = CURRENCIES.find((c) => c.key === qCurrency) ?? CURRENCIES[0];
-  const fmt = (usd: number) => {
-    if (qCurrency === "USD") return `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    return `${currCfg.symbol}${(usd * qRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-  const qPartner = quotation?.partner ?? "Siemens";
-  const replacePartner = (text: string) => text.replace(/SIEMENS|Siemens|siemens/g, qPartner);
-  // Company logo from general settings (overrides proposal_settings logo if present)
-  const companyLogoFromSettings = (() => {
-    try { const gs = JSON.parse(localStorage.getItem("sinem:general-settings") || "{}"); return gs.companyLogoUrl || null; } catch { return null; }
-  })();
+  const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [s, setS] = useState<ProposalSettings | null>(null);
+  const [companyLogoFromSettings, setCompanyLogoFromSettings] = useState<string | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("proposal_settings").select("*").limit(1).single();
-      if (data) setS(dbToSettings(data));
+      // Fetch quotation, line items, settings, and general settings in parallel
+      const [{ data: qRow }, { data: liRows }, { data: settingsRow }, { data: gsRow }] = await Promise.all([
+        supabase.from("quotations").select("*").eq("id", id).single(),
+        supabase.from("quotation_line_items").select("*").eq("quotation_id", id).order("sort_order"),
+        supabase.from("proposal_settings").select("*").limit(1).single(),
+        supabase.from("general_settings").select("value").eq("key", "company_logo_url").maybeSingle(),
+      ]);
+
+      if (qRow) {
+        const lineItems = (liRows ?? []).map((li: any) => ({
+          id: li.id,
+          description: li.description,
+          quantity: li.quantity,
+          unitPriceUSD: Number(li.unit_price_usd),
+          totalUSD: Number(li.total_usd),
+        }));
+
+        setQuotation({
+          id: qRow.id,
+          code: qRow.code,
+          prospectId: qRow.prospect_id ?? undefined,
+          clientId: qRow.client_id ?? undefined,
+          contactId: qRow.contact_id ?? undefined,
+          createdBy: qRow.created_by ?? undefined,
+          subject: qRow.subject,
+          client: {
+            company: qRow.client_company,
+            attention: qRow.client_attention,
+            address: qRow.client_address,
+            phone: qRow.client_phone,
+            email: qRow.client_email,
+            rnc: qRow.client_rnc,
+          },
+          lineItems,
+          subtotalUSD: Number(qRow.subtotal_usd),
+          applyItbis: qRow.apply_itbis,
+          itbisPercent: Number(qRow.itbis_percent),
+          itbisUSD: Number(qRow.itbis_usd),
+          totalUSD: Number(qRow.total_usd),
+          currency: qRow.currency as any,
+          exchangeRate: Number(qRow.exchange_rate),
+          partner: (qRow as any).partner ?? "Siemens",
+          costUSD: Number(qRow.cost_usd),
+          marginPercent: Number(qRow.margin_percent),
+          marginUSD: Number(qRow.margin_usd),
+          paymentTerms: qRow.payment_terms,
+          deliveryTerms: qRow.delivery_terms as any,
+          deliveryWeeksMin: qRow.delivery_weeks_min,
+          deliveryWeeksMax: qRow.delivery_weeks_max,
+          validityDays: qRow.validity_days,
+          deliveryLocation: qRow.delivery_location,
+          notes: qRow.notes,
+          status: qRow.status as any,
+          createdAt: qRow.created_at?.split("T")[0] ?? "",
+          version: qRow.version,
+          history: [],
+          approvalStatus: qRow.approval_status as any,
+          approvedBy: qRow.approved_by ?? undefined,
+          approvedAt: qRow.approved_at ?? undefined,
+          approvalNote: qRow.approval_note ?? undefined,
+        });
+      }
+
+      if (settingsRow) setS(dbToSettings(settingsRow));
+      if (gsRow?.value) setCompanyLogoFromSettings(gsRow.value);
       setLoadingSettings(false);
     };
     load();
-  }, []);
+  }, [id]);
+
+  const isApproved = quotation?.approvalStatus === "approved";
+  const qCurrency = quotation?.currency ?? "USD";
+  const qRate = quotation?.exchangeRate ?? 1;
+  const qIsOriginal = quotation?.isOriginalCurrency ?? false;
+  const currCfg = CURRENCIES.find((c) => c.key === qCurrency) ?? CURRENCIES[0];
+  const fmt = (amount: number) => {
+    if (qIsOriginal) return `${currCfg.symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (qCurrency === "USD") return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currCfg.symbol}${(amount * qRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+  const qPartner = quotation?.partner ?? "Siemens";
+  const replacePartner = (text: string) => text.replace(/SIEMENS|Siemens|siemens/g, qPartner);
 
   if (loadingSettings) {
     return (
@@ -104,6 +165,22 @@ const OfertaPublica = () => {
       </div>
     );
   }
+
+  // Auto-download PDF when ?download=true
+  const [searchParams] = useSearchParams();
+  const autoDownload = searchParams.get("download") === "true";
+  const [downloadTriggered, setDownloadTriggered] = useState(false);
+
+  useEffect(() => {
+    if (autoDownload && !downloadTriggered && contentRef.current && quotation) {
+      // Small delay to ensure content is fully rendered
+      const timer = setTimeout(() => {
+        handleDownloadPDF();
+        setDownloadTriggered(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoDownload, downloadTriggered, quotation]);
 
   const handleDownloadPDF = () => {
     if (!contentRef.current) return;
@@ -291,7 +368,7 @@ const OfertaPublica = () => {
               </tbody>
             </table>
           </div>
-          {qCurrency !== "USD" && (
+          {qCurrency !== "USD" && !qIsOriginal && (
             <p style={{ fontSize: "10px", color: "#888", margin: "-10px 0 15px 0", textAlign: "right" }}>
               Tasa de cambio aplicada: 1 USD = {qRate} {qCurrency}
             </p>

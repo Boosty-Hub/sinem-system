@@ -1,6 +1,7 @@
+import { useState, useEffect } from "react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { mockAppUsers } from "@/lib/mockData";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const getInitials = (name: string) =>
@@ -24,8 +25,36 @@ const sizeClasses = {
   md: "h-8 w-8 text-xs",
 };
 
+// Module-level cache so we fetch app_users only once
+let cachedUsers: { id: string; name: string; avatarUrl: string }[] | null = null;
+let fetchPromise: Promise<void> | null = null;
+
+async function ensureUsers(): Promise<void> {
+  if (cachedUsers) return;
+  if (fetchPromise) return fetchPromise;
+  fetchPromise = (async () => {
+    const { data } = await supabase.from("app_users").select("id, name, avatar_url");
+    cachedUsers = (data ?? []).map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatar_url ?? "" }));
+  })();
+  return fetchPromise;
+}
+
 export default function UserAvatar({ userId, size = "sm", showTooltip = true, className }: UserAvatarProps) {
-  const user = mockAppUsers.find((u) => u.id === userId);
+  const [user, setUser] = useState<{ id: string; name: string; avatarUrl: string } | null>(
+    cachedUsers?.find((u) => u.id === userId) ?? null
+  );
+
+  useEffect(() => {
+    if (!userId) return;
+    if (cachedUsers) {
+      setUser(cachedUsers.find((u) => u.id === userId) ?? null);
+      return;
+    }
+    ensureUsers().then(() => {
+      setUser(cachedUsers?.find((u) => u.id === userId) ?? null);
+    });
+  }, [userId]);
+
   if (!user) return null;
 
   const avatar = (

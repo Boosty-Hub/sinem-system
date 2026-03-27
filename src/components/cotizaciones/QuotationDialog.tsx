@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/lib/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -9,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
-import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search } from "lucide-react";
+import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search, RotateCcw, AlertTriangle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -104,6 +106,8 @@ const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[
 
 const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
+  const { user: authUser } = useAuth();
+  const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
   const [generalSettings] = useLocalStorage<GeneralSettings>("sinem:general-settings", DEFAULT_GENERAL_SETTINGS);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -115,6 +119,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [clientData, setClientData] = useState<ClientData>(emptyClientData);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
+  const [showVersionPrompt, setShowVersionPrompt] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Controlled fields for save logic ──
@@ -136,9 +141,17 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [itbisPercent, setItbisPercent] = useState(18);
   const [currency, setCurrency] = useState<QuotationCurrency>("USD");
   const [exchangeRate, setExchangeRate] = useState(1);
+  const [isOriginalCurrency, setIsOriginalCurrency] = useState(false);
   const [partner, setPartner] = useState<QuotationPartner>("Siemens");
   const [selectedClientId, setSelectedClientId] = useState("none");
   const [selectedContactId, setSelectedContactId] = useState("none");
+
+  // Resolve current auth user to app_users id
+  useEffect(() => {
+    if (!authUser) return;
+    supabase.from("app_users").select("id").eq("auth_user_id", authUser.id).single()
+      .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
+  }, [authUser]);
 
   // Fetch prospects, clients, contacts from Supabase
   useEffect(() => {
@@ -213,6 +226,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       setItbisPercent(quotation?.itbisPercent ?? 18);
       setCurrency(quotation?.currency ?? "USD");
       setExchangeRate(quotation?.exchangeRate ?? 1);
+      setIsOriginalCurrency(quotation?.isOriginalCurrency ?? false);
       setPartner(quotation?.partner ?? "Siemens");
 
       // Auto-fill from prefill prospect
@@ -221,6 +235,24 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       }
     }
   }, [open, quotation, prefill]);
+
+  // Auto-generate code when prospects load with a prefill or selected prospect (new quotation only)
+  useEffect(() => {
+    if (!open || quotation || codeManuallyEdited || prospects.length === 0) return;
+    const pid = selectedProspectId !== "none" ? selectedProspectId : prefill?.prospectId;
+    if (!pid) return;
+    const prospect = prospects.find((p) => p.id === pid);
+    if (!prospect) return;
+
+    // Fill data from prospect if not yet filled
+    fillFromProspect(pid);
+
+    // Generate code
+    const clientName = prospect.directCustomer || clientData.company;
+    generateCode(prospect.bu, clientName, 1).then((c) => {
+      if (!codeManuallyEdited) setCode(c);
+    });
+  }, [prospects, open]);
 
   const fillFromProspect = (prospectId: string) => {
     const prospect = prospects.find((p) => p.id === prospectId);
@@ -305,6 +337,19 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           email: client.contactEmail,
           attention: client.contactName,
         }));
+        // Auto-select first contact belonging to this client
+        const clientContact = contacts.find((ct) => ct.clientId === value);
+        if (clientContact) {
+          setSelectedContactId(clientContact.id);
+          setClientData((d) => ({
+            ...d,
+            company: client.name,
+            address: client.address,
+            attention: `${clientContact.firstName} ${clientContact.lastName}`,
+            phone: clientContact.phone || client.contactPhone,
+            email: clientContact.email || client.contactEmail,
+          }));
+        }
         // Auto-regenerate code with new client name
         if (!codeManuallyEdited && !quotation) {
           const prospect = selectedProspectId !== "none" ? prospects.find((p) => p.id === selectedProspectId) : null;
@@ -359,86 +404,136 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const itbisUSD = applyItbis ? Math.round(subtotal * itbisPercent / 100) : 0;
   const totalUSD = subtotal + itbisUSD;
 
-  const handleSave = () => {
-    if (!onSave) { onOpenChange(false); return; }
+  // Auto-recalculate margins when subtotal or cost changes
+  useEffect(() => {
+    setMarginPercent(subtotal > 0 ? Math.round((1 - costUSD / subtotal) * 10000) / 100 : 0);
+    setMarginUSD(Math.round((subtotal - costUSD) * 100) / 100);
+  }, [subtotal, costUSD]);
 
+  const buildCurrentData = () => {
     const currentLineItems: QuotationLineItem[] = lineItems.map((li) => ({
       id: li.id, description: li.description, quantity: li.quantity,
       unitPriceUSD: li.unitPriceUSD, totalUSD: li.totalUSD,
     }));
+    return {
+      code, status, createdAt, subject,
+      client: { ...clientData },
+      prospectId: selectedProspectId === "none" ? undefined : selectedProspectId,
+      clientId: selectedClientId === "none" ? undefined : selectedClientId,
+      contactId: selectedContactId === "none" ? undefined : selectedContactId,
+      lineItems: currentLineItems,
+      subtotalUSD: subtotal, applyItbis, itbisPercent, itbisUSD, totalUSD,
+      currency, exchangeRate, isOriginalCurrency, partner,
+      costUSD, marginPercent, marginUSD,
+      paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
+    };
+  };
+
+  const handleSave = () => {
+    if (!onSave) { onOpenChange(false); return; }
 
     if (isEdit && quotation) {
-      // Create snapshot of the PREVIOUS version before saving
-      const snapshot: QuotationSnapshot = {
-        version: quotation.version,
-        savedAt: new Date().toISOString().split("T")[0],
-        code: quotation.code,
-        subject: quotation.subject,
-        lineItems: quotation.lineItems,
-        subtotalUSD: quotation.subtotalUSD,
-        totalUSD: quotation.totalUSD,
-        costUSD: quotation.costUSD,
-        marginPercent: quotation.marginPercent,
-        marginUSD: quotation.marginUSD,
-        paymentTerms: quotation.paymentTerms,
-        deliveryTerms: quotation.deliveryTerms,
-        deliveryWeeksMin: quotation.deliveryWeeksMin,
-        deliveryWeeksMax: quotation.deliveryWeeksMax,
-        validityDays: quotation.validityDays,
-        deliveryLocation: quotation.deliveryLocation,
-        notes: quotation.notes,
-        status: quotation.status,
-      };
-
-      // Auto-update version in code if it follows the SINEM format
-      const newVersion = quotation.version + 1;
-      let updatedCode = code;
-      if (!codeManuallyEdited) {
-        // Replace V{old} with V{new} at the end
-        updatedCode = code.replace(/-V\d+$/, `-V${newVersion}`);
-        if (updatedCode === code && !code.includes("-V")) {
-          updatedCode = `${code}-V${newVersion}`;
-        }
-      }
-
-      const updated: Quotation = {
-        ...quotation,
-        code: updatedCode, status, createdAt, subject,
-        client: { ...clientData },
-        prospectId: selectedProspectId === "none" ? undefined : selectedProspectId,
-        clientId: selectedClientId === "none" ? undefined : selectedClientId,
-        contactId: selectedContactId === "none" ? undefined : selectedContactId,
-        lineItems: currentLineItems,
-        subtotalUSD: subtotal, applyItbis, itbisPercent, itbisUSD, totalUSD,
-        currency, exchangeRate, partner,
-        costUSD, marginPercent, marginUSD,
-        paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
-        version: newVersion,
-        history: [...quotation.history, snapshot],
-      };
-      onSave(updated);
-    } else {
-      // New quotation
-      const newQuotation: Quotation = {
-        id: `q-${Date.now()}`,
-        code, status, createdAt: createdAt || new Date().toISOString().split("T")[0],
-        subject,
-        client: { ...clientData },
-        prospectId: selectedProspectId === "none" ? undefined : selectedProspectId,
-        clientId: selectedClientId === "none" ? undefined : selectedClientId,
-        contactId: selectedContactId === "none" ? undefined : selectedContactId,
-        lineItems: currentLineItems,
-        subtotalUSD: subtotal, applyItbis, itbisPercent, itbisUSD, totalUSD,
-        currency, exchangeRate, partner,
-        costUSD, marginPercent, marginUSD,
-        paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
-        version: 1,
-        history: [],
-        approvalStatus: "pending",
-      };
-      onSave(newQuotation);
+      // Show version prompt instead of auto-creating new version
+      setShowVersionPrompt(true);
+      return;
     }
+
+    // New quotation — save directly
+    const data = buildCurrentData();
+    const newQuotation: Quotation = {
+      id: `q-${Date.now()}`,
+      ...data,
+      createdAt: data.createdAt || new Date().toISOString().split("T")[0],
+      version: 1,
+      history: [],
+      approvalStatus: "pending",
+    };
+    onSave(newQuotation);
     onOpenChange(false);
+  };
+
+  /** Save overwriting current version (no new version created) */
+  const saveOverwrite = () => {
+    if (!onSave || !quotation) return;
+    const data = buildCurrentData();
+    const updated: Quotation = {
+      ...quotation,
+      ...data,
+      version: quotation.version,
+      history: quotation.history,
+    };
+    onSave(updated);
+    setShowVersionPrompt(false);
+    onOpenChange(false);
+  };
+
+  /** Save as a new version (snapshot current, bump version) */
+  const saveAsNewVersion = () => {
+    if (!onSave || !quotation) return;
+    const data = buildCurrentData();
+
+    // Snapshot of the PREVIOUS version
+    const snapshot: QuotationSnapshot = {
+      version: quotation.version,
+      savedAt: new Date().toISOString().split("T")[0],
+      modifiedBy: currentAppUserId ?? undefined,
+      code: quotation.code,
+      subject: quotation.subject,
+      lineItems: quotation.lineItems,
+      subtotalUSD: quotation.subtotalUSD,
+      totalUSD: quotation.totalUSD,
+      costUSD: quotation.costUSD,
+      marginPercent: quotation.marginPercent,
+      marginUSD: quotation.marginUSD,
+      paymentTerms: quotation.paymentTerms,
+      deliveryTerms: quotation.deliveryTerms,
+      deliveryWeeksMin: quotation.deliveryWeeksMin,
+      deliveryWeeksMax: quotation.deliveryWeeksMax,
+      validityDays: quotation.validityDays,
+      deliveryLocation: quotation.deliveryLocation,
+      notes: quotation.notes,
+      status: quotation.status,
+    };
+
+    const newVersion = quotation.version + 1;
+    let updatedCode = data.code;
+    if (!codeManuallyEdited) {
+      updatedCode = data.code.replace(/-V\d+$/, `-V${newVersion}`);
+      if (updatedCode === data.code && !data.code.includes("-V")) {
+        updatedCode = `${data.code}-V${newVersion}`;
+      }
+    }
+
+    const updated: Quotation = {
+      ...quotation,
+      ...data,
+      code: updatedCode,
+      version: newVersion,
+      history: [...quotation.history, snapshot],
+    };
+    onSave(updated);
+    setShowVersionPrompt(false);
+    onOpenChange(false);
+  };
+
+  /** Restore data from a previous version snapshot */
+  const restoreVersion = (snap: QuotationSnapshot) => {
+    setCode(snap.code);
+    setSubject(snap.subject);
+    setLineItems(snap.lineItems.map((li) => ({ ...li })));
+    setCostUSD(snap.costUSD);
+    setMarginPercent(snap.marginPercent);
+    setMarginUSD(snap.marginUSD);
+    setPaymentTerms(snap.paymentTerms);
+    setDeliveryTerms(snap.deliveryTerms);
+    setDeliveryWeeksMin(snap.deliveryWeeksMin);
+    setDeliveryWeeksMax(snap.deliveryWeeksMax);
+    setValidityDays(snap.validityDays);
+    setDeliveryLocation(snap.deliveryLocation);
+    setNotes(snap.notes);
+    setStatus(snap.status as Quotation["status"]);
+    setExpandedVersion(null);
+    setHistoryOpen(false);
   };
 
   return (
@@ -519,7 +614,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   <SelectTrigger><SelectValue placeholder="Seleccionar contacto" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sin contacto</SelectItem>
-                    {contacts.map((ct) => (
+                    {[...contacts].sort((a, b) => {
+                      const aMatch = a.clientId === selectedClientId ? 0 : 1;
+                      const bMatch = b.clientId === selectedClientId ? 0 : 1;
+                      return aMatch - bMatch;
+                    }).map((ct) => (
                       <SelectItem key={ct.id} value={ct.id}>{ct.firstName} {ct.lastName}{ct.clientId ? ` (${clients.find(c => c.id === ct.clientId)?.name ?? ''})` : ''}</SelectItem>
                     ))}
                   </SelectContent>
@@ -629,8 +728,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   <tr className="bg-muted/50 border-b">
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Descripción</th>
                     <th className="text-center py-2 px-3 font-medium text-muted-foreground text-xs w-20">Cant.</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">P. Unit. USD</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Total USD</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">P. Unit. {isOriginalCurrency ? currency : "USD"}</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Total {isOriginalCurrency ? currency : "USD"}</th>
                     <th className="w-10"></th>
                   </tr>
                 </thead>
@@ -638,11 +737,12 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   {lineItems.map((item) => (
                     <tr key={item.id} className="border-b last:border-0">
                       <td className="py-2 px-3">
-                        <Input
+                        <Textarea
                           value={item.description}
                           onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                          className="h-8 text-xs"
+                          className="min-h-[32px] text-xs resize-y"
                           placeholder="Descripción del ítem"
+                          rows={1}
                         />
                       </td>
                       <td className="py-2 px-3">
@@ -663,7 +763,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                           min={0}
                         />
                       </td>
-                      <td className="py-2 px-3 text-right font-medium text-xs">${item.totalUSD.toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right font-medium text-xs">{isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$"}{item.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="py-2 px-1">
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item.id)}>
                           <Trash2 className="h-3 w-3" />
@@ -695,7 +795,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               <div>
                 <Label className="text-xs">Moneda de la Cotización</Label>
                 <div className="flex items-center gap-2 mt-1">
-                  <Select value={currency} onValueChange={(v) => { setCurrency(v as QuotationCurrency); if (v === "USD") setExchangeRate(1); }}>
+                  <Select value={currency} onValueChange={(v) => { setCurrency(v as QuotationCurrency); if (v === "USD") { setExchangeRate(1); setIsOriginalCurrency(false); } }}>
                     <SelectTrigger className="w-44 h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {CURRENCIES.map((c) => (
@@ -706,7 +806,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       ))}
                     </SelectContent>
                   </Select>
-                  {currency !== "USD" && (
+                  {currency !== "USD" && !isOriginalCurrency && (
                     <div className="flex items-center gap-1.5">
                       <Label className="text-xs text-muted-foreground whitespace-nowrap">Tasa:</Label>
                       <Input
@@ -724,18 +824,34 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     </div>
                   )}
                 </div>
+                {currency !== "USD" && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <Checkbox id="originalCurrency" checked={isOriginalCurrency} onCheckedChange={(v) => { setIsOriginalCurrency(!!v); if (v) setExchangeRate(1); }} />
+                    <Label htmlFor="originalCurrency" className="text-xs text-muted-foreground">
+                      Moneda original ({CURRENCIES.find((c) => c.key === currency)?.label}) — ítems y montos directamente en {currency}
+                    </Label>
+                  </div>
+                )}
               </div>
             </div>
             <div className="space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">${subtotal.toLocaleString()}</span></div>
-              {applyItbis && <div className="flex justify-between"><span className="text-muted-foreground">ITBIS ({itbisPercent}%):</span><span className="font-medium">${itbisUSD.toLocaleString()}</span></div>}
-              <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total USD:</span><span className="text-primary">${totalUSD.toLocaleString()}</span></div>
-              {currency !== "USD" && exchangeRate > 0 && (
-                <div className="flex justify-between font-semibold text-sm text-muted-foreground">
-                  <span>Total {currency}:</span>
-                  <span>{CURRENCIES.find((c) => c.key === currency)?.symbol}{(totalUSD * exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-              )}
+              {(() => {
+                const sym = isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$";
+                const label = isOriginalCurrency ? currency : "USD";
+                return (
+                  <>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">{sym}{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                    {applyItbis && <div className="flex justify-between"><span className="text-muted-foreground">ITBIS ({itbisPercent}%):</span><span className="font-medium">{sym}{itbisUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>}
+                    <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total {label}:</span><span className="text-primary">{sym}{totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                    {currency !== "USD" && !isOriginalCurrency && exchangeRate > 0 && (
+                      <div className="flex justify-between font-semibold text-sm text-muted-foreground">
+                        <span>Total {currency}:</span>
+                        <span>{CURRENCIES.find((c) => c.key === currency)?.symbol}{(totalUSD * exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -745,15 +861,15 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Costo USD</Label>
-                <Input type="number" value={costUSD || ""} onChange={(e) => setCostUSD(Number(e.target.value) || 0)} />
+                <Input type="number" value={costUSD || ""} onChange={(e) => { const c = Number(e.target.value) || 0; setCostUSD(c); setMarginPercent(subtotal > 0 ? Math.round((1 - c / subtotal) * 10000) / 100 : 0); setMarginUSD(Math.round((subtotal - c) * 100) / 100); }} />
               </div>
               <div>
                 <Label>Margen %</Label>
-                <Input type="number" value={marginPercent || ""} onChange={(e) => setMarginPercent(Number(e.target.value) || 0)} />
+                <Input value={marginPercent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} readOnly className="bg-muted/50" />
               </div>
               <div>
                 <Label>Margen USD</Label>
-                <Input type="number" value={marginUSD || ""} onChange={(e) => setMarginUSD(Number(e.target.value) || 0)} />
+                <Input value={marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} readOnly className="bg-muted/50" />
               </div>
             </div>
           </div>
@@ -854,9 +970,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     {expandedVersion === snap.version && (
                       <div className="px-4 pb-4 bg-muted/10 border-t space-y-3">
                         <div className="grid grid-cols-3 gap-3 pt-3 text-xs">
-                          <div><span className="text-muted-foreground">Total USD:</span> <strong>${snap.totalUSD.toLocaleString()}</strong></div>
-                          <div><span className="text-muted-foreground">Costo USD:</span> <strong>${snap.costUSD.toLocaleString()}</strong></div>
-                          <div><span className="text-muted-foreground">Margen:</span> <strong>{snap.marginPercent}% (${snap.marginUSD.toLocaleString()})</strong></div>
+                          <div><span className="text-muted-foreground">Total USD:</span> <strong>${snap.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                          <div><span className="text-muted-foreground">Costo USD:</span> <strong>${snap.costUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                          <div><span className="text-muted-foreground">Margen:</span> <strong>{snap.marginPercent}% (${snap.marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</strong></div>
                           <div><span className="text-muted-foreground">Entrega:</span> <strong>{snap.deliveryWeeksMin}-{snap.deliveryWeeksMax} sem.</strong></div>
                           <div><span className="text-muted-foreground">Validez:</span> <strong>{snap.validityDays} días</strong></div>
                           <div><span className="text-muted-foreground">Lugar:</span> <strong>{snap.deliveryLocation || "—"}</strong></div>
@@ -878,8 +994,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                                   <tr key={idx} className="border-b last:border-0">
                                     <td className="py-1 px-2">{li.description}</td>
                                     <td className="py-1 px-2 text-center">{li.quantity}</td>
-                                    <td className="py-1 px-2 text-right">${li.unitPriceUSD.toLocaleString()}</td>
-                                    <td className="py-1 px-2 text-right">${li.totalUSD.toLocaleString()}</td>
+                                    <td className="py-1 px-2 text-right">${li.unitPriceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="py-1 px-2 text-right">${li.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -889,6 +1005,17 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                         {snap.notes && (
                           <p className="text-xs text-muted-foreground"><strong>Notas:</strong> {snap.notes}</p>
                         )}
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => restoreVersion(snap)}
+                            className="text-xs gap-1.5"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Restaurar esta versión
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -938,7 +1065,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Pendiente de Aprobación</p>
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       {quotation.totalUSD > generalSettings.managerApprovalLimit
-                        ? `Monto (${quotation.totalUSD.toLocaleString()} USD) excede el límite del Gerente Comercial ($${generalSettings.managerApprovalLimit.toLocaleString()}). Requiere aprobación de Administrador.`
+                        ? `Monto (${quotation.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD) excede el límite del Gerente Comercial ($${generalSettings.managerApprovalLimit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). Requiere aprobación de Administrador.`
                         : `Puede ser aprobada por Gerente Comercial o Administrador.`
                       }
                     </p>
@@ -954,7 +1081,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       onSave({
                         ...quotation,
                         approvalStatus: "approved",
-                        approvedBy: "u1",
+                        approvedBy: currentAppUserId ?? undefined,
                         approvedAt: new Date().toISOString().split("T")[0],
                       });
                       onOpenChange(false);
@@ -973,7 +1100,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       onSave({
                         ...quotation,
                         approvalStatus: "rejected",
-                        approvedBy: "u1",
+                        approvedBy: currentAppUserId ?? undefined,
                         approvedAt: new Date().toISOString().split("T")[0],
                         approvalNote: note || undefined,
                       });
@@ -987,6 +1114,46 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
             )}
           </div>
         )}
+
+        {/* Version prompt — uses AlertDialog to properly layer on top of parent Dialog */}
+        <AlertDialog open={showVersionPrompt} onOpenChange={setShowVersionPrompt}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <AlertDialogTitle>Guardar cambios</AlertDialogTitle>
+                  <AlertDialogDescription>¿Cómo desea guardar los cambios en esta cotización?</AlertDialogDescription>
+                </div>
+              </div>
+            </AlertDialogHeader>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={saveOverwrite}
+                className="w-full text-left p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+              >
+                <p className="font-medium text-sm group-hover:text-primary">Mantener versión actual (v{quotation?.version})</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Sobrescribe los datos de la versión actual sin crear historial.</p>
+              </button>
+              <button
+                type="button"
+                onClick={saveAsNewVersion}
+                className="w-full text-left p-3 rounded-lg border hover:bg-muted/50 transition-colors group"
+              >
+                <p className="font-medium text-sm group-hover:text-primary">Crear nueva versión (v{(quotation?.version ?? 0) + 1})</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Guarda la versión actual en el historial y crea una nueva versión con los cambios.</p>
+              </button>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>

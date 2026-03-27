@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PROJECT_STEPS } from "@/lib/types";
 import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ const emptyForm = {
 };
 
 const Projects = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
   const canCreateProj = canCreateFn("Proyectos");
@@ -202,65 +203,79 @@ const Projects = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {projects.map((project) => {
-          const cfg = statusConfig[project.status] ?? statusConfig.activo;
-          const StatusIcon = cfg.icon;
-          const progress = (project.current_step / 11) * 100;
-          const currentStepName = PROJECT_STEPS[project.current_step - 1]?.name ?? "";
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/50 border-b">
+              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Proyecto</th>
+              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Cliente</th>
+              <th className="text-right py-3 px-4 font-medium text-muted-foreground">Valor USD</th>
+              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Paso Actual</th>
+              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Progreso</th>
+              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Estado</th>
+              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Inicio</th>
+              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((project) => {
+              const cfg = statusConfig[project.status] ?? statusConfig.activo;
+              const StatusIcon = cfg.icon;
+              const progress = Math.round((project.current_step / 11) * 100);
+              const currentStepName = PROJECT_STEPS[project.current_step - 1]?.name ?? "";
 
-          return (
-            <Link key={project.id} to={`/projects/${project.id}`} className="stat-card group block">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold group-hover:text-primary transition-colors">{project.name}</h3>
-                  <p className="text-sm text-muted-foreground">{project.client}</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${cfg.className}`}>
-                    <StatusIcon className="h-3 w-3" />
-                    {cfg.label}
-                  </span>
-                  {canEditProj && (
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(project); }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {canDeleteProj && (
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project); }}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-sm mb-2">
-                <span className="text-muted-foreground">
-                  Paso {project.current_step}: <span className="text-foreground font-medium">{currentStepName}</span>
-                </span>
-                <span className="font-semibold text-primary">${project.value.toLocaleString()}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
-                </div>
-                <span className="text-[11px] text-muted-foreground">{Math.round(progress)}%</span>
-              </div>
-
-              <div className="flex gap-1 mt-3">
-                {PROJECT_STEPS.map((step) => (
-                  <div key={step.number} className={`h-1 flex-1 rounded-full ${step.number <= project.current_step ? "bg-primary" : "bg-muted"}`} />
-                ))}
-              </div>
-            </Link>
-          );
-        })}
-        {projects.length === 0 && (
-          <div className="col-span-full text-center py-12 text-muted-foreground">No se encontraron proyectos</div>
-        )}
+              return (
+                <tr key={project.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => navigate(`/projects/${project.id}`)}>
+                  <td className="py-3 px-4">
+                    <Link to={`/projects/${project.id}`} className="font-medium hover:text-primary transition-colors">
+                      {project.name}
+                    </Link>
+                  </td>
+                  <td className="py-3 px-4 text-muted-foreground">{project.client}</td>
+                  <td className="py-3 px-4 text-right font-semibold text-primary">${project.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="py-3 px-4">
+                    <span className="text-xs text-muted-foreground">Paso {project.current_step}:</span>{" "}
+                    <span className="text-xs font-medium">{currentStepName}</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2 justify-center">
+                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
+                      </div>
+                      <span className="text-[11px] text-muted-foreground w-8">{progress}%</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${cfg.className}`}>
+                      <StatusIcon className="h-3 w-3" />
+                      {cfg.label}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-muted-foreground text-xs">{project.start_date ?? "—"}</td>
+                  <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center gap-0.5">
+                      {canEditProj && (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
+                          onClick={() => openEdit(project)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {canDeleteProj && (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(project)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {projects.length === 0 && (
+              <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No se encontraron proyectos</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

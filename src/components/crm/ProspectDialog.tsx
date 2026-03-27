@@ -97,6 +97,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [expandedSnapVersion, setExpandedSnapVersion] = useState<number | null>(null);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [assignedTo, setAssignedTo] = useState("none");
+  const [revenue, setRevenue] = useState("");
+  const [revenueManuallyEdited, setRevenueManuallyEdited] = useState(false);
   const initialValuesRef = useRef<string>("");
 
   // ── Multi-client direct ──
@@ -185,11 +187,23 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
       setQuotationHistoryOpen(null);
       setExpandedSnapVersion(null);
       setAssignedTo(prospect?.assignedTo ?? "none");
+      setRevenue(prospect?.revenue ?? "");
+      setRevenueManuallyEdited(!!prospect?.revenue);
       setShowUnsavedWarning(false);
       setClientSearch("");
       setTimeout(() => { initialValuesRef.current = ""; }, 0);
     }
   }, [open, prospect]);
+
+  // Re-resolve endCustomer once clients/contacts finish loading
+  useEffect(() => {
+    if (!open || !prospect?.endCustomer || prospect.endCustomer === "" || clients.length === 0) return;
+    const val = prospect.endCustomer;
+    const cl = clients.find((c) => c.name === val);
+    if (cl) { setEndCustomer(`client:${cl.id}`); return; }
+    const ct = contacts.find((c) => `${c.firstName} ${c.lastName}` === val);
+    if (ct) { setEndCustomer(`contact:${ct.id}`); return; }
+  }, [clients, contacts]);
 
   // Capture initial snapshot once fields are set
   useEffect(() => {
@@ -236,12 +250,12 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const marginPercent = priceUSD > 0 ? Math.round((1 - costUSD / priceUSD) * 10000) / 100 : 0;
   const marginUSD = Math.round(weighted * marginPercent / 100 * 100) / 100;
 
-  const revenue = useMemo(() => {
-    if (!estimatedOE) return "";
-    if (linkedQuotations.length === 0) return "";
+  useEffect(() => {
+    if (revenueManuallyEdited) return;
+    if (!estimatedOE || linkedQuotations.length === 0) { setRevenue(""); return; }
     const weeks = linkedQuotations[0].delivery_weeks_max ?? 0;
-    return addWeeksToDate(estimatedOE, weeks);
-  }, [estimatedOE, linkedQuotations]);
+    setRevenue(addWeeksToDate(estimatedOE, weeks));
+  }, [estimatedOE, linkedQuotations, revenueManuallyEdited]);
 
   const handleGenerateQuotation = () => {
     if (!prospect) return;
@@ -562,7 +576,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Input
               type="text"
               inputMode="decimal"
-              value={costUSD ? costUSD.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : ""}
+              value={costUSD ? costUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
               onChange={(e) => {
                 const raw = e.target.value.replace(/,/g, "");
                 setCostUSD(Number(raw) || 0);
@@ -575,7 +589,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Input
               type="text"
               inputMode="decimal"
-              value={priceUSD ? priceUSD.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : ""}
+              value={priceUSD ? priceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}
               onChange={(e) => {
                 const raw = e.target.value.replace(/,/g, "");
                 setPriceUSD(Number(raw) || 0);
@@ -598,7 +612,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
           </div>
           <div>
             <Label className="flex items-center gap-1.5">Peso USD <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input type="text" value={`$${weighted.toLocaleString()}`} readOnly disabled className="bg-muted/50 font-medium" />
+            <Input type="text" value={`$${weighted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} readOnly disabled className="bg-muted/50 font-medium" />
           </div>
           <div>
             <Label className="flex items-center gap-1.5">Margen % <Lock className="h-3 w-3 text-muted-foreground" /></Label>
@@ -606,7 +620,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
           </div>
           <div>
             <Label className="flex items-center gap-1.5">Margen USD <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input type="text" value={`$${marginUSD.toLocaleString()}`} readOnly disabled className="bg-muted/50 font-medium" />
+            <Input type="text" value={`$${marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} readOnly disabled className="bg-muted/50 font-medium" />
           </div>
 
           <div>
@@ -614,10 +628,10 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
             <Input type="date" value={estimatedOE} onChange={(e) => setEstimatedOE(e.target.value)} />
           </div>
           <div>
-            <Label className="flex items-center gap-1.5">Revenue <Lock className="h-3 w-3 text-muted-foreground" /></Label>
-            <Input type="date" value={revenue} readOnly disabled className="bg-muted/50 font-medium" />
-            {!revenue && estimatedOE && (
-              <p className="text-[10px] text-muted-foreground mt-1">Se calcula al vincular una cotización</p>
+            <Label className="flex items-center gap-1.5">Revenue {!revenueManuallyEdited && <Lock className="h-3 w-3 text-muted-foreground" />}</Label>
+            <Input type="date" value={revenue} onChange={(e) => { setRevenue(e.target.value); setRevenueManuallyEdited(true); }} className={revenueManuallyEdited ? "" : "bg-muted/50"} />
+            {!revenue && !revenueManuallyEdited && (
+              <p className="text-[10px] text-muted-foreground mt-1">Se calcula automáticamente o editar manualmente</p>
             )}
           </div>
 
@@ -648,7 +662,7 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                         <span className={`text-[10px] px-2 py-0.5 rounded-full text-primary-foreground ${statusCfg?.color ?? "bg-muted"}`}>
                           {statusCfg?.label ?? q.status}
                         </span>
-                        <span className="text-sm font-semibold">${Number(q.total_usd).toLocaleString()}</span>
+                        <span className="text-sm font-semibold">${Number(q.total_usd).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         <Link to={`/oferta/${q.id}`} target="_blank">
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                             <ExternalLink className="h-3.5 w-3.5" />

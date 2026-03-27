@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload, Trash2, ArrowRightLeft, XCircle, Download } from "lucide-react";
+import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload, Trash2, ArrowRightLeft, XCircle, Download, AlertTriangle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ const CRM = () => {
   const canEditCRM = canEdit("CRM");
   const canDeleteCRM = canDelete("CRM");
   const [view, setView] = useLocalStorage<"kanban" | "table">("sinem:crm:view", "kanban");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useLocalStorage("sinem:crm:search", "");
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [appUsers, setAppUsers] = useState<{ id: string; name: string }[]>([]);
@@ -52,15 +52,15 @@ const CRM = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [filterStage, setFilterStage] = useState("all");
-  const [filterProduct, setFilterProduct] = useState("all");
-  const [filterCustomer, setFilterCustomer] = useState("all");
-  const [filterBU, setFilterBU] = useState("all");
-  const [filterProbMin, setFilterProbMin] = useState("");
-  const [filterProbMax, setFilterProbMax] = useState("");
-  const [filterPriceMin, setFilterPriceMin] = useState("");
-  const [filterPriceMax, setFilterPriceMax] = useState("");
-  const [filterResponsible, setFilterResponsible] = useState("all");
+  const [filterStage, setFilterStage] = useLocalStorage("sinem:crm:filterStage", "all");
+  const [filterProduct, setFilterProduct] = useLocalStorage("sinem:crm:filterProduct", "all");
+  const [filterCustomer, setFilterCustomer] = useLocalStorage("sinem:crm:filterCustomer", "all");
+  const [filterBU, setFilterBU] = useLocalStorage("sinem:crm:filterBU", "all");
+  const [filterProbMin, setFilterProbMin] = useLocalStorage("sinem:crm:filterProbMin", "");
+  const [filterProbMax, setFilterProbMax] = useLocalStorage("sinem:crm:filterProbMax", "");
+  const [filterPriceMin, setFilterPriceMin] = useLocalStorage("sinem:crm:filterPriceMin", "");
+  const [filterPriceMax, setFilterPriceMax] = useLocalStorage("sinem:crm:filterPriceMax", "");
+  const [filterResponsible, setFilterResponsible] = useLocalStorage("sinem:crm:filterResponsible", "all");
 
   // ── Fetch data ──
   const fetchData = useCallback(async () => {
@@ -117,6 +117,8 @@ const CRM = () => {
 
   const totalPipeline = filtered.reduce((sum, p) => sum + p.priceUSD, 0);
   const totalWeighted = filtered.reduce((sum, p) => sum + p.weighted, 0);
+
+  const missingClientProspects = prospects.filter((p) => !p.directCustomer && !p.endCustomer);
 
   const handleEdit = (prospect: Prospect) => {
     setSelectedProspect(prospect);
@@ -375,12 +377,26 @@ const CRM = () => {
 
   return (
     <div className="space-y-5 animate-fade-in">
+      {missingClientProspects.length > 0 && (
+        <div className="flex items-start gap-3 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              {missingClientProspects.length} oportunidad{missingClientProspects.length > 1 ? "es" : ""} sin cliente asignado
+            </p>
+            <p className="text-xs text-amber-700/80 dark:text-amber-400/70 mt-0.5 truncate">
+              {missingClientProspects.slice(0, 5).map((p) => p.projectName).join(", ")}
+              {missingClientProspects.length > 5 ? ` y ${missingClientProspects.length - 5} más...` : ""}
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">CRM Pipeline</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {filtered.length} oportunidades · Pipeline: <span className="font-semibold text-foreground">${totalPipeline.toLocaleString()}</span>
-            {" · "}Ponderado: <span className="font-semibold text-foreground">${totalWeighted.toLocaleString()}</span>
+            {filtered.length} oportunidades · Pipeline: <span className="font-semibold text-foreground">${totalPipeline.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            {" · "}Ponderado: <span className="font-semibold text-foreground">${totalWeighted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </p>
         </div>
         <div className="flex items-center gap-2">

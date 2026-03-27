@@ -180,6 +180,7 @@ export interface Quotation {
   totalUSD: number;
   currency: QuotationCurrency;
   exchangeRate: number;
+  isOriginalCurrency?: boolean;
   partner: QuotationPartner;
   costUSD: number;
   marginPercent: number;

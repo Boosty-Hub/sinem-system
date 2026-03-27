@@ -43,20 +43,14 @@ const AppSidebar = () => {
 
   return (
     <Sidebar collapsible="icon">
-      <div className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          {companyLogo ? (
-            <img src={companyLogo} alt="Logo" className="w-9 h-9 rounded-lg object-contain" />
-          ) : (
-            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-lg">
-              S
-            </div>
-          )}
-          <div className="group-data-[collapsible=icon]:hidden">
-            <h1 className="font-bold text-sidebar-foreground text-lg tracking-tight">SINEM</h1>
-            <p className="text-[11px] text-sidebar-foreground/50">Siemens Partner RD</p>
+      <div className="p-4 border-b border-sidebar-border flex items-center justify-center">
+        {companyLogo ? (
+          <img src={companyLogo} alt="Logo" className="h-10 object-contain group-data-[collapsible=icon]:h-8" />
+        ) : (
+          <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-xl">
+            S
           </div>
-        </div>
+        )}
       </div>
       <SidebarContent>
         <SidebarGroup>

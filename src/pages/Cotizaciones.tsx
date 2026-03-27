@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { QUOTATION_STATUSES, CURRENCIES, type Quotation } from "@/lib/types";
-import { Search, Plus, FileText, ExternalLink, ShieldCheck, Clock, XCircle, Trash2, Loader2 } from "lucide-react";
+import { Search, Plus, FileText, ExternalLink, ShieldCheck, Clock, XCircle, Trash2, Loader2, Download } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,8 +38,11 @@ const Cotizaciones = () => {
 
   const fetchQuotations = async () => {
     setLoading(true);
-    const { data } = await supabase.from("quotations").select("*").order("created_at", { ascending: false });
-    const { data: lineItems } = await supabase.from("quotation_line_items").select("*");
+    const [{ data }, { data: lineItems }, { data: snapshots }] = await Promise.all([
+      supabase.from("quotations").select("*").order("created_at", { ascending: false }),
+      supabase.from("quotation_line_items").select("*"),
+      supabase.from("quotation_snapshots").select("*").order("version", { ascending: true }),
+    ]);
 
     const itemsByQuotation = new Map<string, any[]>();
     (lineItems ?? []).forEach((li) => {
@@ -52,6 +55,39 @@ const Cotizaciones = () => {
         totalUSD: Number(li.total_usd),
       });
       itemsByQuotation.set(li.quotation_id, list);
+    });
+
+    const historyByQuotation = new Map<string, any[]>();
+    (snapshots ?? []).forEach((s: any) => {
+      const list = historyByQuotation.get(s.quotation_id) ?? [];
+      list.push({
+        version: s.version,
+        savedAt: s.saved_at?.split("T")[0] ?? "",
+        modifiedBy: s.modified_by ?? undefined,
+        code: s.code,
+        subject: s.subject,
+        lineItems: (s.line_items ?? []).map((li: any) => ({
+          id: li.id ?? crypto.randomUUID(),
+          description: li.description,
+          quantity: li.quantity,
+          unitPriceUSD: Number(li.unitPriceUSD ?? li.unit_price_usd ?? 0),
+          totalUSD: Number(li.totalUSD ?? li.total_usd ?? 0),
+        })),
+        subtotalUSD: Number(s.subtotal_usd),
+        totalUSD: Number(s.total_usd),
+        costUSD: Number(s.cost_usd),
+        marginPercent: Number(s.margin_percent),
+        marginUSD: Number(s.margin_usd),
+        paymentTerms: s.payment_terms,
+        deliveryTerms: s.delivery_terms as any,
+        deliveryWeeksMin: s.delivery_weeks_min,
+        deliveryWeeksMax: s.delivery_weeks_max,
+        validityDays: s.validity_days,
+        deliveryLocation: s.delivery_location,
+        notes: s.notes,
+        status: s.status,
+      });
+      historyByQuotation.set(s.quotation_id, list);
     });
 
     setQuotations((data ?? []).map((q): Quotation => ({
@@ -89,13 +125,14 @@ const Cotizaciones = () => {
       createdAt: q.created_at?.split("T")[0] ?? "",
       createdBy: q.created_by ?? undefined,
       version: q.version,
-      history: [],
+      history: historyByQuotation.get(q.id) ?? [],
       approvalStatus: q.approval_status as any,
       approvalNote: q.approval_note ?? undefined,
       approvedBy: q.approved_by ?? undefined,
       approvedAt: q.approved_at ?? undefined,
       currency: q.currency as any,
       exchangeRate: Number(q.exchange_rate),
+      isOriginalCurrency: (q as any).is_original_currency ?? false,
       partner: "Siemens",
     })));
     setLoading(false);
@@ -187,6 +224,7 @@ const Cotizaciones = () => {
       approved_at: updated.approvedAt ?? null,
       currency: updated.currency ?? "USD",
       exchange_rate: updated.exchangeRate ?? 1,
+      is_original_currency: updated.isOriginalCurrency ?? false,
       created_by: appUserId,
     };
 
@@ -225,6 +263,36 @@ const Cotizaciones = () => {
       if (liError) {
         toast({ title: "Error al guardar partidas", description: liError.message, variant: "destructive" });
       }
+    }
+
+    // Sync snapshots: delete old, insert current history
+    await supabase.from("quotation_snapshots").delete().eq("quotation_id", quotationRow.id);
+    if (updated.history.length > 0) {
+      await supabase.from("quotation_snapshots").insert(
+        updated.history.map((snap) => ({
+          id: crypto.randomUUID(),
+          quotation_id: quotationRow.id,
+          version: snap.version,
+          saved_at: snap.savedAt ? `${snap.savedAt}T00:00:00Z` : new Date().toISOString(),
+          modified_by: snap.modifiedBy ?? null,
+          code: snap.code,
+          subject: snap.subject,
+          line_items: snap.lineItems as any,
+          subtotal_usd: snap.subtotalUSD,
+          total_usd: snap.totalUSD,
+          cost_usd: snap.costUSD,
+          margin_percent: snap.marginPercent,
+          margin_usd: snap.marginUSD,
+          payment_terms: snap.paymentTerms,
+          delivery_terms: snap.deliveryTerms,
+          delivery_weeks_min: snap.deliveryWeeksMin,
+          delivery_weeks_max: snap.deliveryWeeksMax,
+          validity_days: snap.validityDays,
+          delivery_location: snap.deliveryLocation,
+          notes: snap.notes,
+          status: snap.status,
+        }))
+      );
     }
 
     // Update local state
@@ -271,7 +339,7 @@ const Cotizaciones = () => {
           <h1 className="text-2xl font-bold tracking-tight">Cotizaciones</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {filtered.length} cotizaciones · Total:{" "}
-            <span className="font-semibold text-foreground">${totalValue.toLocaleString()}</span>
+            <span className="font-semibold text-foreground">${totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -325,10 +393,10 @@ const Cotizaciones = () => {
                     </td>
                     <td className="py-3 px-4 font-medium max-w-[250px] truncate">{q.subject}</td>
                     <td className="py-3 px-4 text-muted-foreground">{q.client.company}</td>
-                    <td className="py-3 px-4 text-right">${q.subtotalUSD.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right">{q.isOriginalCurrency ? (CURRENCIES.find((c) => c.key === q.currency)?.symbol ?? "$") : "$"}{q.subtotalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="py-3 px-4 text-right font-semibold text-primary">
-                      ${q.totalUSD.toLocaleString()}
-                      {q.currency && q.currency !== "USD" && (
+                      {q.isOriginalCurrency ? (CURRENCIES.find((c) => c.key === q.currency)?.symbol ?? "$") : "$"}{q.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {q.currency && q.currency !== "USD" && !q.isOriginalCurrency && (
                         <span className="block text-[10px] font-normal text-muted-foreground">
                           {CURRENCIES.find((c) => c.key === q.currency)?.symbol}{(q.totalUSD * q.exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {q.currency}
                         </span>
@@ -336,7 +404,7 @@ const Cotizaciones = () => {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <span className="text-sinem-success font-medium">{q.marginPercent}%</span>
-                      <span className="text-muted-foreground text-xs ml-1">(${q.marginUSD.toLocaleString()})</span>
+                      <span className="text-muted-foreground text-xs ml-1">(${q.marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
                     </td>
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                       <select value={q.status} onChange={(e) => handleStatusChange(q.id, e.target.value)}
@@ -366,7 +434,10 @@ const Cotizaciones = () => {
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-0.5">
                         <Link to={`/oferta/${q.id}`} target="_blank">
-                          <Button variant="ghost" size="sm"><ExternalLink className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" title="Ver oferta"><ExternalLink className="h-4 w-4" /></Button>
+                        </Link>
+                        <Link to={`/oferta/${q.id}?download=true`} target="_blank">
+                          <Button variant="ghost" size="sm" title="Descargar PDF"><Download className="h-4 w-4" /></Button>
                         </Link>
                         {canDeleteCot && (
                           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(q)}>

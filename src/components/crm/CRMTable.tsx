@@ -26,10 +26,10 @@ interface Props {
 }
 
 type SortKey =
-  | "code" | "projectName" | "directCustomer" | "product"
+  | "code" | "projectName" | "directCustomer" | "endCustomer" | "product"
   | "costUSD" | "priceUSD" | "go" | "get" | "probability"
   | "weighted" | "marginPercent" | "marginUSD" | "estimatedOE"
-  | "revenue" | "status";
+  | "revenue" | "status" | "assignedTo";
 
 type SortDir = "asc" | "desc";
 
@@ -123,7 +123,8 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
               <TableHead className="w-10"></TableHead>
               <SortableHead col="code">Código</SortableHead>
               <SortableHead col="projectName">Proyecto</SortableHead>
-              <SortableHead col="directCustomer">Cliente</SortableHead>
+              <SortableHead col="directCustomer">Cliente Directo</SortableHead>
+              <SortableHead col="endCustomer">Cliente Final</SortableHead>
               <SortableHead col="product">Producto</SortableHead>
               <SortableHead col="costUSD" className="text-right">Costo USD</SortableHead>
               <SortableHead col="priceUSD" className="text-right">Precio USD</SortableHead>
@@ -136,6 +137,7 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
               <SortableHead col="estimatedOE">OE Est.</SortableHead>
               <SortableHead col="revenue">Revenue</SortableHead>
               <SortableHead col="status">Status</SortableHead>
+              <SortableHead col="assignedTo">Responsable</SortableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -160,22 +162,28 @@ const CRMTable = ({ prospects, onEdit, onActivity, onStageChange, stages: stages
                   <p className="text-xs text-muted-foreground">{p.scope.slice(0, 50)}</p>
                 </TableCell>
                 <TableCell className="text-sm">{p.directCustomer}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{p.endCustomer || "—"}</TableCell>
                 <TableCell>
                   <span className="text-xs bg-accent text-accent-foreground px-2 py-0.5 rounded">
                     {p.product}
                   </span>
                 </TableCell>
-                <TableCell className="text-right text-sm">${p.costUSD.toLocaleString()}</TableCell>
-                <TableCell className="text-right text-sm font-medium">${p.priceUSD.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-sm">${p.costUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                <TableCell className="text-right text-sm font-medium">${p.priceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                 <TableCell className="text-center text-sm">{p.go}%</TableCell>
                 <TableCell className="text-center text-sm">{p.get}%</TableCell>
                 <TableCell className="text-center text-sm font-medium">{p.probability}%</TableCell>
-                <TableCell className="text-right text-sm">${p.weighted.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-sm">${p.weighted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                 <TableCell className="text-right text-sm">{p.marginPercent}%</TableCell>
-                <TableCell className="text-right text-sm">${p.marginUSD.toLocaleString()}</TableCell>
+                <TableCell className="text-right text-sm">${p.marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{p.estimatedOE}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{p.revenue || "—"}</TableCell>
                 <TableCell>{statusBadge(p.status)}</TableCell>
+                <TableCell onClick={e => e.stopPropagation()}>
+                  {p.assignedTo
+                    ? <UserAvatar userId={p.assignedTo} size="sm" showTooltip />
+                    : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell className="flex items-center gap-1">
                   {p.status === "ganado" && onStageChange && (
                     <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50" onClick={(e) => { e.stopPropagation(); onStageChange(p.id, "facturada"); }}>

@@ -4,35 +4,46 @@ import type { Tables } from "@/integrations/supabase/types";
 // ── Prospect ──
 type DbProspect = Tables<"prospects">;
 
-export const dbToProspect = (row: DbProspect): Prospect => ({
-  id: row.id,
-  code: row.code,
-  cotorta: row.cotorta,
-  projectName: row.project_name,
-  directCustomer: row.direct_customer,
-  endCustomer: row.end_customer,
-  proveedor: row.proveedor,
-  bu: row.bu,
-  product: row.product,
-  scope: row.scope,
-  costUSD: Number(row.cost_usd),
-  priceUSD: Number(row.price_usd),
-  go: Number(row.go_percent),
-  get: Number(row.get_percent),
-  probability: Number(row.probability),
-  weighted: Number(row.weighted),
-  marginPercent: Number(row.margin_percent),
-  marginUSD: Number(row.margin_usd),
-  estimatedOE: row.estimated_oe,
-  revenue: row.revenue,
-  comments: row.comments,
-  status: row.status,
-  createdBy: row.created_by ?? undefined,
-  assignedTo: row.assigned_to ?? undefined,
-  clientId: row.client_id ?? undefined,
-  contactId: row.contact_id ?? undefined,
-  invoicedAt: (row as any).invoiced_at ?? undefined,
-});
+export const dbToProspect = (row: DbProspect): Prospect => {
+  const costUSD = Number(row.cost_usd);
+  const priceUSD = Number(row.price_usd);
+  const go = Number(row.go_percent);
+  const get = Number(row.get_percent);
+  const probability = Math.round((go * get) / 100 * 100) / 100;
+  const weighted = Math.round(priceUSD * probability / 100 * 100) / 100;
+  const marginPercent = priceUSD > 0 ? Math.round((1 - costUSD / priceUSD) * 10000) / 100 : 0;
+  const marginUSD = Math.round(weighted * marginPercent / 100 * 100) / 100;
+
+  return {
+    id: row.id,
+    code: row.code,
+    cotorta: row.cotorta,
+    projectName: row.project_name,
+    directCustomer: row.direct_customer,
+    endCustomer: row.end_customer,
+    proveedor: row.proveedor,
+    bu: row.bu,
+    product: row.product,
+    scope: row.scope,
+    costUSD,
+    priceUSD,
+    go,
+    get,
+    probability,
+    weighted,
+    marginPercent,
+    marginUSD,
+    estimatedOE: row.estimated_oe,
+    revenue: row.revenue,
+    comments: row.comments,
+    status: row.status,
+    createdBy: row.created_by ?? undefined,
+    assignedTo: row.assigned_to ?? undefined,
+    clientId: row.client_id ?? undefined,
+    contactId: row.contact_id ?? undefined,
+    invoicedAt: (row as any).invoiced_at ?? undefined,
+  };
+};
 
 export const prospectToDb = (p: Prospect): Omit<DbProspect, "created_at" | "updated_at"> => ({
   id: p.id,
