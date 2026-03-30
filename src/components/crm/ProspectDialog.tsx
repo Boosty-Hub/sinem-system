@@ -267,10 +267,12 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
     if (!prospect) return;
     const params = new URLSearchParams();
     params.set("prospectId", prospect.id);
+    const cId = primaryClientId ?? prospect.clientId;
+    if (cId) params.set("clientId", cId);
     if (prospect.contactId) params.set("contactId", prospect.contactId);
-    if (prospect.clientId) params.set("clientId", prospect.clientId);
-    params.set("subject", prospect.projectName);
-    params.set("customer", prospect.directCustomer);
+    params.set("subject", projectName || prospect.projectName);
+    const primaryCl = clients.find((c) => c.id === cId);
+    params.set("customer", primaryCl?.name ?? prospect.directCustomer);
     onOpenChange(false);
     navigate(`/cotizaciones?${params.toString()}`);
   };

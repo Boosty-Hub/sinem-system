@@ -254,6 +254,14 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     });
   }, [prospects, open]);
 
+  // Re-run fillFromProspect once clients/contacts finish loading (fixes race condition)
+  useEffect(() => {
+    if (!open || quotation || clients.length === 0) return;
+    const pid = selectedProspectId !== "none" ? selectedProspectId : prefill?.prospectId;
+    if (!pid) return;
+    fillFromProspect(pid);
+  }, [clients, contacts]);
+
   const fillFromProspect = (prospectId: string) => {
     const prospect = prospects.find((p) => p.id === prospectId);
     if (!prospect) return;
