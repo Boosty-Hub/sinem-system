@@ -23,6 +23,7 @@ const emptyForm = {
   contactPhone: "",
   industry: "",
   address: "",
+  rnc: "",
   status: "activo" as "activo" | "inactivo",
 };
 
@@ -121,6 +122,7 @@ const Clientes = () => {
       contactPhone: client.contactPhone,
       industry: client.industry,
       address: client.address,
+      rnc: client.rnc,
       status: client.status,
     });
     // Fetch contacts assigned to this client
@@ -146,6 +148,7 @@ const Clientes = () => {
         contact_phone: formData.contactPhone.trim(),
         industry: formData.industry.trim(),
         address: formData.address.trim(),
+        rnc: formData.rnc.trim(),
         status: formData.status,
         primary_contact_id: primaryContactId,
       } as any).eq("id", editId);
@@ -158,6 +161,7 @@ const Clientes = () => {
         contact_phone: formData.contactPhone.trim(),
         industry: formData.industry.trim(),
         address: formData.address.trim(),
+        rnc: formData.rnc.trim(),
         status: formData.status,
         primary_contact_id: primaryContactId,
       } as any).select("id").single();

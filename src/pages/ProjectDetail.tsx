@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { PROJECT_STEPS, CURRENCIES, type Project, type Quotation } from "@/lib/types";
-import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet, ExternalLink, Receipt, MessageSquareText, Loader2, Download } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet, ExternalLink, Receipt, MessageSquareText, Loader2, Download, FolderOpen } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import UserAvatar from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,20 @@ interface ProjectDocument {
   stepNumber: number;
   storagePath?: string;
   uploadedBy?: string;
+  subfolder?: string;
 }
+
+const STEP_SUBFOLDERS: Record<number, { key: string; label: string }[]> = {
+  2: [
+    { key: "cliente", label: "Oferta de Cliente" },
+    { key: "proveedor", label: "Oferta de Suplidor (Proveedor)" },
+  ],
+  10: [
+    { key: "cliente", label: "Gantt para Cliente" },
+    { key: "interno", label: "Gantt para uso interno (CEN)" },
+    { key: "atrasos", label: "Información de atrasos" },
+  ],
+};
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -48,6 +61,15 @@ const ProjectDetail = () => {
   const [dragging, setDragging] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectDocument | null>(null);
+  const [activeSubfolder, setActiveSubfolder] = useState("");
+
+  // Auto-select first subfolder when switching to a step with subfolders
+  useEffect(() => {
+    const subs = STEP_SUBFOLDERS[activeStep];
+    if (subs && subs.length > 0) {
+      setActiveSubfolder(subs[0].key);
+    }
+  }, [activeStep]);
 
   useEffect(() => {
     if (!user) return;
@@ -98,7 +120,9 @@ const ProjectDetail = () => {
 
     for (const file of fileArray) {
       const docId = crypto.randomUUID();
-      const storagePath = `${id}/step-${activeStep}/${docId}-${file.name}`;
+      const hasSubfolders = !!STEP_SUBFOLDERS[activeStep];
+      const subPath = hasSubfolders ? `${activeSubfolder}/` : "";
+      const storagePath = `${id}/step-${activeStep}/${subPath}${docId}-${file.name}`;
       const { error } = await supabase.storage.from("project-files").upload(storagePath, file);
       if (error) {
         toast({ title: `Error al subir ${file.name}`, description: error.message, variant: "destructive" });
@@ -113,6 +137,7 @@ const ProjectDetail = () => {
         stepNumber: activeStep,
         storagePath,
         uploadedBy: currentAppUserId ?? undefined,
+        ...(hasSubfolders ? { subfolder: activeSubfolder } : {}),
       });
     }
 
@@ -144,7 +169,11 @@ const ProjectDetail = () => {
     );
   }
 
-  const stepDocs = documents.filter((d) => d.stepNumber === activeStep);
+  const stepDocsAll = documents.filter((d) => d.stepNumber === activeStep);
+  const currentSubfolders = STEP_SUBFOLDERS[activeStep];
+  const stepDocs = currentSubfolders
+    ? stepDocsAll.filter((d) => d.subfolder === activeSubfolder)
+    : stepDocsAll;
   const currentStepInfo = PROJECT_STEPS[activeStep - 1];
   const stepsWithDocs = new Set(documents.map((d) => d.stepNumber));
 
@@ -279,6 +308,31 @@ const ProjectDetail = () => {
             </Button>
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInput} />
           </div>
+
+          {currentSubfolders && (
+            <div className="flex gap-1 mb-4 border-b">
+              {currentSubfolders.map((sf) => {
+                const count = stepDocsAll.filter((d) => d.subfolder === sf.key).length;
+                return (
+                  <button
+                    key={sf.key}
+                    onClick={() => setActiveSubfolder(sf.key)}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                      activeSubfolder === sf.key
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                    {sf.label}
+                    <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
+                      count > 0 ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                    }`}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {stepDocs.length > 0 ? (
             <div className="space-y-2">

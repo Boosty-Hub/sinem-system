@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 import { PROJECT_STEPS } from "@/lib/types";
@@ -52,6 +52,19 @@ const emptyForm = {
   prospectId: "",
 };
 
+const TOTAL_STEPS = 11;
+
+const getStepsWithFiles = (projectId: string): number => {
+  try {
+    const raw = localStorage.getItem(`sinem:project-docs:${projectId}`);
+    if (!raw) return 0;
+    const docs: { stepNumber: number }[] = JSON.parse(raw);
+    return new Set(docs.map((d) => d.stepNumber)).size;
+  } catch {
+    return 0;
+  }
+};
+
 const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -69,6 +82,14 @@ const Projects = () => {
   const [deleteTarget, setDeleteTarget] = useState<ProjectRow | null>(null);
   const [wonProspects, setWonProspects] = useState<WonProspect[]>([]);
   const [prospectPopoverOpen, setProspectPopoverOpen] = useState(false);
+
+  const progressMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of allProjects) {
+      map[p.id] = getStepsWithFiles(p.id);
+    }
+    return map;
+  }, [allProjects]);
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -232,7 +253,8 @@ const Projects = () => {
             {projects.map((project) => {
               const cfg = statusConfig[project.status] ?? statusConfig.activo;
               const StatusIcon = cfg.icon;
-              const progress = Math.round((project.current_step / 11) * 100);
+              const stepsCompleted = progressMap[project.id] ?? 0;
+              const progress = Math.round((stepsCompleted / TOTAL_STEPS) * 100);
               const currentStepName = PROJECT_STEPS[project.current_step - 1]?.name ?? "";
 
               return (

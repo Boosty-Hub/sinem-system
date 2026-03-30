@@ -55,8 +55,8 @@ export const PROJECT_STEPS = [
   { number: 1, name: "Pedido", description: "Orden de compra del cliente" },
   { number: 2, name: "Oferta", description: "Oferta enviada al proveedor" },
   { number: 3, name: "Cálculo", description: "Cálculo de costos y márgenes" },
-  { number: 4, name: "Facturas de Proveedores", description: "Facturas recibidas de Siemens" },
-  { number: 5, name: "Pagos a Proveedores", description: "Pagos realizados a Siemens" },
+  { number: 4, name: "Facturas de Proveedores", description: "Facturas recibidas de proveedores" },
+  { number: 5, name: "Pagos a Proveedores", description: "Pagos realizados a proveedores" },
   { number: 6, name: "Facturas a Cliente", description: "Facturas emitidas al cliente" },
   { number: 7, name: "Pagos del Cliente", description: "Pagos recibidos del cliente" },
   { number: 8, name: "Ingeniería", description: "Documentación técnica y planos" },
@@ -92,6 +92,7 @@ export interface Client {
   contactPhone: string;
   industry: string;
   address: string;
+  rnc: string;
   createdAt: string;
   totalProjects: number;
   totalRevenue: number;

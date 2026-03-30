@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload, Trash2, ArrowRightLeft, XCircle, Download, AlertTriangle } from "lucide-react";
+import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload, Trash2, ArrowRightLeft, XCircle, Download, AlertTriangle, ArrowUpDown } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,7 @@ const CRM = () => {
   const [filterPriceMin, setFilterPriceMin] = useLocalStorage("sinem:crm:filterPriceMin", "");
   const [filterPriceMax, setFilterPriceMax] = useLocalStorage("sinem:crm:filterPriceMax", "");
   const [filterResponsible, setFilterResponsible] = useLocalStorage("sinem:crm:filterResponsible", "all");
+  const [kanbanSort, setKanbanSort] = useLocalStorage<"default" | "amount_desc" | "number_asc" | "number_desc" | "code_desc" | "code_asc">("sinem:crm:kanbanSort", "default");
 
   // ── Fetch data ──
   const fetchData = useCallback(async () => {
@@ -114,6 +115,17 @@ const CRM = () => {
     const matchResponsible = filterResponsible === "all" || p.assignedTo === filterResponsible;
     return matchSearch && matchStage && matchProduct && matchCustomer && matchBU && matchProbMin && matchProbMax && matchPriceMin && matchPriceMax && matchResponsible;
   });
+
+  const sorted = useMemo(() => {
+    if (kanbanSort === "default") return filtered;
+    const copy = [...filtered];
+    if (kanbanSort === "amount_desc") copy.sort((a, b) => b.priceUSD - a.priceUSD);
+    else if (kanbanSort === "number_asc") copy.sort((a, b) => a.cotorta - b.cotorta);
+    else if (kanbanSort === "number_desc") copy.sort((a, b) => b.cotorta - a.cotorta);
+    else if (kanbanSort === "code_desc") copy.sort((a, b) => b.code.localeCompare(a.code));
+    else if (kanbanSort === "code_asc") copy.sort((a, b) => a.code.localeCompare(b.code));
+    return copy;
+  }, [filtered, kanbanSort]);
 
   const totalPipeline = filtered.reduce((sum, p) => sum + p.priceUSD, 0);
   const totalWeighted = filtered.reduce((sum, p) => sum + p.weighted, 0);
@@ -422,6 +434,20 @@ const CRM = () => {
               </span>
             )}
           </Button>
+          <Select value={kanbanSort} onValueChange={(v) => setKanbanSort(v as any)}>
+            <SelectTrigger className="w-[180px] h-9 text-xs">
+              <ArrowUpDown className="h-3.5 w-3.5 mr-1" />
+              <SelectValue placeholder="Ordenar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Orden por defecto</SelectItem>
+              <SelectItem value="amount_desc">Monto: Mayor a menor</SelectItem>
+              <SelectItem value="number_desc">N° Oportunidad: Recientes</SelectItem>
+              <SelectItem value="number_asc">N° Oportunidad: Antiguas</SelectItem>
+              <SelectItem value="code_desc">Código: Z → A</SelectItem>
+              <SelectItem value="code_asc">Código: A → Z</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center border rounded-lg overflow-hidden">
             <button
               onClick={() => setView("kanban")}
@@ -560,9 +586,9 @@ const CRM = () => {
       )}
 
       {view === "kanban" ? (
-        <CRMKanban prospects={filtered} onEdit={handleEdit} onStageChange={handleStageChange} onActivity={setActivityProspect} stages={stages} />
+        <CRMKanban prospects={sorted} onEdit={handleEdit} onStageChange={handleStageChange} onActivity={setActivityProspect} stages={stages} />
       ) : (
-        <CRMTable prospects={filtered} onEdit={handleEdit} onActivity={setActivityProspect} onStageChange={handleStageChange} stages={stages} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
+        <CRMTable prospects={sorted} onEdit={handleEdit} onActivity={setActivityProspect} onStageChange={handleStageChange} stages={stages} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
       )}
 
       <ProspectDialog

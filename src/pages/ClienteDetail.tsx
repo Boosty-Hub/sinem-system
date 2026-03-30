@@ -26,7 +26,7 @@ const ClienteDetail = () => {
   const [selectedOffer, setSelectedOffer] = useState<ClientOffer | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: "", contactName: "", contactEmail: "", contactPhone: "", industry: "", address: "", status: "activo" as "activo" | "inactivo",
+    name: "", contactName: "", contactEmail: "", contactPhone: "", industry: "", address: "", rnc: "", status: "activo" as "activo" | "inactivo",
   });
 
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
@@ -58,7 +58,7 @@ const ClienteDetail = () => {
     if (!client) return;
     setEditForm({
       name: client.name, contactName: client.contactName, contactEmail: client.contactEmail,
-      contactPhone: client.contactPhone, industry: client.industry, address: client.address, status: client.status,
+      contactPhone: client.contactPhone, industry: client.industry, address: client.address, rnc: client.rnc, status: client.status,
     });
     setEditOpen(true);
   };
@@ -72,8 +72,9 @@ const ClienteDetail = () => {
       contact_phone: editForm.contactPhone.trim(),
       industry: editForm.industry.trim(),
       address: editForm.address.trim(),
+      rnc: editForm.rnc.trim(),
       status: editForm.status,
-    }).eq("id", client.id);
+    } as any).eq("id", client.id);
     if (!error) {
       toast({ title: "Cliente actualizado" });
       setEditOpen(false);
@@ -194,6 +195,12 @@ const ClienteDetail = () => {
               <div className="flex items-center gap-2 text-sm">
                 <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>{client.address}</span>
+              </div>
+            )}
+            {client.rnc && (
+              <div>
+                <p className="text-xs text-muted-foreground">RNC</p>
+                <p className="text-sm font-medium">{client.rnc}</p>
               </div>
             )}
             <div>
@@ -403,6 +410,10 @@ const ClienteDetail = () => {
             <div className="col-span-2">
               <Label>Dirección</Label>
               <Input value={editForm.address} onChange={(e) => uf("address", e.target.value)} />
+            </div>
+            <div>
+              <Label>RNC</Label>
+              <Input value={editForm.rnc} onChange={(e) => uf("rnc", e.target.value)} placeholder="Ej: 101-12345-6" />
             </div>
             <div>
               <Label>Estado</Label>

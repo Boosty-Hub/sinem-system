@@ -19,6 +19,7 @@ interface ClientForm {
   contactPhone: string;
   industry: string;
   address: string;
+  rnc: string;
   status: "activo" | "inactivo";
 }
 
@@ -87,7 +88,7 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
   const handleSave = () => {
     const valMap: Record<string, any> = {
       name: form.name, industry: form.industry, status: form.status,
-      address: form.address, contacts: selectedContactIds.length > 0 ? "ok" : "",
+      address: form.address, rnc: form.rnc, contacts: selectedContactIds.length > 0 ? "ok" : "",
     };
     const missing = reqFields.filter((f) => f.isRequired && !valMap[f.fieldKey]?.toString().trim());
     if (missing.length > 0) {
@@ -161,6 +162,10 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
           <div className="col-span-2">
             <Label>Dirección</Label>
             <Input value={form.address} onChange={(e) => u("address", e.target.value)} placeholder="Dirección completa" />
+          </div>
+          <div className="col-span-2">
+            <Label>RNC</Label>
+            <Input value={form.rnc} onChange={(e) => u("rnc", e.target.value)} placeholder="Ej: 101-12345-6" />
           </div>
         </div>
 
