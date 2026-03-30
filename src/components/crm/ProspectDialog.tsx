@@ -179,7 +179,9 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
         if (ct) return `contact:${ct.id}`;
         return "none";
       })());
-      setProveedor(prospect?.proveedor ?? "Siemens");
+      const savedProv = prospect?.proveedor || "";
+      const matchedProv = partners.find((p) => p.toLowerCase() === savedProv.toLowerCase());
+      setProveedor(matchedProv ?? savedProv);
       setBu(prospect?.bu ?? "");
       setProduct(prospect?.product ?? "");
       setStatus(prospect?.status ?? "prospecto");
@@ -525,6 +527,9 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                 {partners.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
+                {proveedor && !partners.includes(proveedor) && (
+                  <SelectItem value={proveedor}>{proveedor}</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
