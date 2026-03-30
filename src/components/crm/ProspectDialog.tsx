@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { usePartners } from "@/hooks/usePartners";
 import { useBusinessUnits } from "@/hooks/useBusinessUnits";
+import { useRequiredFields } from "@/hooks/useRequiredFields";
+import { useToast } from "@/hooks/use-toast";
 import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp, X, Search } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Link, useNavigate } from "react-router-dom";
@@ -40,6 +42,8 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const stageList = stagesProp ?? PIPELINE_STAGES;
   const isEdit = !!prospect;
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { isRequired, fields: reqFields } = useRequiredFields("oportunidad");
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [appUsers, setAppUsers] = useState<{ id: string; name: string; avatarUrl: string }[]>([]);
@@ -312,6 +316,17 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   };
 
   const handleSave = async () => {
+    // Validate required fields
+    const valMap: Record<string, any> = {
+      code, projectName, directCustomer: primaryClient?.name ?? "", endCustomer,
+      proveedor, bu, product, status, assignedTo: assignedTo === "none" ? "" : assignedTo,
+      scope, costUSD, priceUSD, go, get: get_, estimatedOE, comments,
+    };
+    const missing = reqFields.filter((f) => f.isRequired && !valMap[f.fieldKey]?.toString().trim());
+    if (missing.length > 0) {
+      toast({ title: "Campos obligatorios", description: missing.map((f) => f.fieldLabel).join(", "), variant: "destructive" });
+      return;
+    }
     if (!projectName.trim()) return;
     const directCustomerName = primaryClient?.name ?? "";
     const saved: Prospect = {

@@ -23,6 +23,7 @@ import ConfigUsuarios from "./pages/configuracion/ConfigUsuarios";
 import ConfigRoles from "./pages/configuracion/ConfigRoles";
 import ConfigPermisos from "./pages/configuracion/ConfigPermisos";
 import ConfigGeneral from "./pages/configuracion/ConfigGeneral";
+import ConfigCamposObligatorios from "./pages/configuracion/ConfigCamposObligatorios";
 import OfertaPublica from "./pages/OfertaPublica";
 import Tareas from "./pages/Tareas";
 import Analitica from "./pages/Analitica";
@@ -68,6 +69,7 @@ const App = () => (
                   <Route path="roles" element={<ConfigRoles />} />
                   <Route path="permisos" element={<ConfigPermisos />} />
                   <Route path="general" element={<ConfigGeneral />} />
+                  <Route path="campos" element={<ConfigCamposObligatorios />} />
                 </Route>
               </Route>
             </Route>

@@ -150,6 +150,33 @@ const OfertaPublica = () => {
   const qPartner = quotation?.partner ?? "Siemens";
   const replacePartner = (text: string) => text.replace(/SIEMENS|Siemens|siemens/g, qPartner);
 
+  // Auto-download PDF when ?download=true (hooks must be before early returns)
+  const [searchParams] = useSearchParams();
+  const autoDownload = searchParams.get("download") === "true";
+  const [downloadTriggered, setDownloadTriggered] = useState(false);
+
+  const handleDownloadPDF = () => {
+    if (!contentRef.current || !quotation) return;
+    const opt = {
+      margin: [10, 15, 10, 15] as [number, number, number, number],
+      filename: `${quotation.code}.pdf`,
+      image: { type: "jpeg" as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: "mm" as const, format: "letter", orientation: "portrait" as const },
+    };
+    html2pdf().set(opt).from(contentRef.current).save();
+  };
+
+  useEffect(() => {
+    if (autoDownload && !downloadTriggered && contentRef.current && quotation) {
+      const timer = setTimeout(() => {
+        handleDownloadPDF();
+        setDownloadTriggered(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoDownload, downloadTriggered, quotation]);
+
   if (loadingSettings) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
@@ -165,34 +192,6 @@ const OfertaPublica = () => {
       </div>
     );
   }
-
-  // Auto-download PDF when ?download=true
-  const [searchParams] = useSearchParams();
-  const autoDownload = searchParams.get("download") === "true";
-  const [downloadTriggered, setDownloadTriggered] = useState(false);
-
-  useEffect(() => {
-    if (autoDownload && !downloadTriggered && contentRef.current && quotation) {
-      // Small delay to ensure content is fully rendered
-      const timer = setTimeout(() => {
-        handleDownloadPDF();
-        setDownloadTriggered(true);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [autoDownload, downloadTriggered, quotation]);
-
-  const handleDownloadPDF = () => {
-    if (!contentRef.current) return;
-    const opt = {
-      margin: [10, 15, 10, 15] as [number, number, number, number],
-      filename: `${quotation.code}.pdf`,
-      image: { type: "jpeg" as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "mm" as const, format: "letter", orientation: "portrait" as const },
-    };
-    html2pdf().set(opt).from(contentRef.current).save();
-  };
 
   const formatDateLong = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
@@ -338,7 +337,7 @@ const OfertaPublica = () => {
               {quotation.lineItems.map((item, i) => (
                 <tr key={item.id} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
                   <td style={{ padding: "9px 12px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
-                  <td style={{ padding: "9px 12px", fontSize: "12px" }}>{item.description}</td>
+                  <td style={{ padding: "9px 12px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                   <td style={{ padding: "9px 12px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
                   <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
                   <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>

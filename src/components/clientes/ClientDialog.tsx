@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Contact } from "@/lib/types";
 import { dbToContact } from "@/lib/supabaseMappers";
 import { useToast } from "@/hooks/use-toast";
+import { useRequiredFields } from "@/hooks/useRequiredFields";
 
 interface ClientForm {
   name: string;
@@ -35,6 +36,7 @@ const emptyNewContact = { firstName: "", lastName: "", email: "", phone: "", pos
 
 const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactIds, initialPrimaryContactId, onSave }: Props) => {
   const { toast } = useToast();
+  const { fields: reqFields } = useRequiredFields("cliente");
   const [form, setForm] = useState<ClientForm>(initialForm);
   const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
@@ -83,6 +85,15 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
   const makePrimary = (id: string) => setPrimaryContactId(id);
 
   const handleSave = () => {
+    const valMap: Record<string, any> = {
+      name: form.name, industry: form.industry, status: form.status,
+      address: form.address, contacts: selectedContactIds.length > 0 ? "ok" : "",
+    };
+    const missing = reqFields.filter((f) => f.isRequired && !valMap[f.fieldKey]?.toString().trim());
+    if (missing.length > 0) {
+      toast({ title: "Campos obligatorios", description: missing.map((f) => f.fieldLabel).join(", "), variant: "destructive" });
+      return;
+    }
     if (!form.name.trim() || selectedContactIds.length === 0) return;
     onSave(form, selectedContactIds, primaryContactId);
   };

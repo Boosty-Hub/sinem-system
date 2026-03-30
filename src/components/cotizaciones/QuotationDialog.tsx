@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
+import { useRequiredFields } from "@/hooks/useRequiredFields";
+import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import RichTextEditor from "@/components/RichTextEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -104,11 +107,15 @@ const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[
   );
 };
 
+const DRAFT_KEY = "sinem:quotation-draft";
+
 const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
   const { user: authUser } = useAuth();
   const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
   const [generalSettings] = useLocalStorage<GeneralSettings>("sinem:general-settings", DEFAULT_GENERAL_SETTINGS);
+  const { toast } = useToast();
+  const { isRequired: isFieldRequired, fields: reqFields } = useRequiredFields("cotizacion");
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -194,45 +201,93 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     return `${prefix}${next}-V${version}`;
   };
 
+  // Save draft to sessionStorage when closing a new quotation (not edit)
+  const saveDraft = () => {
+    if (isEdit) return;
+    const draft = {
+      code, subject, selectedProspectId, selectedClientId, selectedContactId,
+      clientData, lineItems, status, costUSD, marginPercent, marginUSD,
+      paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax,
+      validityDays, deliveryLocation, notes, applyItbis, itbisPercent,
+      currency, exchangeRate, isOriginalCurrency, partner, codeManuallyEdited,
+    };
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  };
+
+  const clearDraft = () => sessionStorage.removeItem(DRAFT_KEY);
+
   useEffect(() => {
     if (open) {
-      setLineItems(quotation?.lineItems ?? []);
-      setSelectedProspectId(quotation?.prospectId ?? prefill?.prospectId ?? "none");
-      setSelectedClientId(quotation?.clientId ?? prefill?.clientId ?? "none");
-      setSelectedContactId(quotation?.contactId ?? prefill?.contactId ?? "none");
-      setClientData(quotation?.client ?? emptyClientData);
       setHistoryOpen(false);
       setExpandedVersion(null);
-      setCodeManuallyEdited(false);
-      if (quotation) {
-        setCode(quotation.code);
-      } else {
-        setCode(""); // Will be generated after prospect/client selection
-      }
-      setStatus(quotation?.status ?? "borrador");
-      setCreatedAt(quotation?.createdAt ?? "");
-      setSubject(quotation?.subject ?? prefill?.subject ?? "");
-      setCostUSD(quotation?.costUSD ?? 0);
-      setMarginPercent(quotation?.marginPercent ?? 0);
-      setMarginUSD(quotation?.marginUSD ?? 0);
-      setPaymentTerms(quotation?.paymentTerms ?? "");
-      setDeliveryTerms(quotation?.deliveryTerms ?? "CIF");
-      setDeliveryWeeksMin(quotation?.deliveryWeeksMin ?? 0);
-      setDeliveryWeeksMax(quotation?.deliveryWeeksMax ?? 0);
-      setValidityDays(quotation?.validityDays ?? 30);
-      setDeliveryLocation(quotation?.deliveryLocation ?? "");
-      setNotes(quotation?.notes ?? "");
-      setApplyItbis(quotation?.applyItbis ?? true);
-      setItbisPercent(quotation?.itbisPercent ?? 18);
-      setCurrency(quotation?.currency ?? "USD");
-      setExchangeRate(quotation?.exchangeRate ?? 1);
-      setIsOriginalCurrency(quotation?.isOriginalCurrency ?? false);
-      setPartner(quotation?.partner ?? "Siemens");
 
-      // Auto-fill from prefill prospect
-      if (!quotation && prefill?.prospectId) {
-        fillFromProspect(prefill.prospectId);
+      if (quotation) {
+        // Editing existing quotation
+        setLineItems(quotation.lineItems);
+        setSelectedProspectId(quotation.prospectId ?? "none");
+        setSelectedClientId(quotation.clientId ?? "none");
+        setSelectedContactId(quotation.contactId ?? "none");
+        setClientData(quotation.client);
+        setCode(quotation.code);
+        setCodeManuallyEdited(false);
+        setStatus(quotation.status);
+        setCreatedAt(quotation.createdAt);
+        setSubject(quotation.subject);
+        setCostUSD(quotation.costUSD);
+        setMarginPercent(quotation.marginPercent);
+        setMarginUSD(quotation.marginUSD);
+        setPaymentTerms(quotation.paymentTerms);
+        setDeliveryTerms(quotation.deliveryTerms);
+        setDeliveryWeeksMin(quotation.deliveryWeeksMin);
+        setDeliveryWeeksMax(quotation.deliveryWeeksMax);
+        setValidityDays(quotation.validityDays);
+        setDeliveryLocation(quotation.deliveryLocation);
+        setNotes(quotation.notes);
+        setApplyItbis(quotation.applyItbis);
+        setItbisPercent(quotation.itbisPercent);
+        setCurrency(quotation.currency);
+        setExchangeRate(quotation.exchangeRate);
+        setIsOriginalCurrency(quotation.isOriginalCurrency ?? false);
+        setPartner(quotation.partner ?? "Siemens");
+      } else {
+        // New quotation — try restoring draft (only if no prefill)
+        const raw = !prefill ? sessionStorage.getItem(DRAFT_KEY) : null;
+        const d = raw ? JSON.parse(raw) : null;
+        setLineItems(d?.lineItems ?? []);
+        setSelectedProspectId(d?.selectedProspectId ?? prefill?.prospectId ?? "none");
+        setSelectedClientId(d?.selectedClientId ?? prefill?.clientId ?? "none");
+        setSelectedContactId(d?.selectedContactId ?? prefill?.contactId ?? "none");
+        setClientData(d?.clientData ?? emptyClientData);
+        setCode(d?.code ?? "");
+        setCodeManuallyEdited(d?.codeManuallyEdited ?? false);
+        setStatus(d?.status ?? "borrador");
+        setCreatedAt("");
+        setSubject(d?.subject ?? prefill?.subject ?? "");
+        setCostUSD(d?.costUSD ?? 0);
+        setMarginPercent(d?.marginPercent ?? 0);
+        setMarginUSD(d?.marginUSD ?? 0);
+        setPaymentTerms(d?.paymentTerms ?? "");
+        setDeliveryTerms(d?.deliveryTerms ?? "CIF");
+        setDeliveryWeeksMin(d?.deliveryWeeksMin ?? 0);
+        setDeliveryWeeksMax(d?.deliveryWeeksMax ?? 0);
+        setValidityDays(d?.validityDays ?? 30);
+        setDeliveryLocation(d?.deliveryLocation ?? "");
+        setNotes(d?.notes ?? "");
+        setApplyItbis(d?.applyItbis ?? true);
+        setItbisPercent(d?.itbisPercent ?? 18);
+        setCurrency(d?.currency ?? "USD");
+        setExchangeRate(d?.exchangeRate ?? 1);
+        setIsOriginalCurrency(d?.isOriginalCurrency ?? false);
+        setPartner(d?.partner ?? "Siemens");
+
+        // Auto-fill from prefill prospect (overrides draft)
+        if (prefill?.prospectId) {
+          fillFromProspect(prefill.prospectId);
+        }
       }
+    } else if (!open && !isEdit) {
+      // Dialog just closed for a new quotation — save draft
+      saveDraft();
     }
   }, [open, quotation, prefill]);
 
@@ -440,6 +495,24 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const handleSave = () => {
     if (!onSave) { onOpenChange(false); return; }
 
+    // Validate required fields
+    const valMap: Record<string, any> = {
+      subject, prospectId: selectedProspectId === "none" ? "" : selectedProspectId,
+      clientId: selectedClientId === "none" ? "" : selectedClientId,
+      contactId: selectedContactId === "none" ? "" : selectedContactId,
+      company: clientData.company, attention: clientData.attention,
+      email: clientData.email, phone: clientData.phone,
+      address: clientData.address, rnc: clientData.rnc,
+      lineItems: lineItems.length > 0 ? "ok" : "",
+      paymentTerms, deliveryTerms, deliveryWeeks: (deliveryWeeksMin || deliveryWeeksMax) ? "ok" : "",
+      validityDays: validityDays > 0 ? "ok" : "", deliveryLocation, notes,
+    };
+    const missing = reqFields.filter((f) => f.isRequired && !valMap[f.fieldKey]?.toString().trim());
+    if (missing.length > 0) {
+      toast({ title: "Campos obligatorios", description: missing.map((f) => f.fieldLabel).join(", "), variant: "destructive" });
+      return;
+    }
+
     if (isEdit && quotation) {
       // Show version prompt instead of auto-creating new version
       setShowVersionPrompt(true);
@@ -456,6 +529,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       history: [],
       approvalStatus: "pending",
     };
+    clearDraft();
     onSave(newQuotation);
     onOpenChange(false);
   };
@@ -470,6 +544,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       version: quotation.version,
       history: quotation.history,
     };
+    clearDraft();
     onSave(updated);
     setShowVersionPrompt(false);
     onOpenChange(false);
@@ -519,6 +594,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       version: newVersion,
       history: [...quotation.history, snapshot],
     };
+    clearDraft();
     onSave(updated);
     setShowVersionPrompt(false);
     onOpenChange(false);
@@ -745,12 +821,10 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   {lineItems.map((item) => (
                     <tr key={item.id} className="border-b last:border-0">
                       <td className="py-2 px-3">
-                        <Textarea
+                        <RichTextEditor
                           value={item.description}
-                          onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                          className="min-h-[32px] text-xs resize-y"
+                          onChange={(val) => updateItem(item.id, "description", val)}
                           placeholder="Descripción del ítem"
-                          rows={1}
                         />
                       </td>
                       <td className="py-2 px-3">
@@ -888,7 +962,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Forma de Pago</Label>
-                <Input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Ej: 50% anticipo, 50% contra entrega" />
+                <Textarea value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Ej: 50% anticipo, 50% contra entrega" rows={2} className="resize-y" />
               </div>
               <div>
                 <Label>Condiciones de Entrega (Incoterm)</Label>
@@ -915,7 +989,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               </div>
               <div>
                 <Label>Validez (días)</Label>
-                <Input type="number" value={validityDays} onChange={(e) => setValidityDays(Number(e.target.value) || 30)} />
+                <Input type="number" value={validityDays} onChange={(e) => setValidityDays(e.target.value === "" ? 0 : Number(e.target.value))} min={0} />
               </div>
               <div>
                 <Label>Lugar de Entrega</Label>
@@ -1000,7 +1074,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                               <tbody>
                                 {snap.lineItems.map((li, idx) => (
                                   <tr key={idx} className="border-b last:border-0">
-                                    <td className="py-1 px-2">{li.description}</td>
+                                    <td className="py-1 px-2" dangerouslySetInnerHTML={{ __html: li.description }} />
                                     <td className="py-1 px-2 text-center">{li.quantity}</td>
                                     <td className="py-1 px-2 text-right">${li.unitPriceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="py-1 px-2 text-right">${li.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>

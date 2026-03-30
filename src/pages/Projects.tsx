@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
+import { useRequiredFields } from "@/hooks/useRequiredFields";
 
 interface ProjectRow {
   id: string;
@@ -54,6 +55,7 @@ const emptyForm = {
 const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { fields: reqFields } = useRequiredFields("proyecto");
   const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
   const canCreateProj = canCreateFn("Proyectos");
   const canEditProj = canEditFn("Proyectos");
@@ -132,6 +134,15 @@ const Projects = () => {
   };
 
   const handleSave = async () => {
+    const valMap: Record<string, any> = {
+      name: form.name, client: form.client, value: form.value,
+      status: form.status, startDate: form.startDate,
+    };
+    const missingFields = reqFields.filter((f) => f.isRequired && !valMap[f.fieldKey]?.toString().trim());
+    if (missingFields.length > 0) {
+      toast({ title: "Campos obligatorios", description: missingFields.map((f) => f.fieldLabel).join(", "), variant: "destructive" });
+      return;
+    }
     if (!form.name.trim()) return;
     if (!editId && !form.prospectId) {
       toast({ title: "Selecciona una oportunidad ganada", variant: "destructive" });

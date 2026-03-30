@@ -1,16 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Client, Contact } from "@/lib/types";
 import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
-import { Search, Plus, Building2, Mail, Phone, Pencil, Trash2, Loader2, Upload } from "lucide-react";
+import { Search, Plus, Building2, Mail, Phone, Pencil, Trash2, Loader2, Upload, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import ClientImportDialog from "@/components/clientes/ClientImportDialog";
 import ClientDialog from "@/components/clientes/ClientDialog";
+
+type SortKey = "name" | "contactName" | "contactEmail" | "contactPhone" | "industry" | "status" | "totalProjects" | "totalRevenue" | "createdAt";
+type SortDir = "asc" | "desc";
 
 const emptyForm = {
   name: "",
@@ -22,8 +26,11 @@ const emptyForm = {
   status: "activo" as "activo" | "inactivo",
 };
 
+const PAGE_SIZE = 20;
+
 const Clientes = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
   const canCreateCli = canCreateFn("Clientes");
   const canEditCli = canEditFn("Clientes");
@@ -38,6 +45,10 @@ const Clientes = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [editContactIds, setEditContactIds] = useState<string[]>([]);
   const [editPrimaryContactId, setEditPrimaryContactId] = useState<string | undefined>(undefined);
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchClients = async () => {
     setLoading(true);
@@ -54,6 +65,44 @@ const Clientes = () => {
       c.contactName.toLowerCase().includes(search.toLowerCase()) ||
       c.industry.toLowerCase().includes(search.toLowerCase())
   );
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      let av: any = a[sortKey];
+      let bv: any = b[sortKey];
+      if (typeof av === "string") { av = av.toLowerCase(); bv = (bv as string).toLowerCase(); }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [filtered, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
+  const allOnPageSelected = paginated.length > 0 && paginated.every((c) => selectedIds.includes(c.id));
+  const toggleAll = () => {
+    if (allOnPageSelected) setSelectedIds((ids) => ids.filter((id) => !paginated.find((c) => c.id === id)));
+    else setSelectedIds((ids) => [...new Set([...ids, ...paginated.map((c) => c.id)])]);
+  };
+  const toggleOne = (id: string) => {
+    setSelectedIds((ids) => ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  };
+
+  // Reset page when search changes
+  useEffect(() => { setPage(1); }, [search]);
 
   const openCreate = () => {
     setEditId(null);
@@ -182,70 +231,106 @@ const Clientes = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((client) => (
-          <Link key={client.id} to={`/clientes/${client.id}`} className="stat-card group block">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-accent-foreground" />
-                </div>
-                <div>
-                  <h3 className="font-semibold group-hover:text-primary transition-colors">{client.name}</h3>
-                  <p className="text-xs text-muted-foreground">{client.industry}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                  client.status === "activo" ? "bg-sinem-success text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}>
-                  {client.status === "activo" ? "Activo" : "Inactivo"}
-                </span>
-                {canEditCli && (
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); openEdit(client); }}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {canDeleteCli && (
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(client); }}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 rounded-lg text-sm">
+          <span className="font-medium">{selectedIds.length} seleccionado{selectedIds.length > 1 ? "s" : ""}</span>
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setSelectedIds([])}>Deseleccionar</Button>
+        </div>
+      )}
 
-            <div className="space-y-1.5 mb-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Mail className="h-3 w-3" />
-                <span>{client.contactEmail}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Phone className="h-3 w-3" />
-                <span>{client.contactPhone}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-3 border-t border-border/40">
-              <div className="flex gap-4 text-xs">
-                <div>
-                  <span className="text-muted-foreground">Proyectos: </span>
-                  <span className="font-semibold">{client.totalProjects}</span>
-                </div>
-              </div>
-              <span className="text-xs font-semibold text-primary">
-                ${client.totalRevenue.toLocaleString()}
-              </span>
-            </div>
-          </Link>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-full text-center py-12 text-muted-foreground">
-            No se encontraron clientes
-          </div>
-        )}
+      <div className="stat-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30">
+              <th className="py-2.5 px-3 w-10">
+                <Checkbox checked={allOnPageSelected} onCheckedChange={toggleAll} />
+              </th>
+              {([
+                ["name", "Cliente"],
+                ["contactName", "Contacto"],
+                ["contactEmail", "Email"],
+                ["contactPhone", "Teléfono"],
+                ["industry", "Industria"],
+                ["totalProjects", "Proyectos"],
+                ["totalRevenue", "Ingresos"],
+                ["status", "Estado"],
+                ["createdAt", "Creado"],
+              ] as [SortKey, string][]).map(([key, label]) => (
+                <th key={key} className="py-2.5 px-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort(key)}>
+                  <span className="inline-flex items-center">{label}<SortIcon col={key} /></span>
+                </th>
+              ))}
+              <th className="py-2.5 px-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paginated.map((client) => (
+              <tr key={client.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => navigate(`/clientes/${client.id}`)}>
+                <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox checked={selectedIds.includes(client.id)} onCheckedChange={() => toggleOne(client.id)} />
+                </td>
+                <td className="py-3 px-3 font-medium">{client.name}</td>
+                <td className="py-3 px-3 text-muted-foreground">{client.contactName || "—"}</td>
+                <td className="py-3 px-3 text-muted-foreground">{client.contactEmail || "—"}</td>
+                <td className="py-3 px-3 text-muted-foreground">{client.contactPhone || "—"}</td>
+                <td className="py-3 px-3 text-muted-foreground">{client.industry || "—"}</td>
+                <td className="py-3 px-3 text-center">{client.totalProjects}</td>
+                <td className="py-3 px-3 text-right font-semibold text-primary">${client.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="py-3 px-3 text-center">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                    client.status === "activo" ? "bg-sinem-success text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {client.status === "activo" ? "Activo" : "Inactivo"}
+                  </span>
+                </td>
+                <td className="py-3 px-3 text-muted-foreground text-xs">{client.createdAt ? new Date(client.createdAt).toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
+                <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-center gap-0.5">
+                    {canEditCli && (
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(client)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {canDeleteCli && (
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => handleDelete(client)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {paginated.length === 0 && (
+              <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">No se encontraron clientes</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} de {sorted.length}</span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+              .map((p, idx, arr) => (
+                <span key={p}>
+                  {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1">…</span>}
+                  <Button variant={p === page ? "default" : "outline"} size="sm" className="h-8 w-8 p-0" onClick={() => setPage(p)}>
+                    {p}
+                  </Button>
+                </span>
+              ))}
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <ClientDialog
         open={dialogOpen}

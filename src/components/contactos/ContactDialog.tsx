@@ -8,6 +8,8 @@ import { Search, X, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToClient } from "@/lib/supabaseMappers";
 import type { Contact, Client } from "@/lib/types";
+import { useRequiredFields } from "@/hooks/useRequiredFields";
+import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   open: boolean;
@@ -30,6 +32,8 @@ const emptyForm = {
 
 const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
   const isEdit = !!contact;
+  const { toast } = useToast();
+  const { fields: reqFields } = useRequiredFields("contacto");
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [clientSearch, setClientSearch] = useState("");
@@ -84,6 +88,16 @@ const ContactDialog = ({ open, onOpenChange, contact, onSave }: Props) => {
   };
 
   const handleSave = () => {
+    const valMap: Record<string, any> = {
+      firstName: form.firstName, lastName: form.lastName, email: form.email,
+      phone: form.phone, position: form.position,
+      clientId: form.clientId === "none" ? "" : form.clientId,
+    };
+    const missing = reqFields.filter((f) => f.isRequired && !valMap[f.fieldKey]?.toString().trim());
+    if (missing.length > 0) {
+      toast({ title: "Campos obligatorios", description: missing.map((f) => f.fieldLabel).join(", "), variant: "destructive" });
+      return;
+    }
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) return;
     const saved: Contact = {
       id: contact?.id ?? crypto.randomUUID(),

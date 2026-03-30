@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
-import { FileText, Users, Shield, KeyRound, Settings, ArrowLeft, SlidersHorizontal } from "lucide-react";
+import { FileText, Users, Shield, KeyRound, Settings, ArrowLeft, SlidersHorizontal, CheckSquare } from "lucide-react";
 
 const configNav = [
   { title: "General", url: "/configuracion/general", icon: SlidersHorizontal },
   { title: "Propuestas / Ofertas", url: "/configuracion/propuestas", icon: FileText },
+  { title: "Campos Obligatorios", url: "/configuracion/campos", icon: CheckSquare },
   { title: "Usuarios", url: "/configuracion/usuarios", icon: Users },
   { title: "Roles", url: "/configuracion/roles", icon: Shield },
   { title: "Permisos", url: "/configuracion/permisos", icon: KeyRound },
