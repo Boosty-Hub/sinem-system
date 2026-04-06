@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 import { PROJECT_STEPS } from "@/lib/types";
-import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target } from "lucide-react";
+import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ interface ProjectRow {
   status: string;
   start_date: string | null;
   origin_prospect_id: string | null;
+  assigned_to: string | null;
 }
 
 interface WonProspect {
@@ -50,6 +51,7 @@ const emptyForm = {
   status: "activo",
   startDate: "",
   prospectId: "",
+  assignedTo: "",
 };
 
 const TOTAL_STEPS = 11;
@@ -82,6 +84,7 @@ const Projects = () => {
   const [deleteTarget, setDeleteTarget] = useState<ProjectRow | null>(null);
   const [wonProspects, setWonProspects] = useState<WonProspect[]>([]);
   const [prospectPopoverOpen, setProspectPopoverOpen] = useState(false);
+  const [appUsers, setAppUsers] = useState<{ id: string; name: string; avatarUrl: string }[]>([]);
 
   const progressMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -93,9 +96,14 @@ const Projects = () => {
 
   const fetchProjects = async () => {
     setLoading(true);
-    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date, origin_prospect_id").order("created_at", { ascending: false });
-    setAllProjects(data ?? []);
+    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date, origin_prospect_id, assigned_to").order("created_at", { ascending: false });
+    setAllProjects((data ?? []) as ProjectRow[]);
     setLoading(false);
+  };
+
+  const fetchAppUsers = async () => {
+    const { data } = await supabase.from("app_users").select("id, name, avatar_url").eq("status", "activo");
+    setAppUsers((data ?? []).map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatar_url })));
   };
 
   const fetchWonProspects = async () => {
@@ -116,7 +124,7 @@ const Projects = () => {
     setWonProspects((prospects ?? []).filter(p => !linkedSet.has(p.id)));
   };
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => { fetchProjects(); fetchAppUsers(); }, []);
 
   const projects = allProjects.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase())
@@ -126,6 +134,7 @@ const Projects = () => {
     setEditId(null);
     setForm(emptyForm);
     fetchWonProspects();
+    fetchAppUsers();
     setDialogOpen(true);
   };
 
@@ -139,7 +148,9 @@ const Projects = () => {
       status: project.status,
       startDate: project.start_date ?? "",
       prospectId: project.origin_prospect_id ?? "",
+      assignedTo: project.assigned_to ?? "",
     });
+    fetchAppUsers();
     setDialogOpen(true);
   };
 
@@ -179,6 +190,7 @@ const Projects = () => {
       start_date: form.startDate || null,
       origin_prospect_id: form.prospectId || null,
       client_id: selectedWonProspect?.client_id || null,
+      assigned_to: form.assignedTo || null,
     } as any;
     if (editId) {
       await supabase.from("projects").update(payload).eq("id", editId);
@@ -394,6 +406,20 @@ const Projects = () => {
             <div>
               <Label>Fecha de Inicio</Label>
               <Input type="date" value={form.startDate} onChange={(e) => u("startDate", e.target.value)} />
+            </div>
+            <div className="col-span-2">
+              <Label className="flex items-center gap-1.5">
+                <User className="h-4 w-4" /> Responsable de Ejecución
+              </Label>
+              <Select value={form.assignedTo} onValueChange={(v) => u("assignedTo", v)}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar responsable" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin asignar</SelectItem>
+                  {appUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
