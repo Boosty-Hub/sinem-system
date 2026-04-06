@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
 import {
   Search, Plus, ListTodo, LayoutGrid, Calendar, AlertCircle, Clock, CheckCircle2,
-  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2, Target, Check, ChevronsUpDown,
+  MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2, Target, Check, ChevronsUpDown, Settings2,
 } from "lucide-react";
+import TaskStagesDialog, { type TaskStage } from "@/components/tareas/TaskStagesDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,17 +64,26 @@ const Tareas = () => {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterProspect, setFilterProspect] = useState<string>("all");
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [stages, setStages] = useState<TaskStage[]>([]);
+  const [stagesDialogOpen, setStagesDialogOpen] = useState(false);
+
+  const fetchStages = async () => {
+    const { data } = await supabase.from("task_stages").select("*").order("position");
+    setStages((data ?? []) as TaskStage[]);
+  };
 
   const fetchData = async () => {
     setLoading(true);
-    const [{ data: tasksData }, { data: commentsData }, { data: clientsData }, { data: projectsData }, { data: usersData }, { data: prospectsData }] = await Promise.all([
+    const [{ data: tasksData }, { data: commentsData }, { data: clientsData }, { data: projectsData }, { data: usersData }, { data: prospectsData }, { data: stagesData }] = await Promise.all([
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
       supabase.from("task_comments").select("*").order("created_at"),
       supabase.from("clients").select("id, name").order("name"),
       supabase.from("projects").select("id, name").order("name"),
       supabase.from("app_users").select("id, name, email, status").eq("status", "activo").order("name"),
       supabase.from("prospects").select("id, code, project_name").order("code"),
+      supabase.from("task_stages").select("*").order("position"),
     ]);
+    setStages((stagesData ?? []) as TaskStage[]);
 
     const commentsByTask = new Map<string, TaskComment[]>();
     (commentsData ?? []).forEach((c) => {
@@ -92,10 +102,11 @@ const Tareas = () => {
       clientId: t.client_id ?? undefined,
       projectId: t.project_id ?? undefined,
       prospectId: (t as any).prospect_id ?? undefined,
+      stageId: (t as any).stage_id ?? undefined,
       dueDate: t.due_date ?? "",
       createdAt: t.created_at,
       comments: commentsByTask.get(t.id) ?? [],
-    })));
+    } as any)));
     setClients(clientsData ?? []);
     setProjects(projectsData ?? []);
     setProspects(prospectsData ?? []);
@@ -326,6 +337,9 @@ const Tareas = () => {
               <ListTodo className="h-4 w-4" />
             </Button>
           </div>
+          <Button size="sm" variant="outline" onClick={() => setStagesDialogOpen(true)}>
+            <Settings2 className="h-4 w-4 mr-1" /> Etapas
+          </Button>
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1" /> Nueva Tarea
           </Button>
@@ -333,18 +347,51 @@ const Tareas = () => {
       </div>
 
       {view === "board" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TASK_STATUSES.map((col) => {
-            const colTasks = filtered.filter((t) => t.status === col.key);
+        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${stages.length || 3}, minmax(280px, 1fr))` }}>
+          {(stages.length > 0 ? stages : TASK_STATUSES.map(s => ({ id: s.key, name: s.label, color: s.color, position: 0 }))).map((col) => {
+            const colTasks = filtered.filter((t) => {
+              if (stages.length > 0) {
+                return (t as any).stageId === col.id || (!((t as any).stageId) && col.position === 0 && t.status === "pendiente") || (!((t as any).stageId) && col.position === 1 && t.status === "en_progreso") || (!((t as any).stageId) && col.position === 2 && t.status === "completada");
+              }
+              return t.status === (col as any).id;
+            });
             return (
-              <div key={col.key} className="space-y-3">
+              <div 
+                key={col.id} 
+                className="space-y-3"
+                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("bg-muted/50"); }}
+                onDragLeave={(e) => { e.currentTarget.classList.remove("bg-muted/50"); }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove("bg-muted/50");
+                  const taskId = e.dataTransfer.getData("taskId");
+                  if (taskId && stages.length > 0) {
+                    await supabase.from("tasks").update({ stage_id: col.id }).eq("id", taskId);
+                    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, stageId: col.id } as any : t));
+                    toast({ title: `Tarea movida a ${col.name}` });
+                  } else if (taskId) {
+                    const newStatus = (col as any).id as TaskStatus;
+                    await supabase.from("tasks").update({ status: newStatus }).eq("id", taskId);
+                    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
+                  }
+                }}
+              >
                 <div className="flex items-center gap-2 px-1">
                   <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
-                  <h3 className="text-sm font-semibold">{col.label}</h3>
+                  <h3 className="text-sm font-semibold">{col.name}</h3>
                   <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">{colTasks.length}</span>
                 </div>
-                <div className="space-y-2 min-h-[100px]">
-                  {colTasks.map((task) => <TaskCard key={task.id} task={task} />)}
+                <div className="space-y-2 min-h-[100px] rounded-lg p-1 transition-colors">
+                  {colTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      draggable
+                      onDragStart={(e) => { e.dataTransfer.setData("taskId", task.id); e.currentTarget.classList.add("opacity-50"); }}
+                      onDragEnd={(e) => { e.currentTarget.classList.remove("opacity-50"); }}
+                    >
+                      <TaskCard task={task} />
+                    </div>
+                  ))}
                   {colTasks.length === 0 && (
                     <div className="border border-dashed border-border rounded-xl p-6 text-center">
                       <p className="text-xs text-muted-foreground">Sin tareas</p>
@@ -622,6 +669,12 @@ const Tareas = () => {
         title="Eliminar Tarea"
         description={`¿Estás seguro de eliminar "${deleteTarget?.title}"? Esta acción no se puede deshacer.`}
         onConfirm={confirmDelete}
+      />
+
+      <TaskStagesDialog
+        open={stagesDialogOpen}
+        onOpenChange={setStagesDialogOpen}
+        onStagesUpdated={fetchStages}
       />
     </div>
   );

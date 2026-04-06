@@ -1171,6 +1171,33 @@ export type Database = {
           },
         ]
       }
+      task_stages: {
+        Row: {
+          id: string
+          name: string
+          color: string
+          position: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          color?: string
+          position?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          color?: string
+          position?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           assignee: string
@@ -1182,6 +1209,7 @@ export type Database = {
           priority: string
           project_id: string | null
           prospect_id: string | null
+          stage_id: string | null
           status: string
           title: string
           updated_at: string
@@ -1196,6 +1224,7 @@ export type Database = {
           priority?: string
           project_id?: string | null
           prospect_id?: string | null
+          stage_id?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -1210,6 +1239,7 @@ export type Database = {
           priority?: string
           project_id?: string | null
           prospect_id?: string | null
+          stage_id?: string | null
           status?: string
           title?: string
           updated_at?: string
