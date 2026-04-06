@@ -133,7 +133,7 @@ const Cotizaciones = () => {
       currency: q.currency as any,
       exchangeRate: Number(q.exchange_rate),
       isOriginalCurrency: (q as any).is_original_currency ?? false,
-      partner: "Siemens",
+      partner: (q as any).partner ?? "Siemens",
     })));
     setLoading(false);
   };
@@ -225,6 +225,7 @@ const Cotizaciones = () => {
       currency: updated.currency ?? "USD",
       exchange_rate: updated.exchangeRate ?? 1,
       is_original_currency: updated.isOriginalCurrency ?? false,
+      partner: updated.partner ?? "Siemens",
       created_by: appUserId,
     };
 

@@ -994,6 +994,7 @@ export type Database = {
           margin_percent: number
           margin_usd: number
           notes: string
+          partner: string
           payment_terms: string
           prospect_id: string | null
           status: string
@@ -1034,6 +1035,7 @@ export type Database = {
           margin_percent?: number
           margin_usd?: number
           notes?: string
+          partner?: string
           payment_terms?: string
           prospect_id?: string | null
           status?: string
@@ -1074,6 +1076,7 @@ export type Database = {
           margin_percent?: number
           margin_usd?: number
           notes?: string
+          partner?: string
           payment_terms?: string
           prospect_id?: string | null
           status?: string
