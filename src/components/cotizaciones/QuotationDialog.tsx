@@ -156,7 +156,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   // Resolve current auth user to app_users id
   useEffect(() => {
     if (!authUser) return;
-    supabase.from("app_users").select("id").eq("auth_user_id", authUser.id).single()
+    supabase.from("app_users").select("id").eq("auth_user_id", authUser.id).maybeSingle()
       .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
   }, [authUser]);
 
@@ -1163,7 +1163,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       onSave({
                         ...quotation,
                         approvalStatus: "approved",
-                        approvedBy: currentAppUserId ?? undefined,
+                        approvedBy: authUser?.id ?? undefined,
                         approvedAt: new Date().toISOString().split("T")[0],
                       });
                       onOpenChange(false);
@@ -1182,7 +1182,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       onSave({
                         ...quotation,
                         approvalStatus: "rejected",
-                        approvedBy: currentAppUserId ?? undefined,
+                        approvedBy: authUser?.id ?? undefined,
                         approvedAt: new Date().toISOString().split("T")[0],
                         approvalNote: note || undefined,
                       });

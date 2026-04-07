@@ -221,7 +221,9 @@ const Cotizaciones = () => {
       approval_status: updated.approvalStatus ?? "pending",
       approval_note: updated.approvalNote ?? null,
       approved_by: updated.approvedBy ?? null,
-      approved_at: updated.approvedAt ?? null,
+      approved_at: updated.approvedAt 
+        ? (updated.approvedAt.includes("T") ? updated.approvedAt : `${updated.approvedAt}T00:00:00Z`) 
+        : null,
       currency: updated.currency ?? "USD",
       exchange_rate: updated.exchangeRate ?? 1,
       is_original_currency: updated.isOriginalCurrency ?? false,

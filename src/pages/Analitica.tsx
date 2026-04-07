@@ -39,11 +39,11 @@ const BAR_INFO: Record<string, { label: string; description: string }> = {
   },
   current: {
     label: "Current",
-    description: "Total de oportunidades ganadas en el año en curso. Se calcula sumando el priceUSD de todas las oportunidades con status 'ganado'.",
+    description: "Total de oportunidades ganadas con Estimated OE en el año en curso. Se calcula sumando el priceUSD de las oportunidades con status 'ganado' o 'facturada' cuyo Estimated OE corresponde al año actual.",
   },
   forecast: {
     label: "Forecast",
-    description: "Suma del peso (weighted = priceUSD × probabilidad) de todas las oportunidades abiertas (no ganadas ni perdidas). Representa el valor esperado del pipeline.",
+    description: "Suma del peso (weighted = priceUSD × probabilidad) de las oportunidades con Estimated OE del año en curso (prospecto, propuesta, seguimiento y ganado). Representa el valor esperado del pipeline para el año.",
   },
   budget: {
     label: "Budget",
@@ -146,52 +146,103 @@ const Analitica = () => {
   const currentYear = budget.year;
   const previousYear = currentYear - 1;
 
+  // Helper to extract year from estimatedOE (format: "YYYY-MM" or "YYYY-MM-DD" or just "YYYY")
+  const getEstimatedOEYear = (estimatedOE: string | undefined): number | null => {
+    if (!estimatedOE) return null;
+    const match = estimatedOE.match(/^(\d{4})/);
+    return match ? parseInt(match[1], 10) : null;
+  };
+
   // ── Order Entry data ──
-  const wonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
+  // Filter won deals by estimatedOE year for "Current" (only current year)
+  const allWonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
+  const wonDeals = allWonDeals.filter((p) => {
+    const oeYear = getEstimatedOEYear(p.estimatedOE);
+    return oeYear === currentYear;
+  });
   const wonTotal = wonDeals.reduce((s, p) => s + p.priceUSD, 0);
-  const openProspects = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
-  const forecastWeighted = openProspects.reduce((s, p) => s + p.weighted, 0);
+  
+  // Forecast: includes prospecto, propuesta, seguimiento, ganado (not perdido, not facturada)
+  // Filter by estimatedOE year = current year
+  const forecastProspects = prospects.filter((p) => {
+    if (p.status === "perdido" || p.status === "facturada") return false;
+    const oeYear = getEstimatedOEYear(p.estimatedOE);
+    return oeYear === currentYear;
+  });
+  const forecastWeighted = forecastProspects.reduce((s, p) => s + p.weighted, 0);
 
   const orderEntryData = [
     { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearWon, fill: BAR_COLORS.previousYear, description: BAR_INFO.previousYear.description, details: [] },
-    { name: "Current", label: "Current", value: wonTotal, fill: BAR_COLORS.current, description: BAR_INFO.current.description, details: wonDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
-    { name: "Forecast", label: "Forecast", value: forecastWeighted, fill: BAR_COLORS.forecast, description: BAR_INFO.forecast.description, details: openProspects.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
+    { name: `${currentYear}`, label: `${currentYear}`, value: wonTotal, fill: BAR_COLORS.current, description: BAR_INFO.current.description, details: wonDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
+    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: forecastWeighted, fill: BAR_COLORS.forecast, description: BAR_INFO.forecast.description, details: forecastProspects.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.annualTarget, fill: BAR_COLORS.budget, description: BAR_INFO.budget.description, details: [] },
   ];
   const maxBarValue = Math.max(...orderEntryData.map((d) => d.value), 1);
 
   // ── Revenue data ──
+  // Helper to extract year from revenue date (format: "YYYY-MM" or "YYYY-MM-DD" or just "YYYY")
+  const getRevenueYear = (revenue: string | undefined): number | null => {
+    if (!revenue) return null;
+    const match = revenue.match(/^(\d{4})/);
+    return match ? parseInt(match[1], 10) : null;
+  };
+
   const invoicedDeals = prospects.filter((p) => p.status === "facturada");
   const invoicedTotal = invoicedDeals.reduce((s, p) => s + p.priceUSD, 0);
-  const revenueForecastDeals = prospects.filter((p) => p.revenue && p.status !== "facturada" && p.status !== "perdido");
-  const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.priceUSD, 0);
+  
+  // Forecast: includes prospecto, propuesta, seguimiento, ganado (not perdido, not facturada)
+  // Filter by revenue year = current year
+  const revenueForecastDeals = prospects.filter((p) => {
+    if (p.status === "perdido" || p.status === "facturada") return false;
+    const revYear = getRevenueYear(p.revenue);
+    return revYear === currentYear;
+  });
+  const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.weighted, 0);
 
   const revenueData = [
     { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearRevenue, fill: "#67e8f9", description: "Revenue facturado del año anterior.", details: [] },
-    { name: "Current", label: "Current", value: invoicedTotal, fill: "#06b6d4", description: "Total de oportunidades marcadas como facturadas en el año en curso.", details: invoicedDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
-    { name: "Forecast", label: "Forecast", value: revenueForecastTotal, fill: "#0891b2", description: "Oportunidades con fecha de revenue que aún no han sido facturadas.", details: revenueForecastDeals.sort((a, b) => b.priceUSD - a.priceUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
+    { name: `${currentYear}`, label: `${currentYear}`, value: invoicedTotal, fill: "#06b6d4", description: "Total de oportunidades marcadas como facturadas en el año en curso.", details: invoicedDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
+    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: revenueForecastTotal, fill: "#0891b2", description: `Suma ponderada (priceUSD × probabilidad) de oportunidades con fecha de revenue en ${currentYear}.`, details: revenueForecastDeals.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.revenueBudget, fill: "#6d28d9", description: "Meta de revenue estipulada para el año.", details: [] },
   ];
   const maxRevenueValue = Math.max(...revenueData.map((d) => d.value), 1);
 
   // ── Operative Margin data ──
-  const marginWonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
+  // Current: ganadas/facturadas con estimatedOE del año en curso
+  const marginWonDeals = prospects.filter((p) => {
+    if (p.status !== "ganado" && p.status !== "facturada") return false;
+    const oeYear = getEstimatedOEYear(p.estimatedOE);
+    return oeYear === currentYear;
+  });
   const marginWonTotal = marginWonDeals.reduce((s, p) => s + p.marginUSD, 0);
-  const marginOpenDeals = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
-  const marginForecastTotal = marginOpenDeals.reduce((s, p) => s + p.marginUSD, 0);
+  
+  // Forecast: prospecto, propuesta, seguimiento, ganado (not perdido, not facturada) con revenue del año en curso
+  const marginForecastDeals = prospects.filter((p) => {
+    if (p.status === "perdido" || p.status === "facturada") return false;
+    const revYear = getRevenueYear(p.revenue);
+    return revYear === currentYear;
+  });
+  const marginForecastTotal = marginForecastDeals.reduce((s, p) => s + p.marginUSD, 0);
 
   const marginData = [
     { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearMargin, fill: "#67e8f9", description: "Margen operativo total de oportunidades ganadas del año anterior.", details: [] },
-    { name: "Current", label: "Current", value: marginWonTotal, fill: "#06b6d4", description: "Suma del margen USD de todas las oportunidades ganadas/facturadas en el año en curso.", details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
-    { name: "Forecast", label: "Forecast", value: marginForecastTotal, fill: "#0891b2", description: "Suma del margen USD de oportunidades abiertas (no ganadas ni perdidas).", details: marginOpenDeals.sort((a, b) => b.marginUSD - a.marginUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
+    { name: `${currentYear}`, label: `${currentYear}`, value: marginWonTotal, fill: "#06b6d4", description: `Suma del margen USD de oportunidades ganadas/facturadas con Estimated OE en ${currentYear}.`, details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
+    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: marginForecastTotal, fill: "#0891b2", description: `Suma del margen USD de oportunidades con fecha de revenue en ${currentYear} (prospecto, propuesta, seguimiento, ganado).`, details: marginForecastDeals.sort((a, b) => b.marginUSD - a.marginUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.marginBudget, fill: "#6d28d9", description: "Meta de margen operativo estipulada para el año.", details: [] },
   ];
   const maxMarginValue = Math.max(...marginData.map((d) => d.value), 1);
 
   // ── Pipeline KPIs ──
-  const pipelineEnCurso = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
+  // Pipeline en curso: solo prospectos, propuesta y seguimiento (sin importar año)
+  const pipelineEnCurso = prospects.filter((p) => 
+    ["prospecto", "propuesta", "seguimiento"].includes(p.status)
+  );
   const totalPipeline = pipelineEnCurso.reduce((s, p) => s + p.priceUSD, 0);
-  const openForWeighted = prospects.filter((p) => !["ganado", "facturada", "perdido"].includes(p.status));
+  
+  // Ponderado: solo prospectos, propuesta y seguimiento (sin importar año)
+  const openForWeighted = prospects.filter((p) => 
+    ["prospecto", "propuesta", "seguimiento"].includes(p.status)
+  );
   const totalWeighted = openForWeighted.reduce((s, p) => s + p.weighted, 0);
   const wonMarginTotal = wonDeals.reduce((s, p) => s + p.marginUSD, 0);
   const wonAvgMarginPct = wonDeals.length > 0 ? Math.round(wonDeals.reduce((s, p) => s + p.marginPercent, 0) / wonDeals.length) : 0;
@@ -335,8 +386,8 @@ const Analitica = () => {
             <TooltipContent side="right" className="max-w-[340px] p-3 space-y-2 text-xs leading-relaxed">
               <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
               <div><strong className="text-sky-400">{previousYear}:</strong> {BAR_INFO.previousYear.description}</div>
-              <div><strong className="text-cyan-500">Current:</strong> {BAR_INFO.current.description}</div>
-              <div><strong className="text-sky-500">Forecast:</strong> {BAR_INFO.forecast.description}</div>
+              <div><strong className="text-cyan-500">{currentYear}:</strong> {BAR_INFO.current.description}</div>
+              <div><strong className="text-sky-500">Forecast {currentYear}:</strong> {BAR_INFO.forecast.description}</div>
               <div><strong className="text-violet-600">Budget {currentYear}:</strong> {BAR_INFO.budget.description}</div>
             </TooltipContent>
           </Tooltip>

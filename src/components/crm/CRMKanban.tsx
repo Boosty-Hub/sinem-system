@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PIPELINE_STAGES, type Prospect, type PipelineStage } from "@/lib/types";
-import { DollarSign, FileText, GripVertical, MessageSquareText, Receipt } from "lucide-react";
+import { DollarSign, FileText, GripVertical, MessageSquareText, Receipt, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/UserAvatar";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,6 +75,11 @@ const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prosp
       {prospect.code && (
         <p className="text-[10px] font-mono font-semibold text-primary mb-1">{prospect.code}</p>
       )}
+      {prospect.status === "facturada" && (
+        <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-700 text-white px-2 py-0.5 rounded-full mb-1">
+          <CheckCircle2 className="h-2.5 w-2.5" /> Facturada
+        </span>
+      )}
       <p className="text-sm font-medium mb-1 leading-snug pr-5">{prospect.projectName}</p>
       <p className="text-xs text-muted-foreground mb-2">{prospect.directCustomer}</p>
       <div className="flex items-center justify-between">
@@ -116,6 +121,11 @@ const CardContent = ({ prospect, onActivity, onMarkInvoiced }: { prospect: Prosp
         >
           <Receipt className="h-3 w-3" /> Marcar Facturada
         </Button>
+      )}
+      {prospect.status === "facturada" && (
+        <div className="mt-2 text-[10px] text-emerald-700 font-medium text-center">
+          ✓ Facturada{prospect.invoicedAt ? ` el ${prospect.invoicedAt}` : ""}
+        </div>
       )}
     </>
   );
@@ -231,8 +241,11 @@ const CRMKanban = ({ prospects, onEdit, onStageChange, onActivity, stages: stage
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {stageList.map((stage) => {
-          const items = prospects.filter((p) => p.status === stage.key);
+        {stageList.filter((stage) => stage.key !== "facturada").map((stage) => {
+          // For "ganado" column, include both ganado AND facturada prospects
+          const items = stage.key === "ganado"
+            ? prospects.filter((p) => p.status === "ganado" || p.status === "facturada")
+            : prospects.filter((p) => p.status === stage.key);
           const total = items.reduce((s, p) => s + p.priceUSD, 0);
           return (
             <div key={stage.key} className="pipeline-column flex-shrink-0">
