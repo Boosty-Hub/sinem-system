@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 import { PROJECT_STEPS } from "@/lib/types";
-import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target, User } from "lucide-react";
+import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target, User, Filter, X } from "lucide-react";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ interface ProjectRow {
   start_date: string | null;
   origin_prospect_id: string | null;
   assigned_to: string | null;
+  code?: string;
 }
 
 interface WonProspect {
@@ -85,6 +87,11 @@ const Projects = () => {
   const [wonProspects, setWonProspects] = useState<WonProspect[]>([]);
   const [prospectPopoverOpen, setProspectPopoverOpen] = useState(false);
   const [appUsers, setAppUsers] = useState<{ id: string; name: string; avatarUrl: string }[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useLocalStorage("sinem:projects:filterStatus", "all");
+  const [filterClient, setFilterClient] = useLocalStorage("sinem:projects:filterClient", "all");
+  const [filterResponsible, setFilterResponsible] = useLocalStorage("sinem:projects:filterResponsible", "all");
+  const [filterStep, setFilterStep] = useLocalStorage("sinem:projects:filterStep", "all");
 
   const progressMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -96,8 +103,20 @@ const Projects = () => {
 
   const fetchProjects = async () => {
     setLoading(true);
-    const { data } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date, origin_prospect_id, assigned_to").order("created_at", { ascending: false });
-    setAllProjects((data ?? []) as ProjectRow[]);
+    const { data: projectsData } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date, origin_prospect_id, assigned_to").order("created_at", { ascending: false });
+    
+    // Fetch prospect codes for projects with origin_prospect_id
+    const prospectIds = (projectsData ?? []).map(p => p.origin_prospect_id).filter(Boolean);
+    let prospectCodes: Record<string, string> = {};
+    if (prospectIds.length > 0) {
+      const { data: prospects } = await supabase.from("prospects").select("id, code").in("id", prospectIds);
+      prospectCodes = (prospects ?? []).reduce((acc, p) => ({ ...acc, [p.id]: p.code }), {});
+    }
+    
+    setAllProjects((projectsData ?? []).map(p => ({
+      ...p,
+      code: p.origin_prospect_id ? prospectCodes[p.origin_prospect_id] : undefined,
+    })) as ProjectRow[]);
     setLoading(false);
   };
 
@@ -126,9 +145,30 @@ const Projects = () => {
 
   useEffect(() => { fetchProjects(); fetchAppUsers(); }, []);
 
-  const projects = allProjects.filter(
-    (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.client.toLowerCase().includes(search.toLowerCase())
-  );
+  // Unique values for filters
+  const uniqueClients = useMemo(() => [...new Set(allProjects.map((p) => p.client).filter(Boolean))].sort(), [allProjects]);
+
+  const activeFilterCount = [filterStatus !== "all", filterClient !== "all", filterResponsible !== "all", filterStep !== "all"].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setFilterStatus("all");
+    setFilterClient("all");
+    setFilterResponsible("all");
+    setFilterStep("all");
+  };
+
+  const projects = allProjects.filter((p) => {
+    const s = search.toLowerCase();
+    const matchSearch = !search ||
+      p.name.toLowerCase().includes(s) ||
+      p.client.toLowerCase().includes(s) ||
+      (p.code?.toLowerCase().includes(s) ?? false);
+    const matchStatus = filterStatus === "all" || p.status === filterStatus;
+    const matchClient = filterClient === "all" || p.client === filterClient;
+    const matchResponsible = filterResponsible === "all" || p.assigned_to === filterResponsible;
+    const matchStep = filterStep === "all" || String(p.current_step) === filterStep;
+    return matchSearch && matchStatus && matchClient && matchResponsible && matchStep;
+  });
 
   const openCreate = () => {
     setEditId(null);
@@ -239,6 +279,19 @@ const Projects = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar proyecto..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-[240px]" />
           </div>
+          <Button
+            variant={filtersOpen || activeFilterCount > 0 ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="relative"
+          >
+            <Filter className="h-4 w-4 mr-1" /> Filtros
+            {activeFilterCount > 0 && (
+              <span className="ml-1 bg-white text-primary rounded-full w-4 h-4 text-[10px] font-bold flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
           {canCreateProj && (
             <Button size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4 mr-1" /> Nuevo Proyecto
@@ -246,6 +299,70 @@ const Projects = () => {
           )}
         </div>
       </div>
+
+      {/* ── Filter Bar ── */}
+      {filtersOpen && (
+        <div className="stat-card p-4 space-y-3 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filtros</h3>
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 text-xs text-muted-foreground">
+                <X className="h-3 w-3 mr-1" /> Limpiar filtros
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Estado</label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="activo">Activo</SelectItem>
+                  <SelectItem value="completado">Completado</SelectItem>
+                  <SelectItem value="pausado">Pausado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Cliente</label>
+              <Select value={filterClient} onValueChange={setFilterClient}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {uniqueClients.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Responsable</label>
+              <Select value={filterResponsible} onValueChange={setFilterResponsible}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {appUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Paso Actual</label>
+              <Select value={filterStep} onValueChange={setFilterStep}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {PROJECT_STEPS.map((s) => (
+                    <SelectItem key={s.number} value={String(s.number)}>{s.number}. {s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -272,8 +389,11 @@ const Projects = () => {
               return (
                 <tr key={project.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => navigate(`/projects/${project.id}`)}>
                   <td className="py-3 px-4">
-                    <Link to={`/projects/${project.id}`} className="font-medium hover:text-primary transition-colors">
-                      {project.name}
+                    <Link to={`/projects/${project.id}`} className="hover:text-primary transition-colors">
+                      {project.code && (
+                        <span className="text-xs text-muted-foreground font-mono mr-2">{project.code}</span>
+                      )}
+                      <span className="font-medium">{project.name}</span>
                     </Link>
                   </td>
                   <td className="py-3 px-4 text-muted-foreground">{project.client}</td>
