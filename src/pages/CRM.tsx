@@ -406,10 +406,16 @@ const CRM = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">CRM Pipeline</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {filtered.length} oportunidades · Pipeline: <span className="font-semibold text-foreground">${totalPipeline.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            {" · "}Ponderado: <span className="font-semibold text-foreground">${totalWeighted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+            <span className="text-xs text-muted-foreground">{filtered.length} oportunidades</span>
+            <span className="text-muted-foreground/40 text-xs">·</span>
+            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+              Pipeline: ${totalPipeline.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium">
+              Ponderado: ${totalWeighted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

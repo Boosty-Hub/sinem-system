@@ -265,7 +265,7 @@ const ClienteDetail = () => {
                       <p className="text-sm font-medium group-hover:text-primary transition-colors">{proj.name}</p>
                       <p className="text-xs text-muted-foreground">Paso {proj.current_step}/11</p>
                     </div>
-                    <span className="text-xs font-semibold text-primary">${Number(proj.value).toLocaleString()}</span>
+                    <span className="text-xs font-semibold text-primary">${Number(proj.value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </Link>
               ))}
@@ -279,7 +279,7 @@ const ClienteDetail = () => {
           <h2 className="font-semibold mb-4">Resumen</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-2xl font-bold text-primary">${client.totalRevenue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-primary">${client.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               <p className="text-xs text-muted-foreground">Revenue Total</p>
             </div>
             <div>
@@ -307,7 +307,7 @@ const ClienteDetail = () => {
           <div>
             <h2 className="font-semibold">Ofertas</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {offers.length} ofertas · Total: ${totalOffersValue.toLocaleString()}
+              {offers.length} ofertas · Total: ${totalOffersValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
           <Button onClick={() => { setSelectedOffer(null); setDialogOpen(true); }} size="sm">
@@ -343,8 +343,8 @@ const ClienteDetail = () => {
                     </td>
                     <td className="py-3 px-4 font-medium">{offer.project_name}</td>
                     <td className="py-3 px-4 text-muted-foreground text-xs max-w-[200px] truncate">{offer.items}</td>
-                    <td className="py-3 px-4 text-right">${Number(offer.cost_usd).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-primary">${Number(offer.price_usd).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right">${Number(offer.cost_usd).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-primary">${Number(offer.price_usd).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="py-3 px-4 text-right">
                       <span className="text-sinem-success font-medium">{Number(offer.margin_percent)}%</span>
                     </td>

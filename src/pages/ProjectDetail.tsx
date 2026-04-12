@@ -35,6 +35,32 @@ const STEP_SUBFOLDERS: Record<number, { key: string; label: string }[]> = {
   ],
 };
 
+/**
+ * Sanitize a filename so it is safe for Supabase Storage paths.
+ * Removes accents, replaces % and other unsafe chars, collapses spaces.
+ * The original display name is stored separately and is untouched.
+ */
+const sanitizeStorageName = (name: string): string => {
+  const lastDot = name.lastIndexOf(".");
+  const ext = lastDot >= 0 ? name.slice(lastDot) : "";
+  const base = lastDot >= 0 ? name.slice(0, lastDot) : name;
+
+  const safePart = base
+    .normalize("NFD")                     // decompose: é → e + combining accent
+    .replace(/[\u0300-\u036f]/g, "")      // strip combining diacritical marks
+    .replace(/%/g, "pct")                 // % → pct (avoids URL encoding issues)
+    .replace(/[^a-zA-Z0-9._\-]/g, "_")   // anything else unsafe → _
+    .replace(/_+/g, "_")                  // collapse repeated underscores
+    .replace(/^_+|_+$/g, "");             // trim leading/trailing underscores
+
+  const safeExt = ext
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9.]/g, "_");
+
+  return (safePart || "archivo") + safeExt;
+};
+
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -122,7 +148,8 @@ const ProjectDetail = () => {
       const docId = crypto.randomUUID();
       const hasSubfolders = !!STEP_SUBFOLDERS[activeStep];
       const subPath = hasSubfolders ? `${activeSubfolder}/` : "";
-      const storagePath = `${id}/step-${activeStep}/${subPath}${docId}-${file.name}`;
+      const safeName = sanitizeStorageName(file.name);
+      const storagePath = `${id}/step-${activeStep}/${subPath}${docId}-${safeName}`;
       const { error } = await supabase.storage.from("project-files").upload(storagePath, file);
       if (error) {
         toast({ title: `Error al subir ${file.name}`, description: error.message, variant: "destructive" });
@@ -130,7 +157,7 @@ const ProjectDetail = () => {
       }
       newDocs.push({
         id: docId,
-        name: file.name,
+        name: file.name,  // keep original display name with accents/special chars
         size: file.size,
         type: file.type || "application/octet-stream",
         uploadedAt: new Date().toISOString(),
@@ -150,7 +177,7 @@ const ProjectDetail = () => {
       });
       toast({ title: `${newDocs.length} archivo${newDocs.length > 1 ? "s" : ""} subido${newDocs.length > 1 ? "s" : ""}` });
     }
-  }, [activeStep, id, setDocuments, toast]);
+  }, [activeStep, activeSubfolder, id, setDocuments, toast]);
 
   if (loading) {
     return (
@@ -236,7 +263,7 @@ const ProjectDetail = () => {
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
           <p className="text-muted-foreground text-sm">
-            {project.client} · ${project.value.toLocaleString()}
+            {project.client} · ${project.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
         {project.prospectId && (

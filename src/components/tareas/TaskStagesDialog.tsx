@@ -51,7 +51,24 @@ export default function TaskStagesDialog({ open, onOpenChange, onStagesUpdated }
       .from("task_stages")
       .select("*")
       .order("position");
-    setStages((data ?? []) as TaskStage[]);
+
+    if (!data || data.length === 0) {
+      // Seed default stages if table is empty
+      const defaults = [
+        { name: "Pendiente", color: "bg-gray-500", position: 0 },
+        { name: "En Progreso", color: "bg-sinem-info", position: 1 },
+        { name: "Completada", color: "bg-sinem-success", position: 2 },
+      ];
+      await supabase.from("task_stages").insert(defaults);
+      const { data: seeded } = await supabase
+        .from("task_stages")
+        .select("*")
+        .order("position");
+      setStages((seeded ?? []) as TaskStage[]);
+    } else {
+      setStages(data as TaskStage[]);
+    }
+
     setLoading(false);
   };
 

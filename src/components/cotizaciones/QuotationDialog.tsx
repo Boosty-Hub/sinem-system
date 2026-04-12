@@ -928,7 +928,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     {currency !== "USD" && !isOriginalCurrency && exchangeRate > 0 && (
                       <div className="flex justify-between font-semibold text-sm text-muted-foreground">
                         <span>Total {currency}:</span>
-                        <span>{CURRENCIES.find((c) => c.key === currency)?.symbol}{(totalUSD * exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span>{CURRENCIES.find((c) => c.key === currency)?.symbol}{(totalUSD * exchangeRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     )}
                   </>

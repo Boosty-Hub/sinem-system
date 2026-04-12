@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 import { PROJECT_STEPS } from "@/lib/types";
-import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target, User, Filter, X } from "lucide-react";
+import { Search, Plus, FolderOpen, CheckCircle2, PauseCircle, Trash2, Pencil, Loader2, Check, ChevronsUpDown, Target, User, Filter, X, ChevronUp, ChevronDown, ChevronsUpDown as SortIcon } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +92,8 @@ const Projects = () => {
   const [filterClient, setFilterClient] = useLocalStorage("sinem:projects:filterClient", "all");
   const [filterResponsible, setFilterResponsible] = useLocalStorage("sinem:projects:filterResponsible", "all");
   const [filterStep, setFilterStep] = useLocalStorage("sinem:projects:filterStep", "all");
+  const [sortKey, setSortKey] = useState<"name" | "client" | "value" | "current_step" | "progress" | "status" | "start_date">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const progressMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -168,7 +170,41 @@ const Projects = () => {
     const matchResponsible = filterResponsible === "all" || p.assigned_to === filterResponsible;
     const matchStep = filterStep === "all" || String(p.current_step) === filterStep;
     return matchSearch && matchStatus && matchClient && matchResponsible && matchStep;
+  }).sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    switch (sortKey) {
+      case "name":    return dir * a.name.localeCompare(b.name);
+      case "client":  return dir * a.client.localeCompare(b.client);
+      case "value":   return dir * (a.value - b.value);
+      case "current_step": return dir * (a.current_step - b.current_step);
+      case "progress": return dir * ((progressMap[a.id] ?? 0) - (progressMap[b.id] ?? 0));
+      case "status":  return dir * a.status.localeCompare(b.status);
+      case "start_date": return dir * ((a.start_date ?? "").localeCompare(b.start_date ?? ""));
+      default: return 0;
+    }
   });
+
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const SortHeader = ({ col, label, align = "left" }: { col: typeof sortKey; label: string; align?: string }) => (
+    <th
+      className={`py-3 px-4 font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors text-${align}`}
+      onClick={() => handleSort(col)}
+    >
+      <span className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""} ${align === "center" ? "justify-center w-full" : ""}`}>
+        {label}
+        {sortKey === col
+          ? sortDir === "asc"
+            ? <ChevronUp className="h-3.5 w-3.5 text-primary" />
+            : <ChevronDown className="h-3.5 w-3.5 text-primary" />
+          : <SortIcon className="h-3.5 w-3.5 opacity-30" />
+        }
+      </span>
+    </th>
+  );
 
   const openCreate = () => {
     setEditId(null);
@@ -368,13 +404,13 @@ const Projects = () => {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Proyecto</th>
-              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Cliente</th>
-              <th className="text-right py-3 px-4 font-medium text-muted-foreground">Valor USD</th>
-              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Paso Actual</th>
-              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Progreso</th>
-              <th className="text-center py-3 px-4 font-medium text-muted-foreground">Estado</th>
-              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Inicio</th>
+              <SortHeader col="name" label="Proyecto" />
+              <SortHeader col="client" label="Cliente" />
+              <SortHeader col="value" label="Valor USD" align="right" />
+              <SortHeader col="current_step" label="Paso Actual" />
+              <SortHeader col="progress" label="Progreso" align="center" />
+              <SortHeader col="status" label="Estado" align="center" />
+              <SortHeader col="start_date" label="Inicio" />
               <th className="text-center py-3 px-4 font-medium text-muted-foreground">Acciones</th>
             </tr>
           </thead>
@@ -475,7 +511,7 @@ const Projects = () => {
                               <Check className={cn("mr-2 h-4 w-4", form.prospectId === p.id ? "opacity-100" : "opacity-0")} />
                               <div className="flex flex-col">
                                 <span className="font-medium">{p.code} – {p.project_name}</span>
-                                <span className="text-xs text-muted-foreground">{p.direct_customer} · ${p.price_usd.toLocaleString()}</span>
+                                <span className="text-xs text-muted-foreground">{p.direct_customer} · ${p.price_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               </div>
                             </CommandItem>
                           ))}

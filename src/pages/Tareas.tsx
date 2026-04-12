@@ -5,6 +5,7 @@ import {
   Search, Plus, ListTodo, LayoutGrid, Calendar, AlertCircle, Clock, CheckCircle2,
   MessageSquare, Trash2, Send, User2, Building2, FolderKanban, Loader2, Target, Check, ChevronsUpDown, Settings2,
 } from "lucide-react";
+import UserAvatar from "@/components/UserAvatar";
 import TaskStagesDialog, { type TaskStage } from "@/components/tareas/TaskStagesDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,7 +84,18 @@ const Tareas = () => {
       supabase.from("prospects").select("id, code, project_name").order("code"),
       supabase.from("task_stages").select("*").order("position"),
     ]);
-    setStages((stagesData ?? []) as TaskStage[]);
+    let resolvedStages = (stagesData ?? []) as TaskStage[];
+    if (resolvedStages.length === 0) {
+      const defaults = [
+        { name: "Pendiente", color: "bg-gray-500", position: 0 },
+        { name: "En Progreso", color: "bg-sinem-info", position: 1 },
+        { name: "Completada", color: "bg-sinem-success", position: 2 },
+      ];
+      await supabase.from("task_stages").insert(defaults);
+      const { data: seeded } = await supabase.from("task_stages").select("*").order("position");
+      resolvedStages = (seeded ?? []) as TaskStage[];
+    }
+    setStages(resolvedStages);
 
     const commentsByTask = new Map<string, TaskComment[]>();
     (commentsData ?? []).forEach((c) => {
@@ -105,6 +117,7 @@ const Tareas = () => {
       stageId: (t as any).stage_id ?? undefined,
       dueDate: t.due_date ?? "",
       createdAt: t.created_at,
+      createdBy: (t as any).created_by ?? undefined,
       comments: commentsByTask.get(t.id) ?? [],
     } as any)));
     setClients(clientsData ?? []);
@@ -145,7 +158,7 @@ const Tareas = () => {
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
-    const payload = {
+    const payload: any = {
       title: form.title.trim(),
       description: form.description.trim(),
       priority: form.priority,
@@ -155,6 +168,9 @@ const Tareas = () => {
       prospect_id: form.prospectId || null,
       due_date: form.dueDate || null,
     };
+    if (!editId && currentAppUserId) {
+      payload.created_by = currentAppUserId;
+    }
     if (editId) {
       await supabase.from("tasks").update(payload).eq("id", editId);
       toast({ title: "Tarea actualizada" });
@@ -234,6 +250,7 @@ const Tareas = () => {
     const clientName = getClientName(task.clientId);
     const prospectCode = getProspectCode(task.prospectId);
     const overdue = isOverdue(task);
+    const assigneeUser = systemUsers.find((u) => u.name === task.assignee);
     return (
       <div className="stat-card p-3 group cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailTask(task)}>
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -258,9 +275,13 @@ const Tareas = () => {
         )}
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-              <User2 className="h-3 w-3 text-primary" />
-            </div>
+            {assigneeUser ? (
+              <UserAvatar userId={assigneeUser.id} size="xs" showTooltip={false} />
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                <User2 className="h-3 w-3 text-primary" />
+              </div>
+            )}
             <span className="text-[11px] text-muted-foreground">{task.assignee.split(" ")[0]}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -441,7 +462,23 @@ const Tareas = () => {
                         <PriorityIcon className="h-3.5 w-3.5" /> {priorityCfg.label}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-xs">{task.assignee}</td>
+                    <td className="py-3 px-4">
+                      {(() => {
+                        const u = systemUsers.find((u) => u.name === task.assignee);
+                        return (
+                          <div className="flex items-center gap-2">
+                            {u ? (
+                              <UserAvatar userId={u.id} size="xs" showTooltip={false} />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <User2 className="h-3 w-3 text-primary" />
+                              </div>
+                            )}
+                            <span className="text-xs">{task.assignee || "—"}</span>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td className="py-3 px-4 text-xs text-muted-foreground">{clientName || "—"}</td>
                     <td className="py-3 px-4">
                       {task.dueDate ? (
@@ -602,15 +639,51 @@ const Tareas = () => {
                       </span>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Responsable</p>
-                      <span className="flex items-center gap-1 text-xs"><User2 className="h-3 w-3" /> {freshTask.assignee}</span>
-                    </div>
-                    <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Vencimiento</p>
                       <span className={`flex items-center gap-1 text-xs ${overdue ? "text-destructive font-medium" : ""}`}>
                         <Calendar className="h-3 w-3" />
-                        {freshTask.dueDate ? new Date(freshTask.dueDate).toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" }) : "Sin fecha"}
+                        {freshTask.dueDate ? new Date(freshTask.dueDate + "T00:00:00").toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" }) : "Sin fecha"}
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Responsable + Creado por — always visible */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Responsable</p>
+                      {(() => {
+                        const assigneeUser = systemUsers.find((u) => u.name === freshTask.assignee);
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            {assigneeUser
+                              ? <UserAvatar userId={assigneeUser.id} size="xs" showTooltip={false} />
+                              : <User2 className="h-3 w-3 text-muted-foreground" />
+                            }
+                            <span className="text-xs font-medium">{freshTask.assignee || "—"}</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Creado por</p>
+                      {(() => {
+                        const creatorId = (freshTask as any).createdBy;
+                        const creatorUser = systemUsers.find((u) => u.id === creatorId);
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            {creatorId
+                              ? <UserAvatar userId={creatorId} size="xs" showTooltip={false} />
+                              : <User2 className="h-3 w-3 text-muted-foreground" />
+                            }
+                            <span className="text-xs font-medium">{creatorUser?.name ?? "—"}</span>
+                            {freshTask.createdAt && (
+                              <span className="text-[10px] text-muted-foreground/60 ml-1">
+                                · {new Date(freshTask.createdAt).toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" })}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 

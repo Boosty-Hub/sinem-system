@@ -401,7 +401,7 @@ const Cotizaciones = () => {
                       {q.isOriginalCurrency ? (CURRENCIES.find((c) => c.key === q.currency)?.symbol ?? "$") : "$"}{q.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {q.currency && q.currency !== "USD" && !q.isOriginalCurrency && (
                         <span className="block text-[10px] font-normal text-muted-foreground">
-                          {CURRENCIES.find((c) => c.key === q.currency)?.symbol}{(q.totalUSD * q.exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {q.currency}
+                          {CURRENCIES.find((c) => c.key === q.currency)?.symbol}{(q.totalUSD * q.exchangeRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {q.currency}
                         </span>
                       )}
                     </td>

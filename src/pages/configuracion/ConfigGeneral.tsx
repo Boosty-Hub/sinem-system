@@ -434,7 +434,7 @@ const ConfigGeneral = () => {
               <span className="text-sm text-muted-foreground">USD</span>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5">
-              Valor actual: <strong>${managerApprovalLimit.toLocaleString()} USD</strong>
+              Valor actual: <strong>${managerApprovalLimit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</strong>
             </p>
           </div>
         </div>

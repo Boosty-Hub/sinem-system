@@ -386,8 +386,8 @@ const ProspectImportDialog = ({ open, onOpenChange, onImported }: Props) => {
                         <td className="py-2 px-3">{c.directCustomer}</td>
                         <td className="py-2 px-3">{c.bu}</td>
                         <td className="py-2 px-3">{c.product}</td>
-                        <td className="py-2 px-3 text-right font-mono">${c.costUSD.toLocaleString()}</td>
-                        <td className="py-2 px-3 text-right font-mono">${c.priceUSD.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right font-mono">${c.costUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-3 text-right font-mono">${c.priceUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="py-2 px-3 text-center">{c.go}%</td>
                         <td className="py-2 px-3 text-center">{c.get}%</td>
                         <td className="py-2 px-3">

@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Save, User2, Mail, Phone, Loader2 } from "lucide-react";
+import { Camera, Save, User2, Mail, Phone, Loader2, Bell, BellOff } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const getInitials = (name: string) =>
   name
@@ -29,6 +30,9 @@ const Perfil = () => {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarPreview, setAvatarPreview] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [notifSystem, setNotifSystem] = useState(true);
+  const [notifEmail, setNotifEmail] = useState(true);
+  const [savingNotif, setSavingNotif] = useState(false);
 
   useEffect(() => {
     if (!authUser?.email) return;
@@ -44,6 +48,8 @@ const Perfil = () => {
         setPhone(data.phone ?? "");
         setAvatarUrl(data.avatar_url ?? "");
         setAvatarPreview(data.avatar_url ?? "");
+        setNotifSystem(data.notif_system ?? true);
+        setNotifEmail(data.notif_email ?? false);
       }
       setLoading(false);
     };
@@ -95,6 +101,21 @@ const Perfil = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveNotifPrefs = async () => {
+    if (!appUserId) return;
+    setSavingNotif(true);
+    const { error } = await supabase
+      .from("app_users")
+      .update({ notif_system: notifSystem, notif_email: notifEmail } as any)
+      .eq("id", appUserId);
+    if (error) {
+      toast({ title: "Error al guardar preferencias", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Preferencias de notificaciones guardadas" });
+    }
+    setSavingNotif(false);
   };
 
   if (loading) {
@@ -172,6 +193,64 @@ const Perfil = () => {
           <Button onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
             Guardar Cambios
+          </Button>
+        </div>
+      </div>
+
+      {/* Notification Preferences */}
+      <div className="stat-card p-6 space-y-5">
+        <div>
+          <h3 className="font-semibold text-sm">Preferencias de Notificaciones</h3>
+          <p className="text-xs text-muted-foreground mt-1">Controla cómo y cuándo recibes notificaciones del sistema.</p>
+        </div>
+
+        <div className="space-y-4">
+          {/* System notifications */}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border/60 bg-muted/20">
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${notifSystem ? "bg-primary/10" : "bg-muted"}`}>
+                <Bell className={`h-4 w-4 ${notifSystem ? "text-primary" : "text-muted-foreground"}`} />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Notificaciones del Sistema</p>
+                <p className="text-xs text-muted-foreground">Recibe alertas en el centro de notificaciones cuando te asignen tareas, mencionen o haya actividad relevante.</p>
+              </div>
+            </div>
+            <Switch
+              checked={notifSystem}
+              onCheckedChange={setNotifSystem}
+            />
+          </div>
+
+          {/* Email notifications */}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border/60 bg-muted/20">
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${notifEmail ? "bg-blue-500/10" : "bg-muted"}`}>
+                <Mail className={`h-4 w-4 ${notifEmail ? "text-blue-500" : "text-muted-foreground"}`} />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Notificaciones por Correo</p>
+                <p className="text-xs text-muted-foreground">Recibe un email en <span className="font-medium">{authUser?.email}</span> cada vez que se genere una notificación para ti.</p>
+              </div>
+            </div>
+            <Switch
+              checked={notifEmail}
+              onCheckedChange={setNotifEmail}
+            />
+          </div>
+        </div>
+
+        {!notifSystem && !notifEmail && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
+            <BellOff className="h-3.5 w-3.5 flex-shrink-0" />
+            <span>Tienes todas las notificaciones desactivadas. No recibirás alertas de ningún tipo.</span>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-1">
+          <Button onClick={handleSaveNotifPrefs} disabled={savingNotif} variant="outline">
+            {savingNotif ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+            Guardar Preferencias
           </Button>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Settings, Save, Eraser, Check, Loader2 } from "lucide-react";
+import { Settings, Save, Eraser, Check, Loader2, Upload, PenLine } from "lucide-react";
 import SignaturePad from "signature_pad";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -90,6 +90,9 @@ const ConfigPropuestas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sigPadRef = useRef<SignaturePad | null>(null);
   const [sigMode, setSigMode] = useState<"view" | "edit">("view");
+  const [sigInputMode, setSigInputMode] = useState<"draw" | "upload">("draw");
+  const [uploadingSig, setUploadingSig] = useState(false);
+  const sigFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -184,6 +187,52 @@ const ConfigPropuestas = () => {
 
   const handleClearPad = () => {
     sigPadRef.current?.clear();
+  };
+
+  const handleUploadSignature = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingSig(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
+      const path = `signatures/company-signature.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("company-assets")
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      let finalUrl: string;
+      if (uploadErr) {
+        // Fall back to data URL if storage fails
+        finalUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+      } else {
+        const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path);
+        finalUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      }
+
+      setSettings((prev) => ({ ...prev, signatureImageUrl: finalUrl }));
+      setSigMode("view");
+
+      if (settingsId) {
+        const { error } = await supabase
+          .from("proposal_settings")
+          .update({ signature_image_url: finalUrl, updated_at: new Date().toISOString() })
+          .eq("id", settingsId);
+        if (error) {
+          toast({ title: "Error al guardar firma", description: error.message, variant: "destructive" });
+        } else {
+          toast({ title: "Firma guardada", description: "La imagen de firma ha sido guardada correctamente." });
+        }
+      }
+    } catch (err: any) {
+      toast({ title: "Error al subir firma", description: err.message, variant: "destructive" });
+    } finally {
+      setUploadingSig(false);
+      if (sigFileInputRef.current) sigFileInputRef.current.value = "";
+    }
   };
 
   const handleDeleteSignature = async () => {
@@ -288,29 +337,83 @@ const ConfigPropuestas = () => {
           </div>
           <div className="col-span-2">
             <Label>Firma Digital</Label>
-            <p className="text-xs text-muted-foreground mb-2">Dibuja la firma que aparecerá en las ofertas públicas.</p>
+            <p className="text-xs text-muted-foreground mb-2">Dibuja la firma o sube una imagen (JPEG/PNG) que aparecerá en las ofertas.</p>
+
             {sigMode === "edit" ? (
               <div>
-                <div className="border-2 border-primary/30 rounded-lg bg-white relative" style={{ height: "160px" }}>
-                  <canvas
-                    ref={canvasRef}
-                    className="w-full h-full rounded-lg cursor-crosshair"
-                  />
-                  <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-                    <div className="border-t border-dashed border-gray-300 w-3/4" />
-                  </div>
+                {/* Mode tabs */}
+                <div className="flex gap-1 mb-3 border rounded-lg p-1 bg-muted/30 w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setSigInputMode("draw")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${sigInputMode === "draw" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <PenLine className="h-3.5 w-3.5" /> Dibujar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSigInputMode("upload")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${sigInputMode === "upload" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <Upload className="h-3.5 w-3.5" /> Subir archivo
+                  </button>
                 </div>
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" onClick={handleSaveSignature}>
-                    <Check className="h-3.5 w-3.5 mr-1" /> Guardar firma
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleClearPad}>
-                    <Eraser className="h-3.5 w-3.5 mr-1" /> Limpiar
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setSigMode("view")}>
-                    Cancelar
-                  </Button>
-                </div>
+
+                {sigInputMode === "draw" ? (
+                  <>
+                    <div className="border-2 border-primary/30 rounded-lg bg-white relative" style={{ height: "160px" }}>
+                      <canvas
+                        ref={canvasRef}
+                        className="w-full h-full rounded-lg cursor-crosshair"
+                      />
+                      <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+                        <div className="border-t border-dashed border-gray-300 w-3/4" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <Button size="sm" onClick={handleSaveSignature}>
+                        <Check className="h-3.5 w-3.5 mr-1" /> Guardar firma
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleClearPad}>
+                        <Eraser className="h-3.5 w-3.5 mr-1" /> Limpiar
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setSigMode("view")}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      ref={sigFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/jpg"
+                      className="hidden"
+                      onChange={handleUploadSignature}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => sigFileInputRef.current?.click()}
+                      disabled={uploadingSig}
+                      className="flex flex-col items-center justify-center border-2 border-dashed border-primary/30 rounded-lg p-8 w-full hover:border-primary/60 hover:bg-primary/5 transition-colors disabled:opacity-60"
+                    >
+                      {uploadingSig ? (
+                        <Loader2 className="h-7 w-7 animate-spin text-primary mb-2" />
+                      ) : (
+                        <Upload className="h-7 w-7 text-muted-foreground mb-2" />
+                      )}
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {uploadingSig ? "Subiendo..." : "Haz clic para seleccionar imagen"}
+                      </span>
+                      <span className="text-xs text-muted-foreground mt-1">JPEG o PNG — fondo transparente recomendado</span>
+                    </button>
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="ghost" size="sm" onClick={() => setSigMode("view")}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             ) : settings.signatureImageUrl ? (
               <div className="flex items-start gap-4">
@@ -322,8 +425,11 @@ const ConfigPropuestas = () => {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setSigMode("edit")}>
-                    Volver a firmar
+                  <Button variant="outline" size="sm" onClick={() => { setSigInputMode("draw"); setSigMode("edit"); }}>
+                    <PenLine className="h-3.5 w-3.5 mr-1" /> Volver a dibujar
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => { setSigInputMode("upload"); setSigMode("edit"); }}>
+                    <Upload className="h-3.5 w-3.5 mr-1" /> Subir otra imagen
                   </Button>
                   <Button
                     variant="ghost"
@@ -336,13 +442,22 @@ const ConfigPropuestas = () => {
                 </div>
               </div>
             ) : (
-              <button
-                onClick={() => setSigMode("edit")}
-                className="flex flex-col items-center justify-center border-2 border-dashed border-border/60 rounded-lg p-6 w-full hover:border-primary/40 transition-colors"
-              >
-                <span className="text-2xl text-muted-foreground mb-1">✍️</span>
-                <span className="text-sm text-muted-foreground">Haz clic para firmar digitalmente</span>
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setSigInputMode("draw"); setSigMode("edit"); }}
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-border/60 rounded-lg p-6 flex-1 hover:border-primary/40 transition-colors"
+                >
+                  <PenLine className="h-6 w-6 text-muted-foreground mb-1" />
+                  <span className="text-sm text-muted-foreground">Dibujar firma</span>
+                </button>
+                <button
+                  onClick={() => { setSigInputMode("upload"); setSigMode("edit"); }}
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-border/60 rounded-lg p-6 flex-1 hover:border-primary/40 transition-colors"
+                >
+                  <Upload className="h-6 w-6 text-muted-foreground mb-1" />
+                  <span className="text-sm text-muted-foreground">Subir imagen</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

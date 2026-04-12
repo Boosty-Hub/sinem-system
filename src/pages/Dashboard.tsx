@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Users, FolderKanban, TrendingUp, ArrowUpRight, Building2, FileText, ClipboardList, Loader2 } from "lucide-react";
+import { Users, FolderKanban, TrendingUp, ArrowUpRight, Building2, FileText, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -8,7 +8,7 @@ interface DashboardData {
   quotationsCount: number;
   clientsCount: number;
   activeProjectsCount: number;
-  tasksCount: number;
+  activeOpportunitiesCount: number;
   pipelineValue: number;
   recentQuotations: { id: string; subject: string; client_company: string; total_usd: number; status: string }[];
   activeProjects: { id: string; name: string; client: string; current_step: number; status: string }[];
@@ -41,7 +41,7 @@ const Dashboard = () => {
     quotationsCount: 0,
     clientsCount: 0,
     activeProjectsCount: 0,
-    tasksCount: 0,
+    activeOpportunitiesCount: 0,
     pipelineValue: 0,
     recentQuotations: [],
     activeProjects: [],
@@ -56,13 +56,13 @@ const Dashboard = () => {
         { data: quotations },
         { data: clients },
         { data: projects },
-        { count: tasksCount },
+        { count: activeOpportunitiesCount },
       ] = await Promise.all([
         supabase.from("prospects").select("*", { count: "exact", head: true }),
         supabase.from("quotations").select("id, subject, client_company, total_usd, status, created_at").order("created_at", { ascending: false }).limit(5),
         supabase.from("clients").select("id, name, industry, total_revenue, total_projects").order("total_revenue", { ascending: false }).limit(5),
         supabase.from("projects").select("id, name, client, current_step, status, value"),
-        supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "pendiente"),
+        supabase.from("prospects").select("*", { count: "exact", head: true }).in("status", ["prospecto", "propuesta", "seguimiento"]),
       ]);
 
       const activeProjects = (projects ?? []).filter((p) => p.status === "activo");
@@ -79,7 +79,7 @@ const Dashboard = () => {
         quotationsCount: quotationsCount ?? 0,
         clientsCount: clientsCount ?? 0,
         activeProjectsCount: activeProjects.length,
-        tasksCount: tasksCount ?? 0,
+        activeOpportunitiesCount: activeOpportunitiesCount ?? 0,
         pipelineValue,
         recentQuotations: quotations ?? [],
         activeProjects: activeProjects.slice(0, 4),
@@ -95,7 +95,7 @@ const Dashboard = () => {
     { label: "Cotizaciones", value: data.quotationsCount.toString(), icon: FileText, to: "/cotizaciones" },
     { label: "Clientes", value: data.clientsCount.toString(), icon: Building2, to: "/clientes" },
     { label: "Proyectos Activos", value: data.activeProjectsCount.toString(), icon: FolderKanban, to: "/projects" },
-    { label: "Tareas Pendientes", value: data.tasksCount.toString(), icon: ClipboardList, to: "/tareas" },
+    { label: "Oportunidades Activas", value: data.activeOpportunitiesCount.toString(), icon: TrendingUp, to: "/crm" },
   ];
 
   if (loading) {
@@ -149,7 +149,7 @@ const Dashboard = () => {
                   <p className="text-xs text-muted-foreground">{q.client_company || "—"}</p>
                 </div>
                 <div className="text-right flex items-center gap-3 shrink-0">
-                  <span className="text-sm font-semibold">${q.total_usd?.toLocaleString() ?? 0}</span>
+                  <span className="text-sm font-semibold">${(q.total_usd ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATUS_COLORS[q.status] ?? "bg-muted text-muted-foreground"}`}>
                     {STATUS_LABELS[q.status] ?? q.status}
                   </span>
@@ -211,7 +211,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold">${client.total_revenue?.toLocaleString() ?? 0}</p>
+                  <p className="text-sm font-semibold">${(client.total_revenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <p className="text-[10px] text-muted-foreground">{client.total_projects} proyectos</p>
                 </div>
               </Link>

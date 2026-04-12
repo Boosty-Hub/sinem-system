@@ -15,6 +15,8 @@ interface AppUser {
   id: string;
   name: string;
   email: string;
+  phone: string;
+  cargo: string;
   status: string;
   last_login: string | null;
   created_at: string;
@@ -33,9 +35,11 @@ interface UserForm {
   password: string;
   role_id: string;
   status: string;
+  phone: string;
+  cargo: string;
 }
 
-const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none", status: "activo" };
+const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none", status: "activo", phone: "", cargo: "" };
 
 const ConfigUsuarios = () => {
   const [search, setSearch] = useState("");
@@ -55,7 +59,7 @@ const ConfigUsuarios = () => {
     setLoading(true);
     const { data } = await supabase
       .from("app_users")
-      .select("id, name, email, status, last_login, created_at, role_id, roles(name)")
+      .select("id, name, email, phone, cargo, status, last_login, created_at, role_id, roles(name)")
       .order("created_at", { ascending: false });
     setUsers((data as unknown as AppUser[]) ?? []);
     setLoading(false);
@@ -87,6 +91,8 @@ const ConfigUsuarios = () => {
       password: "",
       role_id: user.role_id ?? "none",
       status: user.status,
+      phone: user.phone ?? "",
+      cargo: (user as any).cargo ?? "",
     });
     setError("");
     setShowPassword(false);
@@ -120,12 +126,16 @@ const ConfigUsuarios = () => {
             password: form.password || undefined,
             role_id: form.role_id === "none" ? null : form.role_id,
             status: form.status,
+            phone: form.phone,
+            cargo: form.cargo,
           }
         : {
             name: form.name,
             email: form.email,
             password: form.password,
             role_id: form.role_id === "none" ? null : form.role_id,
+            phone: form.phone,
+            cargo: form.cargo,
           };
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
@@ -189,6 +199,7 @@ const ConfigUsuarios = () => {
               <tr className="border-b border-border/60">
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Usuario</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
+                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Cargo</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Rol</th>
                 <th className="text-center py-3 px-4 font-medium text-muted-foreground">Estado</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Creado</th>
@@ -212,6 +223,7 @@ const ConfigUsuarios = () => {
                       <span>{user.email}</span>
                     </div>
                   </td>
+                  <td className="py-3 px-4 text-xs text-muted-foreground">{(user as any).cargo || "—"}</td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-1.5">
                       <Shield className="h-3 w-3 text-primary" />
@@ -239,7 +251,7 @@ const ConfigUsuarios = () => {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">
+                  <td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">
                     No se encontraron usuarios
                   </td>
                 </tr>
@@ -272,6 +284,24 @@ const ConfigUsuarios = () => {
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 placeholder="usuario@email.com"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Cargo / Puesto</Label>
+                <Input
+                  value={form.cargo}
+                  onChange={(e) => setForm((f) => ({ ...f, cargo: e.target.value }))}
+                  placeholder="Ej: Gerente de Ventas"
+                />
+              </div>
+              <div>
+                <Label>Teléfono</Label>
+                <Input
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="Ej: +1 809 000 0000"
+                />
+              </div>
             </div>
             <div>
               <Label>{isEditing ? "Nueva contraseña (dejar vacío para no cambiar)" : "Contraseña"}</Label>

@@ -23,7 +23,7 @@ import {
 
 const COLORS = ["hsl(199 89% 48%)", "hsl(168 76% 42%)", "hsl(45 93% 47%)", "hsl(142 71% 45%)", "hsl(0 84% 60%)"];
 
-const fmt = (n: number) => `$${n.toLocaleString()}`;
+const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const BAR_COLORS = {
   previousYear: "#38bdf8",

@@ -64,6 +64,7 @@ const OfertaPublica = () => {
   const [s, setS] = useState<ProposalSettings | null>(null);
   const [companyLogoFromSettings, setCompanyLogoFromSettings] = useState<string | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
+  const [approver, setApprover] = useState<{ name: string; cargo: string; phone: string; email: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -132,20 +133,43 @@ const OfertaPublica = () => {
 
       if (settingsRow) setS(dbToSettings(settingsRow));
       if (gsRow?.value) setCompanyLogoFromSettings(gsRow.value);
+
+      // Load approver data if quotation is approved
+      if (qRow?.approved_by) {
+        const { data: approverRow } = await supabase
+          .from("app_users")
+          .select("name, cargo, phone, email")
+          .eq("id", qRow.approved_by)
+          .maybeSingle();
+        if (approverRow) {
+          setApprover({
+            name: approverRow.name ?? "",
+            cargo: (approverRow as any).cargo ?? "",
+            phone: approverRow.phone ?? "",
+            email: approverRow.email ?? "",
+          });
+        }
+      }
+
       setLoadingSettings(false);
     };
     load();
   }, [id]);
 
   const isApproved = quotation?.approvalStatus === "approved";
+  // Use approver's data when available, fall back to proposal_settings
+  const sigName  = (isApproved && approver?.name)  ? approver.name  : s?.signatureName  ?? "";
+  const sigTitle = (isApproved && approver?.cargo)  ? approver.cargo : s?.signatureTitle ?? "";
+  const sigPhone = (isApproved && approver?.phone)  ? approver.phone : s?.signaturePhone ?? "";
+  const sigEmail = (isApproved && approver?.email)  ? approver.email : s?.signatureEmail ?? "";
   const qCurrency = quotation?.currency ?? "USD";
   const qRate = quotation?.exchangeRate ?? 1;
   const qIsOriginal = quotation?.isOriginalCurrency ?? false;
   const currCfg = CURRENCIES.find((c) => c.key === qCurrency) ?? CURRENCIES[0];
   const fmt = (amount: number) => {
-    if (qIsOriginal) return `${currCfg.symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (qCurrency === "USD") return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    return `${currCfg.symbol}${(amount * qRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (qIsOriginal) return `${currCfg.symbol}${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (qCurrency === "USD") return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currCfg.symbol}${(amount * qRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   const qPartner = quotation?.partner ?? "Siemens";
   const replacePartner = (text: string) => text.replace(/SIEMENS|Siemens|siemens/g, qPartner);
@@ -257,7 +281,7 @@ const OfertaPublica = () => {
           <div style={{ textAlign: "right", marginTop: "40px", marginBottom: "40px", fontSize: "13px", lineHeight: "1.8" }}>
             <p style={{ margin: 0 }}>{formatDateLong(quotation.createdAt)}</p>
             <p style={{ margin: 0 }}>Asunto: {quotation.subject}</p>
-            <p style={{ margin: 0 }}>De: {s.signatureName}</p>
+            <p style={{ margin: 0 }}>De: {sigName}</p>
             <p style={{ margin: 0 }}>Para: {quotation.client.attention}</p>
             <p style={{ margin: 0 }}>No. de oferta: {quotation.code}</p>
           </div>
@@ -283,23 +307,40 @@ const OfertaPublica = () => {
 
           {isApproved ? (
             <>
-              {/* Signature image */}
-              {s.signatureImageUrl && (
-                <img src={s.signatureImageUrl} alt="Firma" style={{ display: "block", height: "55px", maxWidth: "200px", marginBottom: "4px", objectFit: "contain", objectPosition: "left" }} />
-              )}
-              {!s.signatureImageUrl && <div style={{ height: "30px" }} />}
+              {/* Signature block with overlay effect */}
+              <div style={{ position: "relative" }}>
+                {s.signatureImageUrl && (
+                  <img
+                    src={s.signatureImageUrl}
+                    alt="Firma"
+                    style={{
+                      display: "block",
+                      height: "60px",
+                      maxWidth: "220px",
+                      objectFit: "contain",
+                      objectPosition: "left bottom",
+                      position: "relative",
+                      zIndex: 2,
+                      marginBottom: "-18px",
+                      opacity: 0.92,
+                      mixBlendMode: "multiply",
+                    }}
+                  />
+                )}
+                {!s.signatureImageUrl && <div style={{ height: "20px" }} />}
 
-              {/* Signature block: two columns */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0" }}>
-                <div>
-                  <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{s.signatureName}</p>
-                  <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signatureTitle}</p>
-                  <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signaturePhone}</p>
-                  <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#0097A7" }}>{s.signatureEmail}</p>
-                  <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyWebsite}</p>
+                {/* Signature block: two columns — sits under the image */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
+                    <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigTitle}</p>
+                    <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
+                  </div>
+                  <div style={{ textAlign: "left" }}>
+                    <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigPhone}</p>
+                    <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#0097A7" }}>{sigEmail}</p>
+                    <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyWebsite}</p>
+                  </div>
                 </div>
               </div>
             </>
@@ -469,9 +510,9 @@ const OfertaPublica = () => {
             </p>
             <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.8", fontWeight: 500 }}>{s.purchaseOrderInfo}</div>
             <div style={{ marginTop: "14px", fontSize: "12px", lineHeight: "1.7" }}>
-              <p style={{ margin: "0 0 2px 0" }}>Con atención a {s.signatureName}</p>
-              <p style={{ margin: "0 0 2px 0" }}>Teléfono: {s.signaturePhone}</p>
-              <p style={{ margin: 0 }}>{s.signatureEmail}</p>
+              <p style={{ margin: "0 0 2px 0" }}>Con atención a {sigName}</p>
+              <p style={{ margin: "0 0 2px 0" }}>Teléfono: {sigPhone}</p>
+              <p style={{ margin: 0 }}>{sigEmail}</p>
             </div>
           </div>
 
@@ -481,17 +522,32 @@ const OfertaPublica = () => {
           {/* Atentamente + Signature */}
           <p style={{ margin: "0 0 12px 0", fontSize: "13px" }}>Atentamente,</p>
           {isApproved ? (
-            <>
+            <div style={{ position: "relative" }}>
               {s.signatureImageUrl && (
-                <img src={s.signatureImageUrl} alt="Firma" style={{ display: "block", height: "55px", maxWidth: "200px", marginBottom: "4px", objectFit: "contain", objectPosition: "left" }} />
+                <img
+                  src={s.signatureImageUrl}
+                  alt="Firma"
+                  style={{
+                    display: "block",
+                    height: "60px",
+                    maxWidth: "220px",
+                    objectFit: "contain",
+                    objectPosition: "left bottom",
+                    position: "relative",
+                    zIndex: 2,
+                    marginBottom: "-18px",
+                    opacity: 0.92,
+                    mixBlendMode: "multiply",
+                  }}
+                />
               )}
-              {!s.signatureImageUrl && <div style={{ height: "30px" }} />}
-              <div>
-                <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{s.signatureName}</p>
-                <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{s.signatureTitle}</p>
+              {!s.signatureImageUrl && <div style={{ height: "20px" }} />}
+              <div style={{ position: "relative", zIndex: 1 }}>
+                <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
+                <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigTitle}</p>
                 <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
               </div>
-            </>
+            </div>
           ) : (
             <div style={{ padding: "15px 0", color: "#999", fontSize: "12px", fontStyle: "italic" }}>
               Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
