@@ -567,10 +567,10 @@ const Projects = () => {
               <Label className="flex items-center gap-1.5">
                 <User className="h-4 w-4" /> Responsable de Ejecución
               </Label>
-              <Select value={form.assignedTo} onValueChange={(v) => u("assignedTo", v)}>
+              <Select value={form.assignedTo || "__none__"} onValueChange={(v) => u("assignedTo", v === "__none__" ? "" : v)}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar responsable" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin asignar</SelectItem>
+                  <SelectItem value="__none__">Sin asignar</SelectItem>
                   {appUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                   ))}
