@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Mail, Shield, Loader2, Eye, EyeOff, Pencil } from "lucide-react";
+import { Search, Plus, Mail, Shield, Loader2, Eye, EyeOff, Pencil, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ interface AppUser {
   created_at: string;
   role_id: string | null;
   roles: { name: string } | null;
+  pin_code: string | null;
 }
 
 interface Role {
@@ -37,9 +38,10 @@ interface UserForm {
   status: string;
   phone: string;
   cargo: string;
+  pin_code: string;
 }
 
-const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none", status: "activo", phone: "", cargo: "" };
+const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none", status: "activo", phone: "", cargo: "", pin_code: "" };
 
 const ConfigUsuarios = () => {
   const [search, setSearch] = useState("");
@@ -59,7 +61,7 @@ const ConfigUsuarios = () => {
     setLoading(true);
     const { data } = await supabase
       .from("app_users")
-      .select("id, name, email, phone, cargo, status, last_login, created_at, role_id, roles(name)")
+      .select("id, name, email, phone, cargo, status, last_login, created_at, role_id, pin_code, roles(name)")
       .order("created_at", { ascending: false });
     setUsers((data as unknown as AppUser[]) ?? []);
     setLoading(false);
@@ -93,6 +95,7 @@ const ConfigUsuarios = () => {
       status: user.status,
       phone: user.phone ?? "",
       cargo: (user as any).cargo ?? "",
+      pin_code: user.pin_code ?? "",
     });
     setError("");
     setShowPassword(false);
@@ -113,6 +116,10 @@ const ConfigUsuarios = () => {
       setError("La contraseña debe tener al menos 6 caracteres");
       return;
     }
+    if (form.pin_code && !/^\d{4}$/.test(form.pin_code)) {
+      setError("El PIN debe ser exactamente 4 dígitos numéricos");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -128,6 +135,7 @@ const ConfigUsuarios = () => {
             status: form.status,
             phone: form.phone,
             cargo: form.cargo,
+            pin_code: form.pin_code || "",
           }
         : {
             name: form.name,
@@ -136,6 +144,7 @@ const ConfigUsuarios = () => {
             role_id: form.role_id === "none" ? null : form.role_id,
             phone: form.phone,
             cargo: form.cargo,
+            pin_code: form.pin_code || null,
           };
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
@@ -200,6 +209,7 @@ const ConfigUsuarios = () => {
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Usuario</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Email</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Cargo</th>
+                <th className="text-center py-3 px-4 font-medium text-muted-foreground">PIN</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Rol</th>
                 <th className="text-center py-3 px-4 font-medium text-muted-foreground">Estado</th>
                 <th className="text-left py-3 px-4 font-medium text-muted-foreground">Creado</th>
@@ -224,6 +234,15 @@ const ConfigUsuarios = () => {
                     </div>
                   </td>
                   <td className="py-3 px-4 text-xs text-muted-foreground">{(user as any).cargo || "—"}</td>
+                  <td className="py-3 px-4 text-center">
+                    {user.pin_code ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        <KeyRound className="h-2.5 w-2.5" /> PIN
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-1.5">
                       <Shield className="h-3 w-3 text-primary" />
@@ -302,6 +321,28 @@ const ConfigUsuarios = () => {
                   placeholder="Ej: +1 809 000 0000"
                 />
               </div>
+            </div>
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                PIN de acceso rápido <span className="text-muted-foreground font-normal">(4 dígitos, opcional)</span>
+              </Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={form.pin_code}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                  setForm((f) => ({ ...f, pin_code: val }));
+                }}
+                placeholder="Ej: 1234"
+                className="tracking-[0.4em] text-center font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Permite al usuario iniciar sesión desde la pantalla de login ingresando solo su PIN de 4 dígitos.
+                {isEditing && " Dejar vacío para eliminar el PIN actual."}
+              </p>
             </div>
             <div>
               <Label>{isEditing ? "Nueva contraseña (dejar vacío para no cambiar)" : "Contraseña"}</Label>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
 import { useRequiredFields } from "@/hooks/useRequiredFields";
 import { useToast } from "@/hooks/use-toast";
@@ -127,6 +127,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [historyOpen, setHistoryOpen] = useState(false);
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
   const [showVersionPrompt, setShowVersionPrompt] = useState(false);
+  const [showSignatureWarning, setShowSignatureWarning] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<(() => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Controlled fields for save logic ──
@@ -1158,15 +1160,31 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     type="button"
                     size="sm"
                     className="bg-sinem-success hover:bg-sinem-success/90"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!onSave) return;
-                      onSave({
-                        ...quotation,
-                        approvalStatus: "approved",
-                        approvedBy: authUser?.id ?? undefined,
-                        approvedAt: new Date().toISOString().split("T")[0],
-                      });
-                      onOpenChange(false);
+                      const doApprove = () => {
+                        onSave({
+                          ...quotation,
+                          approvalStatus: "approved",
+                          approvedBy: authUser?.id ?? undefined,
+                          approvedAt: new Date().toISOString().split("T")[0],
+                        });
+                        onOpenChange(false);
+                      };
+                      // Check if current user has a signature configured
+                      if (authUser?.id) {
+                        const { data: appUserRow } = await supabase
+                          .from("app_users")
+                          .select("signature_image_url")
+                          .eq("auth_user_id", authUser.id)
+                          .maybeSingle();
+                        if (!(appUserRow as any)?.signature_image_url) {
+                          setPendingApproval(() => doApprove);
+                          setShowSignatureWarning(true);
+                          return;
+                        }
+                      }
+                      doApprove();
                     }}
                   >
                     <CheckCircle2 className="h-4 w-4 mr-1" /> Aprobar
@@ -1233,6 +1251,41 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Signature warning — shown when approver has no signature configured */}
+        <AlertDialog open={showSignatureWarning} onOpenChange={setShowSignatureWarning}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <AlertDialogTitle>Firma digital no configurada</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tu perfil no tiene una firma digital cargada. La firma del aprobador aparece en la URL pública de la cotización.
+                  </AlertDialogDescription>
+                </div>
+              </div>
+            </AlertDialogHeader>
+            <p className="text-sm text-muted-foreground px-1 pb-1">
+              Ve a <strong>Mi Perfil</strong> y sube tu firma en la sección <strong>"Firma Digital"</strong> para que aparezca en las cotizaciones que apruebes. Mientras tanto, se usará la firma por defecto del sistema.
+            </p>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingApproval(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-sinem-success hover:bg-sinem-success/90"
+                onClick={() => {
+                  pendingApproval?.();
+                  setPendingApproval(null);
+                  setShowSignatureWarning(false);
+                }}
+              >
+                Aprobar de todas formas
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

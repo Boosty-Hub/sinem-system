@@ -42,11 +42,18 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const { name, email, password, role_id } = await req.json();
+    const { name, email, password, role_id, phone, cargo, pin_code } = await req.json();
 
     if (!name || !email || !password) {
       return new Response(
         JSON.stringify({ error: "name, email and password are required" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (pin_code && !/^\d{4}$/.test(pin_code)) {
+      return new Response(
+        JSON.stringify({ error: "El PIN debe ser exactamente 4 dígitos numéricos" }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -82,6 +89,9 @@ Deno.serve(async (req) => {
         auth_user_id: authData.user.id,
         role_id: role_id || null,
         status: "activo",
+        phone: phone ?? null,
+        cargo: cargo ?? null,
+        pin_code: pin_code || null,
       });
 
     if (insertError) {

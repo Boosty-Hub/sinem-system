@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Save, User2, Mail, Phone, Loader2, Bell, BellOff } from "lucide-react";
+import { Camera, Save, User2, Mail, Phone, Loader2, Bell, BellOff, PenLine, Trash2, Upload } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 const getInitials = (name: string) =>
@@ -33,6 +33,12 @@ const Perfil = () => {
   const [notifSystem, setNotifSystem] = useState(true);
   const [notifEmail, setNotifEmail] = useState(true);
   const [savingNotif, setSavingNotif] = useState(false);
+  const [roleName, setRoleName] = useState<string>("");
+  const [signatureUrl, setSignatureUrl] = useState("");
+  const [signaturePreview, setSignaturePreview] = useState("");
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [savingSignature, setSavingSignature] = useState(false);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!authUser?.email) return;
@@ -50,6 +56,17 @@ const Perfil = () => {
         setAvatarPreview(data.avatar_url ?? "");
         setNotifSystem(data.notif_system ?? true);
         setNotifEmail(data.notif_email ?? false);
+        setSignatureUrl((data as any).signature_image_url ?? "");
+        setSignaturePreview((data as any).signature_image_url ?? "");
+        // Fetch role name
+        if (data.role_id) {
+          const { data: roleRow } = await supabase
+            .from("roles")
+            .select("name")
+            .eq("id", data.role_id)
+            .maybeSingle();
+          if (roleRow) setRoleName(roleRow.name ?? "");
+        }
       }
       setLoading(false);
     };
@@ -101,6 +118,56 @@ const Perfil = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSignatureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSignatureFile(file);
+    setSignaturePreview(URL.createObjectURL(file));
+  };
+
+  const handleSaveSignature = async () => {
+    if (!appUserId || !signatureFile) return;
+    setSavingSignature(true);
+    try {
+      const ext = signatureFile.name.split(".").pop();
+      const path = `signatures/${appUserId}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("avatars")
+        .upload(path, signatureFile, { upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const finalUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+      const { error } = await supabase
+        .from("app_users")
+        .update({ signature_image_url: finalUrl } as any)
+        .eq("id", appUserId);
+      if (error) throw error;
+      setSignatureUrl(finalUrl);
+      setSignatureFile(null);
+      toast({ title: "Firma guardada correctamente" });
+    } catch (err: any) {
+      toast({ title: "Error al guardar firma", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingSignature(false);
+    }
+  };
+
+  const handleRemoveSignature = async () => {
+    if (!appUserId) return;
+    const { error } = await supabase
+      .from("app_users")
+      .update({ signature_image_url: null } as any)
+      .eq("id", appUserId);
+    if (error) {
+      toast({ title: "Error al eliminar firma", description: error.message, variant: "destructive" });
+      return;
+    }
+    setSignatureUrl("");
+    setSignaturePreview("");
+    setSignatureFile(null);
+    toast({ title: "Firma eliminada" });
   };
 
   const handleSaveNotifPrefs = async () => {
@@ -196,6 +263,85 @@ const Perfil = () => {
           </Button>
         </div>
       </div>
+
+      {/* Digital Signature — only for Administrador and Gerente de Operaciones */}
+      {(roleName === "Administrador" || roleName === "Gerente de Operaciones") && (
+        <div className="stat-card p-6 space-y-5">
+          <div>
+            <h3 className="font-semibold text-sm flex items-center gap-1.5">
+              <PenLine className="h-3.5 w-3.5 text-muted-foreground" /> Firma Digital
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Tu firma aparecerá en la URL pública de las cotizaciones que apruebes.
+            </p>
+          </div>
+
+          {signaturePreview ? (
+            <div className="flex flex-col gap-3">
+              <div className="border rounded-lg p-4 bg-muted/20 flex items-center justify-center min-h-[100px]">
+                <img
+                  src={signaturePreview}
+                  alt="Firma digital"
+                  className="max-h-24 max-w-xs object-contain"
+                  style={{ mixBlendMode: "multiply" }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => signatureInputRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" /> Reemplazar
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={handleRemoveSignature}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
+                </Button>
+                {signatureFile && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSaveSignature}
+                    disabled={savingSignature}
+                    className="ml-auto"
+                  >
+                    {savingSignature ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                    Guardar Firma
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div
+              className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center gap-3 cursor-pointer hover:bg-muted/30 transition-colors"
+              onClick={() => signatureInputRef.current?.click()}
+            >
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Upload className="h-5 w-5 text-primary" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium">Subir imagen de firma</p>
+                <p className="text-xs text-muted-foreground mt-0.5">PNG o JPG con fondo transparente recomendado</p>
+              </div>
+            </div>
+          )}
+
+          <input
+            ref={signatureInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleSignatureFileChange}
+          />
+        </div>
+      )}
 
       {/* Notification Preferences */}
       <div className="stat-card p-6 space-y-5">

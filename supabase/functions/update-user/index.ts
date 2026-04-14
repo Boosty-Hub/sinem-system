@@ -39,11 +39,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { app_user_id, name, email, password, role_id, status, phone, cargo } = await req.json();
+    const { app_user_id, name, email, password, role_id, status, phone, cargo, pin_code } = await req.json();
 
     if (!app_user_id || !name || !email) {
       return new Response(
         JSON.stringify({ error: "app_user_id, name and email are required" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (pin_code !== undefined && pin_code !== null && pin_code !== "" && !/^\d{4}$/.test(pin_code)) {
+      return new Response(
+        JSON.stringify({ error: "El PIN debe ser exactamente 4 dígitos numéricos" }),
         { status: 400, headers: corsHeaders }
       );
     }
@@ -87,6 +94,7 @@ Deno.serve(async (req) => {
     }
 
     // Update app_users row
+    const pinUpdate = pin_code === "" ? null : (pin_code || undefined);
     const { error: updateError } = await adminClient
       .from("app_users")
       .update({
@@ -96,6 +104,7 @@ Deno.serve(async (req) => {
         status: status || "activo",
         phone: phone ?? null,
         cargo: cargo ?? null,
+        ...(pin_code !== undefined ? { pin_code: pinUpdate } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", app_user_id);

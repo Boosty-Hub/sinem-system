@@ -64,7 +64,7 @@ const OfertaPublica = () => {
   const [s, setS] = useState<ProposalSettings | null>(null);
   const [companyLogoFromSettings, setCompanyLogoFromSettings] = useState<string | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
-  const [approver, setApprover] = useState<{ name: string; cargo: string; phone: string; email: string } | null>(null);
+  const [approver, setApprover] = useState<{ name: string; cargo: string; phone: string; email: string; signatureImageUrl: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -138,8 +138,8 @@ const OfertaPublica = () => {
       if (qRow?.approved_by) {
         const { data: approverRow } = await supabase
           .from("app_users")
-          .select("name, cargo, phone, email")
-          .eq("id", qRow.approved_by)
+          .select("name, cargo, phone, email, signature_image_url")
+          .eq("auth_user_id", qRow.approved_by)
           .maybeSingle();
         if (approverRow) {
           setApprover({
@@ -147,6 +147,7 @@ const OfertaPublica = () => {
             cargo: (approverRow as any).cargo ?? "",
             phone: approverRow.phone ?? "",
             email: approverRow.email ?? "",
+            signatureImageUrl: (approverRow as any).signature_image_url ?? "",
           });
         }
       }
@@ -162,6 +163,8 @@ const OfertaPublica = () => {
   const sigTitle = (isApproved && approver?.cargo)  ? approver.cargo : s?.signatureTitle ?? "";
   const sigPhone = (isApproved && approver?.phone)  ? approver.phone : s?.signaturePhone ?? "";
   const sigEmail = (isApproved && approver?.email)  ? approver.email : s?.signatureEmail ?? "";
+  // Approver's personal signature image takes priority over the global one
+  const sigImageUrl = (isApproved && approver?.signatureImageUrl) ? approver.signatureImageUrl : s?.signatureImageUrl ?? "";
   const qCurrency = quotation?.currency ?? "USD";
   const qRate = quotation?.exchangeRate ?? 1;
   const qIsOriginal = quotation?.isOriginalCurrency ?? false;
@@ -309,9 +312,9 @@ const OfertaPublica = () => {
             <>
               {/* Signature block with overlay effect */}
               <div style={{ position: "relative" }}>
-                {s.signatureImageUrl && (
+                {sigImageUrl && (
                   <img
-                    src={s.signatureImageUrl}
+                    src={sigImageUrl}
                     alt="Firma"
                     style={{
                       display: "block",
@@ -327,7 +330,7 @@ const OfertaPublica = () => {
                     }}
                   />
                 )}
-                {!s.signatureImageUrl && <div style={{ height: "20px" }} />}
+                {!sigImageUrl && <div style={{ height: "20px" }} />}
 
                 {/* Signature block: two columns — sits under the image */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
@@ -523,9 +526,9 @@ const OfertaPublica = () => {
           <p style={{ margin: "0 0 12px 0", fontSize: "13px" }}>Atentamente,</p>
           {isApproved ? (
             <div style={{ position: "relative" }}>
-              {s.signatureImageUrl && (
+              {sigImageUrl && (
                 <img
-                  src={s.signatureImageUrl}
+                  src={sigImageUrl}
                   alt="Firma"
                   style={{
                     display: "block",
@@ -541,7 +544,7 @@ const OfertaPublica = () => {
                   }}
                 />
               )}
-              {!s.signatureImageUrl && <div style={{ height: "20px" }} />}
+              {!sigImageUrl && <div style={{ height: "20px" }} />}
               <div style={{ position: "relative", zIndex: 1 }}>
                 <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
                 <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigTitle}</p>
