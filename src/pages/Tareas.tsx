@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
 import {
@@ -42,9 +43,113 @@ interface ClientRow { id: string; name: string; }
 interface ProjectRow { id: string; name: string; }
 interface ProspectRow { id: string; code: string; project_name: string; }
 
+/* ── Mention-aware textarea ── */
+const MentionInput = ({
+  value,
+  onChange,
+  onSubmit,
+  users,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  users: SystemUser[];
+}) => {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
+  const [mentionStart, setMentionStart] = useState(-1);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    onChange(val);
+    const pos = e.target.selectionStart;
+    const before = val.slice(0, pos);
+    const atIdx = before.lastIndexOf("@");
+    if (atIdx >= 0 && (atIdx === 0 || before[atIdx - 1] === " " || before[atIdx - 1] === "\n")) {
+      const partial = before.slice(atIdx + 1);
+      if (!partial.includes(" ")) {
+        setMentionStart(atIdx);
+        setMentionFilter(partial.toLowerCase());
+        setShowDropdown(true);
+        return;
+      }
+    }
+    setShowDropdown(false);
+  };
+
+  const insertMention = (userName: string) => {
+    const before = value.slice(0, mentionStart);
+    const after = value.slice(textareaRef.current?.selectionStart ?? value.length);
+    onChange(`${before}@${userName} ${after}`);
+    setShowDropdown(false);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey && !showDropdown) { e.preventDefault(); onSubmit(); }
+    if (e.key === "Escape") setShowDropdown(false);
+  };
+
+  const filtered = users.filter((u) => u.name.toLowerCase().includes(mentionFilter));
+
+  return (
+    <div className="relative flex-1">
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder="Escribe un comentario... usa @ para mencionar"
+        rows={2}
+        className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[60px] max-h-[120px]"
+      />
+      {showDropdown && filtered.length > 0 && (
+        <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">
+          {filtered.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
+              onMouseDown={(e) => { e.preventDefault(); insertMention(u.name); }}
+            >
+              <UserAvatar userId={u.id} size="xs" />
+              <span>{u.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── Render text with highlighted @mentions ── */
+const RichText = ({ text, users }: { text: string; users: SystemUser[] }) => {
+  const pattern = users.length
+    ? users
+        .slice()
+        .sort((a, b) => b.name.length - a.name.length)
+        .map((u) => `@${u.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`)
+        .join("|")
+    : null;
+  const parts = pattern ? text.split(new RegExp(`(${pattern})`, "g")) : [text];
+  return (
+    <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">
+      {parts.map((part, i) =>
+        part.startsWith("@") ? (
+          <span key={i} className="text-primary font-medium bg-primary/10 px-0.5 rounded">{part}</span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </p>
+  );
+};
+
 const Tareas = () => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -129,13 +234,22 @@ const Tareas = () => {
 
   useEffect(() => { fetchData(); }, []);
 
+  // Open task from URL param (e.g. /tareas?task=<id> from notification link)
+  useEffect(() => {
+    const taskId = searchParams.get("task");
+    if (taskId && tasks.length > 0) {
+      const task = tasks.find((t) => t.id === taskId);
+      if (task) setDetailTask(task);
+    }
+  }, [tasks, searchParams]);
+
   const currentUserName = systemUsers.find((u) => u.id === (user as any)?.id)?.name ?? systemUsers[0]?.name ?? "Usuario";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [newComment, setNewComment] = useState("");
-  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+
 
   const filtered = tasks.filter((t) => {
     const matchSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.description.toLowerCase().includes(search.toLowerCase());
@@ -172,25 +286,34 @@ const Tareas = () => {
       payload.created_by = currentAppUserId;
     }
     if (editId) {
-      await supabase.from("tasks").update(payload).eq("id", editId);
+      const { error: updateError } = await supabase.from("tasks").update(payload).eq("id", editId);
+      if (updateError) {
+        toast({ title: "Error al actualizar la tarea", variant: "destructive" });
+        return;
+      }
       toast({ title: "Tarea actualizada" });
     } else {
-      const { data } = await supabase.from("tasks").insert(payload).select("id").single();
+      payload.stage_id = stages[0]?.id ?? null;
+      const { data, error: insertError } = await supabase.from("tasks").insert(payload).select("id").single();
+      if (insertError) {
+        toast({ title: "Error al crear la tarea", variant: "destructive" });
+        return;
+      }
       toast({ title: "Tarea creada" });
 
-      // Notify assigned user
-      if (form.assignee && currentAppUserId) {
+      // Notify assigned user (always, including self-assignment)
+      if (form.assignee) {
         const assignedUser = systemUsers.find((u) => u.name === form.assignee);
-        if (assignedUser && assignedUser.id !== currentAppUserId) {
+        if (assignedUser) {
           createNotification({
             userId: assignedUser.id,
             type: "task",
             title: "Nueva tarea asignada",
             message: `Se te ha asignado la tarea "${form.title.trim()}".`,
-            link: "/tareas",
+            link: `/tareas?task=${data?.id}`,
             referenceId: data?.id,
             referenceType: "task",
-            triggeredBy: currentAppUserId,
+            triggeredBy: currentAppUserId ?? undefined,
           });
         }
       }
@@ -219,14 +342,45 @@ const Tareas = () => {
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !detailTask) return;
-    const { data } = await supabase.from("task_comments").insert({
-      task_id: detailTask.id, author: currentUserName, text: newComment.trim(),
+    const commentText = newComment.trim();
+    const taskId = detailTask.id;
+    const taskTitle = detailTask.title;
+
+    const { data, error } = await supabase.from("task_comments").insert({
+      task_id: taskId, author: currentUserName, text: commentText,
     }).select().single();
+
+    if (error) {
+      toast({ title: "Error al agregar comentario", variant: "destructive" });
+      return;
+    }
+
     if (data) {
       const comment: TaskComment = { id: data.id, author: data.author, text: data.text, createdAt: data.created_at };
-      setTasks((prev) => prev.map((t) => t.id === detailTask.id ? { ...t, comments: [...t.comments, comment] } : t));
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, comments: [...t.comments, comment] } : t));
       setDetailTask((d) => d ? { ...d, comments: [...d.comments, comment] } : null);
     }
+
+    // Detect @mentions and notify — runs regardless of data being null
+    const mentionedUsers = systemUsers.filter(
+      (u) => commentText.includes(`@${u.name}`) && u.id !== currentAppUserId
+    );
+    const preview = commentText.length > 80 ? `${commentText.slice(0, 80)}…` : commentText;
+    await Promise.all(
+      mentionedUsers.map((mentioned) =>
+        createNotification({
+          userId: mentioned.id,
+          type: "mention",
+          title: "Usted ha sido mencionado en una Tarea",
+          message: `"${taskTitle}": ${preview}`,
+          link: `/tareas?task=${taskId}`,
+          referenceId: taskId,
+          referenceType: "task",
+          triggeredBy: currentAppUserId ?? undefined,
+        })
+      )
+    );
+
     setNewComment("");
     toast({ title: "Comentario agregado" });
   };
@@ -713,7 +867,7 @@ const Tareas = () => {
                                   {new Date(c.createdAt).toLocaleDateString("es-DO", { day: "2-digit", month: "short" })} {new Date(c.createdAt).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" })}
                                 </span>
                               </div>
-                              <p className="text-sm text-muted-foreground mt-0.5">{c.text}</p>
+                              <RichText text={c.text} users={systemUsers} />
                             </div>
                           </div>
                         ))}
@@ -722,8 +876,12 @@ const Tareas = () => {
                       <p className="text-xs text-muted-foreground mb-4">Sin comentarios aún</p>
                     )}
                     <div className="flex gap-2">
-                      <Textarea ref={commentInputRef} value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Escribe un comentario..." rows={2} className="flex-1 text-sm"
-                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }} />
+                      <MentionInput
+                        value={newComment}
+                        onChange={setNewComment}
+                        onSubmit={handleAddComment}
+                        users={systemUsers}
+                      />
                       <Button size="sm" className="self-end" onClick={handleAddComment} disabled={!newComment.trim()}>
                         <Send className="h-4 w-4" />
                       </Button>

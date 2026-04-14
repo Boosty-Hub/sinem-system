@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Content-Type": "application/json",
@@ -23,25 +23,23 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Validate caller's JWT
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    // Validate caller JWT using admin client
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await anonClient.auth.getClaims(token);
+    const { data: userData, error: userError } = await adminClient.auth.getUser(token);
 
-    if (claimsError || !claimsData?.claims) {
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: corsHeaders,
       });
     }
 
-    const { app_user_id, name, email, password, role_id, status } = await req.json();
+    const { app_user_id, name, email, password, role_id, status, phone, cargo } = await req.json();
 
     if (!app_user_id || !name || !email) {
       return new Response(
@@ -49,10 +47,6 @@ Deno.serve(async (req) => {
         { status: 400, headers: corsHeaders }
       );
     }
-
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
 
     // Get app_user to find auth_user_id
     const { data: appUser, error: fetchError } = await adminClient
@@ -100,6 +94,8 @@ Deno.serve(async (req) => {
         email,
         role_id: role_id || null,
         status: status || "activo",
+        phone: phone ?? null,
+        cargo: cargo ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", app_user_id);

@@ -92,7 +92,7 @@ const Projects = () => {
   const [filterClient, setFilterClient] = useLocalStorage("sinem:projects:filterClient", "all");
   const [filterResponsible, setFilterResponsible] = useLocalStorage("sinem:projects:filterResponsible", "all");
   const [filterStep, setFilterStep] = useLocalStorage("sinem:projects:filterStep", "all");
-  const [sortKey, setSortKey] = useState<"name" | "client" | "value" | "current_step" | "progress" | "status" | "start_date">("name");
+  const [sortKey, setSortKey] = useState<"code" | "name" | "client" | "value" | "current_step" | "progress" | "status" | "start_date">("code");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const progressMap = useMemo(() => {
@@ -172,7 +172,9 @@ const Projects = () => {
     return matchSearch && matchStatus && matchClient && matchResponsible && matchStep;
   }).sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1;
+    const codeNum = (p: typeof a) => parseInt(p.code?.slice(0, 3) ?? "0", 10) || 0;
     switch (sortKey) {
+      case "code":    return dir * (codeNum(a) - codeNum(b));
       case "name":    return dir * a.name.localeCompare(b.name);
       case "client":  return dir * a.client.localeCompare(b.client);
       case "value":   return dir * (a.value - b.value);
@@ -404,7 +406,7 @@ const Projects = () => {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/50 border-b">
-              <SortHeader col="name" label="Proyecto" />
+              <SortHeader col="code" label="Proyecto" />
               <SortHeader col="client" label="Cliente" />
               <SortHeader col="value" label="Valor USD" align="right" />
               <SortHeader col="current_step" label="Paso Actual" />
