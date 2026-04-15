@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Content-Type": "application/json",
@@ -26,15 +26,12 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     // Validate caller's JWT
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await anonClient.auth.getClaims(token);
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: userData, error: userError } =
+      await anonClient.auth.getUser(token);
 
-    if (claimsError || !claimsData?.claims) {
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: corsHeaders,
