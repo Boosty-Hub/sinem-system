@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface FieldRow {
   id: string;
@@ -26,6 +27,8 @@ const MODULE_ORDER = ["oportunidad", "cotizacion", "cliente", "contacto", "proye
 
 const ConfigCamposObligatorios = () => {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const canEditConfig = canEdit("Configuración");
   const [fields, setFields] = useState<FieldRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,7 +92,7 @@ const ConfigCamposObligatorios = () => {
             Configura qué campos son obligatorios al crear o editar registros en cada módulo
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving || !dirty} size="sm">
+        <Button onClick={handleSave} disabled={saving || !dirty || !canEditConfig} size="sm">
           {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
           Guardar
         </Button>
@@ -122,7 +125,8 @@ const ConfigCamposObligatorios = () => {
                     </span>
                     <Switch
                       checked={f.is_required}
-                      onCheckedChange={() => toggle(f.id)}
+                      onCheckedChange={() => canEditConfig && toggle(f.id)}
+                      disabled={!canEditConfig}
                     />
                   </div>
                 ))}

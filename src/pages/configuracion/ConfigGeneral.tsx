@@ -7,8 +7,13 @@ import { useToast } from "@/hooks/use-toast";
 import { usePartners } from "@/hooks/usePartners";
 import { useBusinessUnits, type BusinessUnit } from "@/hooks/useBusinessUnits";
 import { supabase } from "@/integrations/supabase/client";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const ConfigGeneral = () => {
+  const { canEdit, canCreate, canDelete } = usePermissions();
+  const canEditConfig = canEdit("Configuración");
+  const canCreateConfig = canCreate("Configuración");
+  const canDeleteConfig = canDelete("Configuración");
   const { toast } = useToast();
   const { partners, setPartners } = usePartners();
   const { businessUnits, setBusinessUnits } = useBusinessUnits();
@@ -169,18 +174,22 @@ const ConfigGeneral = () => {
                 <img src={logoUrl} alt="Logo" className="h-14 max-w-[200px] object-contain" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
-                  {uploadingLogo ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />} Cambiar
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleRemoveLogo}>
-                  <Trash2 className="h-3 w-3 mr-1" /> Eliminar
-                </Button>
+                {canEditConfig && (
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+                    {uploadingLogo ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />} Cambiar
+                  </Button>
+                )}
+                {canDeleteConfig && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleRemoveLogo}>
+                    <Trash2 className="h-3 w-3 mr-1" /> Eliminar
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/40 transition-colors ${uploadingLogo ? "opacity-50 pointer-events-none" : ""}`}
-              onClick={() => logoInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-lg p-8 text-center ${canEditConfig ? "cursor-pointer hover:border-primary/40" : "opacity-50 pointer-events-none"} transition-colors ${uploadingLogo ? "opacity-50 pointer-events-none" : ""}`}
+              onClick={() => canEditConfig && logoInputRef.current?.click()}
             >
               {uploadingLogo ? (
                 <Loader2 className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2 animate-spin" />
@@ -229,36 +238,42 @@ const ConfigGeneral = () => {
               ) : (
                 <>
                   <span className="text-sm flex-1 py-1.5 px-2 rounded bg-muted/50">{p}</span>
-                  <Button
-                    size="sm" variant="ghost"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => { setEditingIdx(i); setEditingValue(p); }}
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Button>
-                  <Button
-                    size="sm" variant="ghost"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                    onClick={() => deletePartner(i)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {canEditConfig && (
+                    <Button
+                      size="sm" variant="ghost"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => { setEditingIdx(i); setEditingValue(p); }}
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  )}
+                  {canDeleteConfig && (
+                    <Button
+                      size="sm" variant="ghost"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                      onClick={() => deletePartner(i)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </>
               )}
             </div>
           ))}
-          <div className="flex items-center gap-2 pt-2 border-t">
-            <Input
-              value={newPartner}
-              onChange={(e) => setNewPartner(e.target.value)}
-              placeholder="Nuevo partner..."
-              className="h-8 text-sm flex-1"
-              onKeyDown={(e) => e.key === "Enter" && addPartner()}
-            />
-            <Button size="sm" variant="outline" className="h-8" onClick={addPartner} disabled={!newPartner.trim()}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
-            </Button>
-          </div>
+          {canCreateConfig && (
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <Input
+                value={newPartner}
+                onChange={(e) => setNewPartner(e.target.value)}
+                placeholder="Nuevo partner..."
+                className="h-8 text-sm flex-1"
+                onKeyDown={(e) => e.key === "Enter" && addPartner()}
+              />
+              <Button size="sm" variant="outline" className="h-8" onClick={addPartner} disabled={!newPartner.trim()}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -329,33 +344,37 @@ const ConfigGeneral = () => {
                 <>
                   <span className="text-sm font-mono w-10 text-center py-1.5 px-1 rounded bg-primary/10 text-primary font-semibold">{bu.key}</span>
                   <span className="text-sm flex-1 py-1.5 px-2 rounded bg-muted/50">{bu.label}</span>
-                  <Button
-                    size="sm" variant="ghost"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => {
-                      setEditingBUIdx(i);
-                      setEditingBUKey(bu.key);
-                      const parts = bu.label.split(" - ");
-                      setEditingBULabel(parts.length > 1 ? parts.slice(1).join(" - ") : bu.label);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Button>
-                  <Button
-                    size="sm" variant="ghost"
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                    onClick={() => {
-                      setBusinessUnits(businessUnits.filter((_, j) => j !== i));
-                      toast({ title: "BU eliminada" });
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {canEditConfig && (
+                    <Button
+                      size="sm" variant="ghost"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                        setEditingBUIdx(i);
+                        setEditingBUKey(bu.key);
+                        const parts = bu.label.split(" - ");
+                        setEditingBULabel(parts.length > 1 ? parts.slice(1).join(" - ") : bu.label);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  )}
+                  {canDeleteConfig && (
+                    <Button
+                      size="sm" variant="ghost"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                      onClick={() => {
+                        setBusinessUnits(businessUnits.filter((_, j) => j !== i));
+                        toast({ title: "BU eliminada" });
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </>
               )}
             </div>
           ))}
-          <div className="flex items-center gap-2 pt-2 border-t">
+          {canCreateConfig && <div className="flex items-center gap-2 pt-2 border-t">
             <Input
               value={newBUKey}
               onChange={(e) => setNewBUKey(e.target.value.toUpperCase())}
@@ -399,7 +418,7 @@ const ConfigGeneral = () => {
             }}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
             </Button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -430,6 +449,7 @@ const ConfigGeneral = () => {
                 className="w-48"
                 min={0}
                 step={10000}
+                disabled={!canEditConfig}
               />
               <span className="text-sm text-muted-foreground">USD</span>
             </div>
@@ -440,11 +460,13 @@ const ConfigGeneral = () => {
         </div>
       </div>
 
-      <div className="max-w-xl flex justify-end">
-        <Button onClick={handleSave} size="sm">
-          <Save className="h-4 w-4 mr-1" /> Guardar Cambios
-        </Button>
-      </div>
+      {canEditConfig && (
+        <div className="max-w-xl flex justify-end">
+          <Button onClick={handleSave} size="sm">
+            <Save className="h-4 w-4 mr-1" /> Guardar Cambios
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { KeyRound, Check, X, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const MODULES = ["Dashboard", "CRM", "Cotizaciones", "Clientes", "Contactos", "Proyectos", "Configuración"];
 const ACTION_KEYS = ["can_view", "can_create", "can_edit", "can_delete"] as const;
@@ -12,6 +13,8 @@ interface PermRow { id: string; role_id: string; module: string; can_view: boole
 
 const ConfigPermisos = () => {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const canEditConfig = canEdit("Configuración");
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [perms, setPerms] = useState<PermRow[]>([]);
@@ -134,9 +137,9 @@ const ConfigPermisos = () => {
                     return (
                       <td key={action} className="py-3 px-4 text-center">
                         <button
-                          onClick={() => togglePerm(mod, action)}
-                          disabled={saving}
-                          className="transition-transform hover:scale-110"
+                          onClick={() => canEditConfig && togglePerm(mod, action)}
+                          disabled={saving || !canEditConfig}
+                          className={`transition-transform ${canEditConfig ? "hover:scale-110" : "opacity-50 cursor-not-allowed"}`}
                         >
                           {allowed ? (
                             <span className="inline-flex w-7 h-7 rounded-full bg-sinem-success/20 items-center justify-center cursor-pointer hover:bg-sinem-success/30">

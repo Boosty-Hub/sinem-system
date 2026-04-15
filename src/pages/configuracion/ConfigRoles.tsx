@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface RoleRow {
   id: string;
@@ -19,6 +20,10 @@ interface RoleRow {
 
 const ConfigRoles = () => {
   const { toast } = useToast();
+  const { canCreate, canEdit, canDelete } = usePermissions();
+  const canCreateConfig = canCreate("Configuración");
+  const canEditConfig = canEdit("Configuración");
+  const canDeleteConfig = canDelete("Configuración");
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -122,9 +127,11 @@ const ConfigRoles = () => {
           <h1 className="text-xl font-bold tracking-tight">Gestión de Roles</h1>
           <p className="text-muted-foreground text-sm mt-1">{roles.length} roles definidos</p>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1" /> Nuevo Rol
-        </Button>
+        {canCreateConfig && (
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1" /> Nuevo Rol
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -146,12 +153,16 @@ const ConfigRoles = () => {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(role)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(role)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {canEditConfig && (
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(role)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {canDeleteConfig && (
+                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(role)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-4 mt-4 pt-3 border-t border-border/40">

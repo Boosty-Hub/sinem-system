@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const SUPABASE_URL = "https://fxsshhrxzjyjvfszaorq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4c3NoaHJ4emp5anZmc3phb3JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyOTEwODQsImV4cCI6MjA4Njg2NzA4NH0.qJl7Dle-5iqFnNXir4mDPKR2c3-s8Og4e_6h6ZgquIE";
@@ -44,6 +45,9 @@ interface UserForm {
 const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none", status: "activo", phone: "", cargo: "", pin_code: "" };
 
 const ConfigUsuarios = () => {
+  const { canCreate, canEdit } = usePermissions();
+  const canCreateConfig = canCreate("Configuración");
+  const canEditConfig = canEdit("Configuración");
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<AppUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -187,9 +191,11 @@ const ConfigUsuarios = () => {
           <h1 className="text-xl font-bold tracking-tight">Gestión de Usuarios</h1>
           <p className="text-muted-foreground text-sm mt-1">{users.length} usuarios registrados</p>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1" /> Nuevo Usuario
-        </Button>
+        {canCreateConfig && (
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1" /> Nuevo Usuario
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-sm">
@@ -262,9 +268,11 @@ const ConfigUsuarios = () => {
                     {new Date(user.created_at).toLocaleDateString("es-DO")}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(user)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    {canEditConfig && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(user)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}

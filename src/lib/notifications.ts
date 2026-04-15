@@ -48,6 +48,7 @@ const sendEmailNotification = async (params: CreateNotificationParams) => {
         title: params.title,
         message: params.message,
         link: params.link,
+        type: params.type,
       }),
     });
   } catch (err) {

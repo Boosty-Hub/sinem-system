@@ -8,6 +8,7 @@ import { Settings, Save, Eraser, Check, Loader2, Upload, PenLine } from "lucide-
 import SignaturePad from "signature_pad";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const emptySettings: ProposalSettings = {
   companyName: "", companyAddress: "", companyPhone: "", companyEmail: "",
@@ -83,6 +84,8 @@ const settingsToDb = (s: ProposalSettings) => ({
 
 const ConfigPropuestas = () => {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const canEditConfig = canEdit("Configuración");
   const [settings, setSettings] = useState<ProposalSettings>(emptySettings);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(true);
@@ -287,31 +290,31 @@ const ConfigPropuestas = () => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Nombre de la Empresa</Label>
-            <Input value={settings.companyName} onChange={(e) => update("companyName", e.target.value)} />
+            <Input value={settings.companyName} onChange={(e) => update("companyName", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>RNC</Label>
-            <Input value={settings.companyRnc} onChange={(e) => update("companyRnc", e.target.value)} />
+            <Input value={settings.companyRnc} onChange={(e) => update("companyRnc", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div className="col-span-2">
             <Label>Dirección</Label>
-            <Input value={settings.companyAddress} onChange={(e) => update("companyAddress", e.target.value)} />
+            <Input value={settings.companyAddress} onChange={(e) => update("companyAddress", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Teléfono</Label>
-            <Input value={settings.companyPhone} onChange={(e) => update("companyPhone", e.target.value)} />
+            <Input value={settings.companyPhone} onChange={(e) => update("companyPhone", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Email</Label>
-            <Input value={settings.companyEmail} onChange={(e) => update("companyEmail", e.target.value)} />
+            <Input value={settings.companyEmail} onChange={(e) => update("companyEmail", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Website</Label>
-            <Input value={settings.companyWebsite} onChange={(e) => update("companyWebsite", e.target.value)} />
+            <Input value={settings.companyWebsite} onChange={(e) => update("companyWebsite", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>URL del Logo</Label>
-            <Input value={settings.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />
+            <Input value={settings.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} readOnly={!canEditConfig} />
           </div>
         </div>
       </div>
@@ -321,25 +324,25 @@ const ConfigPropuestas = () => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Nombre del Firmante</Label>
-            <Input value={settings.signatureName} onChange={(e) => update("signatureName", e.target.value)} />
+            <Input value={settings.signatureName} onChange={(e) => update("signatureName", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Cargo</Label>
-            <Input value={settings.signatureTitle} onChange={(e) => update("signatureTitle", e.target.value)} />
+            <Input value={settings.signatureTitle} onChange={(e) => update("signatureTitle", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Teléfono del Firmante</Label>
-            <Input value={settings.signaturePhone} onChange={(e) => update("signaturePhone", e.target.value)} />
+            <Input value={settings.signaturePhone} onChange={(e) => update("signaturePhone", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Email del Firmante</Label>
-            <Input value={settings.signatureEmail} onChange={(e) => update("signatureEmail", e.target.value)} />
+            <Input value={settings.signatureEmail} onChange={(e) => update("signatureEmail", e.target.value)} readOnly={!canEditConfig} />
           </div>
           <div className="col-span-2">
             <Label>Firma Digital</Label>
             <p className="text-xs text-muted-foreground mb-2">Dibuja la firma o sube una imagen (JPEG/PNG) que aparecerá en las ofertas.</p>
 
-            {sigMode === "edit" ? (
+            {sigMode === "edit" && canEditConfig ? (
               <div>
                 {/* Mode tabs */}
                 <div className="flex gap-1 mb-3 border rounded-lg p-1 bg-muted/30 w-fit">
@@ -424,24 +427,26 @@ const ConfigPropuestas = () => {
                     className="max-h-20 max-w-[200px] object-contain"
                   />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Button variant="outline" size="sm" onClick={() => { setSigInputMode("draw"); setSigMode("edit"); }}>
-                    <PenLine className="h-3.5 w-3.5 mr-1" /> Volver a dibujar
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setSigInputMode("upload"); setSigMode("edit"); }}>
-                    <Upload className="h-3.5 w-3.5 mr-1" /> Subir otra imagen
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={handleDeleteSignature}
-                  >
-                    Eliminar firma
-                  </Button>
-                </div>
+                {canEditConfig && (
+                  <div className="flex flex-col gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setSigInputMode("draw"); setSigMode("edit"); }}>
+                      <PenLine className="h-3.5 w-3.5 mr-1" /> Volver a dibujar
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { setSigInputMode("upload"); setSigMode("edit"); }}>
+                      <Upload className="h-3.5 w-3.5 mr-1" /> Subir otra imagen
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={handleDeleteSignature}
+                    >
+                      Eliminar firma
+                    </Button>
+                  </div>
+                )}
               </div>
-            ) : (
+            ) : canEditConfig ? (
               <div className="flex gap-3">
                 <button
                   onClick={() => { setSigInputMode("draw"); setSigMode("edit"); }}
@@ -458,6 +463,8 @@ const ConfigPropuestas = () => {
                   <span className="text-sm text-muted-foreground">Subir imagen</span>
                 </button>
               </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">Sin firma configurada.</p>
             )}
           </div>
         </div>
@@ -469,15 +476,15 @@ const ConfigPropuestas = () => {
         <div className="space-y-4">
           <div>
             <Label>Párrafo Introductorio</Label>
-            <Textarea value={settings.coverIntroText} onChange={(e) => update("coverIntroText", e.target.value)} rows={3} />
+            <Textarea value={settings.coverIntroText} onChange={(e) => update("coverIntroText", e.target.value)} rows={3} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Párrafo de Partner SIEMENS</Label>
-            <Textarea value={settings.coverPartnerText} onChange={(e) => update("coverPartnerText", e.target.value)} rows={3} />
+            <Textarea value={settings.coverPartnerText} onChange={(e) => update("coverPartnerText", e.target.value)} rows={3} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Párrafo de Cierre</Label>
-            <Textarea value={settings.coverClosingText} onChange={(e) => update("coverClosingText", e.target.value)} rows={2} />
+            <Textarea value={settings.coverClosingText} onChange={(e) => update("coverClosingText", e.target.value)} rows={2} readOnly={!canEditConfig} />
           </div>
         </div>
       </div>
@@ -487,7 +494,7 @@ const ConfigPropuestas = () => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>ITBIS por defecto (%)</Label>
-            <Input type="number" value={settings.defaultItbisPercent} onChange={(e) => update("defaultItbisPercent", Number(e.target.value))} />
+            <Input type="number" value={settings.defaultItbisPercent} onChange={(e) => update("defaultItbisPercent", Number(e.target.value))} readOnly={!canEditConfig} />
             <p className="text-xs text-muted-foreground mt-1">Este valor se usará por defecto al crear nuevas cotizaciones. Se puede activar/desactivar por oferta.</p>
           </div>
         </div>
@@ -498,32 +505,32 @@ const ConfigPropuestas = () => {
         <div className="space-y-4">
           <div>
             <Label>Saludo Introductorio</Label>
-            <Textarea value={settings.greetingText} onChange={(e) => update("greetingText", e.target.value)} rows={3} />
+            <Textarea value={settings.greetingText} onChange={(e) => update("greetingText", e.target.value)} rows={3} readOnly={!canEditConfig} />
             <p className="text-xs text-muted-foreground mt-1">Texto que aparece después de los datos del cliente, antes de la tabla de ítems.</p>
           </div>
           <div>
             <Label>Garantía</Label>
-            <Textarea value={settings.warrantyText} onChange={(e) => update("warrantyText", e.target.value)} rows={5} />
+            <Textarea value={settings.warrantyText} onChange={(e) => update("warrantyText", e.target.value)} rows={5} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Responsabilidad</Label>
-            <Textarea value={settings.responsibilityText} onChange={(e) => update("responsibilityText", e.target.value)} rows={4} />
+            <Textarea value={settings.responsibilityText} onChange={(e) => update("responsibilityText", e.target.value)} rows={4} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Riesgos</Label>
-            <Textarea value={settings.risksText} onChange={(e) => update("risksText", e.target.value)} rows={5} />
+            <Textarea value={settings.risksText} onChange={(e) => update("risksText", e.target.value)} rows={5} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Instalación</Label>
-            <Textarea value={settings.installationText} onChange={(e) => update("installationText", e.target.value)} rows={3} />
+            <Textarea value={settings.installationText} onChange={(e) => update("installationText", e.target.value)} rows={3} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Vigencia de la Propuesta</Label>
-            <Textarea value={settings.validityText} onChange={(e) => update("validityText", e.target.value)} rows={2} />
+            <Textarea value={settings.validityText} onChange={(e) => update("validityText", e.target.value)} rows={2} readOnly={!canEditConfig} />
           </div>
           <div>
             <Label>Devoluciones y/o Cancelaciones</Label>
-            <Textarea value={settings.returnsText} onChange={(e) => update("returnsText", e.target.value)} rows={3} />
+            <Textarea value={settings.returnsText} onChange={(e) => update("returnsText", e.target.value)} rows={3} readOnly={!canEditConfig} />
           </div>
         </div>
       </div>
@@ -533,17 +540,17 @@ const ConfigPropuestas = () => {
         <div className="space-y-4">
           <div>
             <Label>Términos y Condiciones</Label>
-            <Textarea value={settings.legalClauses} onChange={(e) => update("legalClauses", e.target.value)} rows={6} />
+            <Textarea value={settings.legalClauses} onChange={(e) => update("legalClauses", e.target.value)} rows={6} readOnly={!canEditConfig} />
             <p className="text-xs text-muted-foreground mt-1">Cada línea se muestra como un punto separado en la propuesta.</p>
           </div>
           <div>
             <Label>Datos para Orden de Compra</Label>
-            <Textarea value={settings.purchaseOrderInfo} onChange={(e) => update("purchaseOrderInfo", e.target.value)} rows={4} />
+            <Textarea value={settings.purchaseOrderInfo} onChange={(e) => update("purchaseOrderInfo", e.target.value)} rows={4} readOnly={!canEditConfig} />
             <p className="text-xs text-muted-foreground mt-1">Datos de la empresa para que el cliente emita la orden de compra. El nombre, teléfono y email del firmante se agregan automáticamente.</p>
           </div>
           <div>
             <Label>Texto de Cierre</Label>
-            <Textarea value={settings.closingText} onChange={(e) => update("closingText", e.target.value)} rows={2} />
+            <Textarea value={settings.closingText} onChange={(e) => update("closingText", e.target.value)} rows={2} readOnly={!canEditConfig} />
             <p className="text-xs text-muted-foreground mt-1">Texto que aparece antes de la firma al final de la oferta.</p>
           </div>
         </div>
@@ -553,15 +560,17 @@ const ConfigPropuestas = () => {
         <h2 className="font-semibold mb-4">Pie de Página</h2>
         <div>
           <Label>Texto del Footer</Label>
-          <Input value={settings.footerText} onChange={(e) => update("footerText", e.target.value)} />
+          <Input value={settings.footerText} onChange={(e) => update("footerText", e.target.value)} readOnly={!canEditConfig} />
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSaveAll} disabled={saving}>
-          {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Guardando...</> : <><Save className="h-4 w-4 mr-2" /> Guardar Configuración</>}
-        </Button>
-      </div>
+      {canEditConfig && (
+        <div className="flex justify-end">
+          <Button onClick={handleSaveAll} disabled={saving}>
+            {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Guardando...</> : <><Save className="h-4 w-4 mr-2" /> Guardar Configuración</>}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
