@@ -3,25 +3,37 @@ import { useRef, useState, useEffect } from "react";
 import { CURRENCIES, type ProposalSettings, type Quotation } from "@/lib/types";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import html2pdf from "html2pdf.js";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import { supabase } from "@/lib/supabase";
+
+// Letter page: 816 × 1056px at 96dpi. Each page div matches this exactly.
+const PAGE_W = 816;
+const PAGE_H = 1056;
+const PAD_H = 45; // top padding
+const PAD_V = 55; // side padding
+const PAD_B = 30; // bottom padding
+const HEADER_H = 72;  // logo (55px) + 10px margin-bottom + some gap
+const FOOTER_H = 44;  // border + text + padding
 
 const PAGE_STYLE: React.CSSProperties = {
   fontFamily: "'Inter', Arial, sans-serif",
   color: "#1a1a1a",
   fontSize: "13px",
   lineHeight: "1.7",
-  padding: "45px 55px 30px 55px",
+  width: `${PAGE_W}px`,
+  minHeight: `${PAGE_H}px`,
+  padding: `${PAD_H}px ${PAD_V}px ${PAD_B}px ${PAD_V}px`,
   position: "relative",
-  minHeight: "1056px",
   display: "flex",
   flexDirection: "column",
+  boxSizing: "border-box",
 };
 
 const FOOTER_STYLE: React.CSSProperties = {
   marginTop: "auto",
+  paddingTop: "8px",
   borderTop: "1px solid #ccc",
-  paddingTop: "10px",
   fontSize: "10px",
   color: "#888",
   lineHeight: "1.4",
@@ -68,7 +80,6 @@ const OfertaPublica = () => {
 
   useEffect(() => {
     const load = async () => {
-      // Fetch quotation, line items, settings, and general settings in parallel
       const [{ data: qRow }, { data: liRows }, { data: settingsRow }, { data: gsRow }] = await Promise.all([
         supabase.from("quotations").select("*").eq("id", id).single(),
         supabase.from("quotation_line_items").select("*").eq("quotation_id", id).order("sort_order"),
@@ -96,6 +107,7 @@ const OfertaPublica = () => {
           client: {
             company: qRow.client_company,
             attention: qRow.client_attention,
+            gender: ((qRow as any).client_gender ?? "Sra.") as "Sr." | "Sra.",
             address: qRow.client_address,
             phone: qRow.client_phone,
             email: qRow.client_email,
@@ -134,7 +146,6 @@ const OfertaPublica = () => {
       if (settingsRow) setS(dbToSettings(settingsRow));
       if (gsRow?.value) setCompanyLogoFromSettings(gsRow.value);
 
-      // Load approver data if quotation is approved
       if (qRow?.approved_by) {
         const { data: approverRow } = await supabase
           .from("app_users")
@@ -158,12 +169,10 @@ const OfertaPublica = () => {
   }, [id]);
 
   const isApproved = quotation?.approvalStatus === "approved";
-  // Use approver's data when available, fall back to proposal_settings
   const sigName  = (isApproved && approver?.name)  ? approver.name  : s?.signatureName  ?? "";
   const sigTitle = (isApproved && approver?.cargo)  ? approver.cargo : s?.signatureTitle ?? "";
   const sigPhone = (isApproved && approver?.phone)  ? approver.phone : s?.signaturePhone ?? "";
   const sigEmail = (isApproved && approver?.email)  ? approver.email : s?.signatureEmail ?? "";
-  // Approver's personal signature image takes priority over the global one
   const sigImageUrl = (isApproved && approver?.signatureImageUrl) ? approver.signatureImageUrl : s?.signatureImageUrl ?? "";
   const qCurrency = quotation?.currency ?? "USD";
   const qRate = quotation?.exchangeRate ?? 1;
@@ -177,21 +186,152 @@ const OfertaPublica = () => {
   const qPartner = quotation?.partner ?? "Siemens";
   const replacePartner = (text: string) => text.replace(/SIEMENS|Siemens|siemens/g, qPartner);
 
-  // Auto-download PDF when ?download=true (hooks must be before early returns)
   const [searchParams] = useSearchParams();
   const autoDownload = searchParams.get("download") === "true";
   const [downloadTriggered, setDownloadTriggered] = useState(false);
 
-  const handleDownloadPDF = () => {
+  // Letter: 215.9 × 279.4 mm — matches PAGE_W × PAGE_H at 96 dpi
+  const PDF_W_MM = 215.9;
+  const PDF_H_MM = 279.4;
+  const SCALE = 2;
+  const PAGE_W_PX = PAGE_W * SCALE;
+  const PAGE_H_PX = PAGE_H * SCALE;
+
+  const handleDownloadPDF = async () => {
     if (!contentRef.current || !quotation) return;
-    const opt = {
-      margin: [10, 15, 10, 15] as [number, number, number, number],
-      filename: `${quotation.code}.pdf`,
-      image: { type: "jpeg" as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "mm" as const, format: "letter", orientation: "portrait" as const },
-    };
-    html2pdf().set(opt).from(contentRef.current).save();
+
+    const pageEls = Array.from(
+      contentRef.current.querySelectorAll<HTMLElement>(".pdf-page")
+    );
+    if (pageEls.length === 0) return;
+
+    const pdf = new jsPDF({
+      unit: "mm",
+      format: "letter",
+      orientation: "portrait",
+      compress: true,
+    });
+
+    for (let i = 0; i < pageEls.length; i++) {
+      const pageEl = pageEls[i];
+
+      // Measure header/footer boundaries in CSS px relative to page div top
+      const pageRect  = pageEl.getBoundingClientRect();
+      const headerEl  = pageEl.querySelector<HTMLElement>(".pdf-header");
+      const footerEl  = pageEl.querySelector<HTMLElement>(".pdf-footer");
+
+      const headerBottom_dom = headerEl
+        ? headerEl.getBoundingClientRect().bottom - pageRect.top
+        : PAD_H + HEADER_H;
+      const footerTop_dom = footerEl
+        ? footerEl.getBoundingClientRect().top - pageRect.top
+        : pageEl.offsetHeight - FOOTER_H - PAD_B;
+
+      // Convert to canvas pixels (scale=2)
+      const headerBottom_px = Math.round(headerBottom_dom * SCALE);
+      const footerTop_px    = Math.round(footerTop_dom    * SCALE);
+
+      // Render the full section (header + content + footer) to canvas
+      const canvas = await html2canvas(pageEl, {
+        scale: SCALE,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+        width: PAGE_W,
+        windowWidth: PAGE_W,
+        onclone: (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll<HTMLElement>(
+            ".shadow-lg,.shadow-md,.shadow-sm,.shadow-xl"
+          ).forEach((n) => { n.style.boxShadow = "none"; });
+          clonedDoc.querySelectorAll<HTMLElement>(".pdf-page").forEach((n) => {
+            n.style.marginBottom = "0";
+          });
+        },
+      } as any);
+
+      const totalH_px   = canvas.height;
+      const footerH_px  = totalH_px - footerTop_px;
+      const contentH_px = footerTop_px - headerBottom_px;
+      const usable_px   = PAGE_H_PX - headerBottom_px - footerH_px;
+
+      if (usable_px <= 0) {
+        // Degenerate — just add as-is
+        if (i > 0) pdf.addPage("letter", "portrait");
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
+        continue;
+      }
+
+      // ── Collect no-break zones (relative to content start = headerBottom_px) ──
+      const noBreakEls = Array.from(pageEl.querySelectorAll<HTMLElement>(".pdf-no-break"));
+      const noBreakZones = noBreakEls.map((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          top:    Math.round((r.top    - pageRect.top) * SCALE) - headerBottom_px,
+          bottom: Math.round((r.bottom - pageRect.top) * SCALE) - headerBottom_px,
+        };
+      }).filter((z) => z.top >= 0 && z.top < contentH_px);
+
+      // ── Compute smart break points that avoid cutting no-break zones ──
+      const sliceStarts: number[] = [0]; // content-relative starts
+      let y = 0;
+      while (y + usable_px < contentH_px) {
+        let proposed = y + usable_px;
+        // Check whether proposed cut falls inside any no-break zone
+        const hit = noBreakZones.find((z) => z.top < proposed && z.bottom > proposed);
+        if (hit) {
+          if (hit.top > y) {
+            // Break before the zone starts
+            proposed = hit.top;
+          } else {
+            // Zone is too tall to fit entirely — break after it ends
+            proposed = hit.bottom;
+          }
+        }
+        sliceStarts.push(proposed);
+        y = proposed;
+      }
+
+      // ── Build one composite PDF page per slice ──
+      const addCompositePage = (srcContentY: number, sliceH: number) => {
+        const comp = document.createElement("canvas");
+        comp.width  = PAGE_W_PX;
+        comp.height = PAGE_H_PX;
+        const ctx = comp.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, PAGE_W_PX, PAGE_H_PX);
+
+        // Header
+        ctx.drawImage(canvas, 0, 0, PAGE_W_PX, headerBottom_px, 0, 0, PAGE_W_PX, headerBottom_px);
+
+        // Content slice
+        const canvasSrcY = headerBottom_px + srcContentY;
+        if (sliceH > 0) {
+          ctx.drawImage(canvas, 0, canvasSrcY, PAGE_W_PX, sliceH, 0, headerBottom_px, PAGE_W_PX, sliceH);
+        }
+
+        // Footer
+        ctx.drawImage(canvas, 0, footerTop_px, PAGE_W_PX, footerH_px, 0, PAGE_H_PX - footerH_px, PAGE_W_PX, footerH_px);
+
+        pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
+      };
+
+      if (sliceStarts.length === 1) {
+        // Whole content fits on one page
+        if (i > 0) pdf.addPage("letter", "portrait");
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
+      } else {
+        for (let p = 0; p < sliceStarts.length; p++) {
+          if (i > 0 || p > 0) pdf.addPage("letter", "portrait");
+          const start = sliceStarts[p];
+          const end   = p + 1 < sliceStarts.length ? sliceStarts[p + 1] : contentH_px;
+          addCompositePage(start, end - start);
+        }
+      }
+    }
+
+    pdf.save(`${quotation.code}.pdf`);
   };
 
   useEffect(() => {
@@ -225,42 +365,98 @@ const OfertaPublica = () => {
     const day = d.getDate();
     const month = d.toLocaleDateString("es-DO", { month: "long" });
     const monthCap = month.charAt(0).toUpperCase() + month.slice(1);
-    const year = d.getFullYear();
-    return `${day} de ${monthCap} del ${year}`;
+    return `${day} de ${monthCap} del ${d.getFullYear()}`;
   };
 
   const formatDateShort = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    return `${dd}.${mm}.${yyyy}`;
+    return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
   };
 
-  const PageFooter = ({ pageNum, totalPages }: { pageNum: number; totalPages: number }) => (
-    <div style={FOOTER_STYLE}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-        <div style={{ whiteSpace: "pre-line" }}>{s.footerText}</div>
-        <div style={{ fontSize: "11px", color: "#666", whiteSpace: "nowrap", marginLeft: "20px" }}>{pageNum}</div>
+  const logoSrc = companyLogoFromSettings || s.logoUrl;
+
+  // ── Shared sub-components ────────────────────────────────────────────────
+  const PageHeader = ({ pageNum }: { pageNum: number }) => (
+    <div className="pdf-header" style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      borderBottom: "2px solid #0097A7",
+      paddingBottom: "10px",
+      marginBottom: "20px",
+    }}>
+      <img src={logoSrc} alt="SINEM" style={{ height: "50px", objectFit: "contain" }} crossOrigin="anonymous" />
+      <div style={{ textAlign: "right", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
+        <p style={{ margin: 0, fontWeight: 600, fontSize: "12px", color: "#333" }}>{quotation.code}</p>
+        <p style={{ margin: "2px 0 0 0" }}>{formatDateShort(quotation.createdAt)}</p>
+        <p style={{ margin: "2px 0 0 0", color: "#999" }}>Pág. {pageNum}</p>
       </div>
     </div>
   );
 
-  const PageHeader = () => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-      <img src={companyLogoFromSettings || s.logoUrl} alt="SINEM" style={{ height: "55px" }} />
-      <div style={{ textAlign: "right", fontSize: "11px", color: "#555", lineHeight: "1.4" }}>
-        <p style={{ margin: 0, fontWeight: 500 }}>{quotation.code}</p>
-        <p style={{ margin: "2px 0 0 0" }}>{formatDateShort(quotation.createdAt)}</p>
+  const PageFooter = () => (
+    <div className="pdf-footer" style={FOOTER_STYLE}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "20px" }}>
+        <div style={{ whiteSpace: "pre-line", flex: 1 }}>{s.footerText}</div>
+        <div style={{ fontSize: "10px", color: "#bbb", whiteSpace: "nowrap" }}>
+          {s.companyWebsite}
+        </div>
       </div>
     </div>
   );
+
+  const SignatureBlock = () => (
+    <>
+      <p style={{ margin: "0 0 12px 0", fontSize: "13px" }}>Atentamente,</p>
+      {isApproved ? (
+        <div style={{ position: "relative" }}>
+          {sigImageUrl && (
+            <img
+              src={sigImageUrl}
+              alt="Firma"
+              crossOrigin="anonymous"
+              style={{
+                display: "block",
+                height: "60px",
+                maxWidth: "220px",
+                objectFit: "contain",
+                objectPosition: "left bottom",
+                position: "relative",
+                zIndex: 2,
+                marginBottom: "-18px",
+                opacity: 0.92,
+                mixBlendMode: "multiply",
+              }}
+            />
+          )}
+          {!sigImageUrl && <div style={{ height: "20px" }} />}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
+            <div>
+              <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
+              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigTitle}</p>
+              <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
+            </div>
+            <div style={{ textAlign: "left" }}>
+              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigPhone}</p>
+              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#0097A7" }}>{sigEmail}</p>
+              <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyWebsite}</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: "15px 0", color: "#999", fontSize: "12px", fontStyle: "italic" }}>
+          Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
+        </div>
+      )}
+    </>
+  );
+
 
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Toolbar */}
       <div className="sticky top-0 z-50 bg-white border-b shadow-sm print:hidden">
-        <div className="max-w-[816px] mx-auto flex items-center justify-between py-3 px-4">
+        <div style={{ maxWidth: `${PAGE_W}px` }} className="mx-auto flex items-center justify-between py-3 px-4">
           <span className="text-sm font-semibold text-gray-700">
             {quotation.code} — {quotation.client.company}
           </span>
@@ -270,18 +466,21 @@ const OfertaPublica = () => {
         </div>
       </div>
 
-      {/* Offer Content */}
-      <div className="max-w-[816px] mx-auto my-8 print:my-0" ref={contentRef}>
+      {/* All pages */}
+      <div
+        ref={contentRef}
+        style={{ width: `${PAGE_W}px`, margin: "0 auto" }}
+        className="my-8 print:my-0"
+      >
 
-        {/* ═══════════════════════════════════════════════════════════════
-            PAGE 1 — COVER LETTER (matches PDF exactly)
-        ═══════════════════════════════════════════════════════════════ */}
-        <div className="bg-white shadow-lg print:shadow-none mb-8" style={PAGE_STYLE}>
-          {/* Header: Logo left, code+date right */}
-          <PageHeader />
+        {/* ══════════════════════════════════════════════════
+            PÁGINA 1 — CARTA DE PRESENTACIÓN
+        ══════════════════════════════════════════════════ */}
+        <div className="pdf-page bg-white shadow-lg print:shadow-none mb-6" style={PAGE_STYLE}>
+          <PageHeader pageNum={1} />
 
-          {/* Right-aligned info block */}
-          <div style={{ textAlign: "right", marginTop: "40px", marginBottom: "40px", fontSize: "13px", lineHeight: "1.8" }}>
+          {/* Info block */}
+          <div style={{ textAlign: "right", marginTop: "30px", marginBottom: "30px", fontSize: "13px", lineHeight: "1.8" }}>
             <p style={{ margin: 0 }}>{formatDateLong(quotation.createdAt)}</p>
             <p style={{ margin: 0 }}>Asunto: {quotation.subject}</p>
             <p style={{ margin: 0 }}>De: {sigName}</p>
@@ -289,277 +488,182 @@ const OfertaPublica = () => {
             <p style={{ margin: 0 }}>No. de oferta: {quotation.code}</p>
           </div>
 
-          {/* Greeting */}
-          <p style={{ margin: "0 0 30px 0", fontSize: "13px" }}>
-            Estimada {quotation.client.attention}:
+          <p style={{ margin: "0 0 28px 0", fontSize: "13px" }}>
+            {quotation.client.gender === "Sr." ? "Estimado" : "Estimada"} {quotation.client.attention}:
           </p>
 
-          {/* Body paragraphs */}
           <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
             {replacePartner(s.coverIntroText)}
           </p>
           <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
             {replacePartner(s.coverPartnerText)}
           </p>
-          <p style={{ margin: "0 0 30px 0", fontSize: "13px", textAlign: "justify" }}>
+          <p style={{ margin: "0 0 28px 0", fontSize: "13px", textAlign: "justify" }}>
             {s.coverClosingText}
           </p>
 
-          {/* Atentamente */}
-          <p style={{ margin: "0 0 15px 0", fontSize: "13px" }}>Atentamente,</p>
-
-          {isApproved ? (
-            <>
-              {/* Signature block with overlay effect */}
-              <div style={{ position: "relative" }}>
-                {sigImageUrl && (
-                  <img
-                    src={sigImageUrl}
-                    alt="Firma"
-                    style={{
-                      display: "block",
-                      height: "60px",
-                      maxWidth: "220px",
-                      objectFit: "contain",
-                      objectPosition: "left bottom",
-                      position: "relative",
-                      zIndex: 2,
-                      marginBottom: "-18px",
-                      opacity: 0.92,
-                      mixBlendMode: "multiply",
-                    }}
-                  />
-                )}
-                {!sigImageUrl && <div style={{ height: "20px" }} />}
-
-                {/* Signature block: two columns — sits under the image */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
-                  <div>
-                    <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
-                    <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigTitle}</p>
-                    <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
-                  </div>
-                  <div style={{ textAlign: "left" }}>
-                    <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigPhone}</p>
-                    <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#0097A7" }}>{sigEmail}</p>
-                    <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyWebsite}</p>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div style={{ padding: "15px 0", color: "#999", fontSize: "12px", fontStyle: "italic" }}>
-              Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
-            </div>
-          )}
-
-          {/* Page 1 Footer */}
-          <PageFooter pageNum={1} totalPages={2} />
+          <SignatureBlock />
+          <PageFooter />
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════════
-            PAGE 2+ — TECHNICAL & COMMERCIAL PROPOSAL
-        ═══════════════════════════════════════════════════════════════ */}
-        <div className="bg-white shadow-lg print:shadow-none mb-8" style={PAGE_STYLE}>
-          <PageHeader />
 
-          {/* Greeting */}
-          <p style={{ margin: "15px 0 20px 0", fontSize: "13px" }}>{s.greetingText}</p>
+        {/* ══════════════════════════════════════════════════
+            PÁGINA 2 — PROPUESTA TÉCNICO-COMERCIAL
+        ══════════════════════════════════════════════════ */}
+        <div className="pdf-page bg-white shadow-lg print:shadow-none mb-6" style={PAGE_STYLE}>
+          <PageHeader pageNum={2} />
 
-          {/* Items Table */}
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "15px" }}>
+          <p style={{ margin: "0 0 18px 0", fontSize: "13px" }}>{s.greetingText}</p>
+
+          {/* Items table */}
+          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
             <thead>
               <tr style={{ backgroundColor: "#0097A7", color: "white" }}>
-                <th style={{ padding: "10px 12px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "36px" }}>No.</th>
-                <th style={{ padding: "10px 12px", textAlign: "left", fontSize: "11px", fontWeight: 600 }}>Descripción</th>
-                <th style={{ padding: "10px 12px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "55px" }}>Cant.</th>
-                <th style={{ padding: "10px 12px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "105px" }}>P. Unit. {qCurrency}</th>
-                <th style={{ padding: "10px 12px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "105px" }}>Total {qCurrency}</th>
+                <th style={{ padding: "9px 10px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "36px" }}>No.</th>
+                <th style={{ padding: "9px 10px", textAlign: "left", fontSize: "11px", fontWeight: 600 }}>Descripción</th>
+                <th style={{ padding: "9px 10px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "50px" }}>Cant.</th>
+                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>P. Unit. {qCurrency}</th>
+                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>Total {qCurrency}</th>
               </tr>
             </thead>
             <tbody>
               {quotation.lineItems.map((item, i) => (
                 <tr key={item.id} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
-                  <td style={{ padding: "9px 12px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
-                  <td style={{ padding: "9px 12px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
-                  <td style={{ padding: "9px 12px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
-                  <td style={{ padding: "9px 12px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
+                  <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                  <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
           {/* Totals */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "25px" }}>
-            <table style={{ borderCollapse: "collapse", minWidth: "270px" }}>
+          <div className="pdf-no-break" style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+            <table style={{ borderCollapse: "collapse", minWidth: "260px" }}>
               <tbody>
                 <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
-                  <td style={{ padding: "7px 14px", fontWeight: 600, fontSize: "12px" }}>Subtotal:</td>
-                  <td style={{ padding: "7px 14px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.subtotalUSD)}</td>
+                  <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>Subtotal:</td>
+                  <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.subtotalUSD)}</td>
                 </tr>
                 {quotation.applyItbis && (
                   <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
-                    <td style={{ padding: "7px 14px", fontWeight: 600, fontSize: "12px" }}>ITBIS ({quotation.itbisPercent}%):</td>
-                    <td style={{ padding: "7px 14px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.itbisUSD)}</td>
+                    <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>ITBIS ({quotation.itbisPercent}%):</td>
+                    <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.itbisUSD)}</td>
                   </tr>
                 )}
                 <tr style={{ backgroundColor: "#0097A7" }}>
-                  <td style={{ padding: "9px 14px", fontWeight: 700, fontSize: "13px", color: "white" }}>Total General:</td>
-                  <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 700, fontSize: "13px", color: "white" }}>{fmt(quotation.totalUSD)}</td>
+                  <td style={{ padding: "8px 12px", fontWeight: 700, fontSize: "13px", color: "white" }}>Total General:</td>
+                  <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, fontSize: "13px", color: "white" }}>{fmt(quotation.totalUSD)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
           {qCurrency !== "USD" && !qIsOriginal && (
-            <p style={{ fontSize: "10px", color: "#888", margin: "-10px 0 15px 0", textAlign: "right" }}>
+            <p style={{ fontSize: "10px", color: "#888", margin: "-8px 0 14px 0", textAlign: "right" }}>
               Tasa de cambio aplicada: 1 USD = {qRate} {qCurrency}
             </p>
           )}
 
           {quotation.notes && (
-            <div style={{ marginBottom: "20px", padding: "10px 14px", backgroundColor: "#f8f9fa", borderLeft: "3px solid #0097A7", borderRadius: "4px" }}>
+            <div style={{ marginBottom: "18px", padding: "10px 14px", backgroundColor: "#f8f9fa", borderLeft: "3px solid #0097A7", borderRadius: "4px" }}>
               <p style={{ fontWeight: 600, fontSize: "11px", color: "#555", margin: "0 0 3px 0" }}>Notas:</p>
               <p style={{ margin: 0, fontSize: "12px" }}>{quotation.notes}</p>
             </div>
           )}
 
-          {/* Commercial Terms */}
-          <div style={{ marginBottom: "20px" }}>
-            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "10px", borderBottom: "2px solid #0097A7", paddingBottom: "5px" }}>
+          {/* Condiciones Comerciales */}
+          <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
+            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "8px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
               Condiciones Comerciales
             </h3>
             <table style={{ fontSize: "12px", borderCollapse: "collapse", width: "100%" }}>
               <tbody>
-                <tr style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ fontWeight: 600, padding: "6px 0", width: "170px", color: "#555" }}>Moneda:</td>
-                  <td style={{ padding: "6px 0" }}>Dólares Americanos (USD)</td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Forma de Pago:</td>
-                  <td style={{ padding: "6px 0" }}>{quotation.paymentTerms}</td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Condiciones de Entrega:</td>
-                  <td style={{ padding: "6px 0" }}>{quotation.deliveryTerms ?? "—"}</td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Tiempo de Entrega:</td>
-                  <td style={{ padding: "6px 0" }}>{quotation.deliveryWeeksMin}-{quotation.deliveryWeeksMax} semanas</td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Validez de la Oferta:</td>
-                  <td style={{ padding: "6px 0" }}>{quotation.validityDays} días</td>
-                </tr>
-                <tr style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ fontWeight: 600, padding: "6px 0", color: "#555" }}>Lugar de Entrega:</td>
-                  <td style={{ padding: "6px 0" }}>{quotation.deliveryLocation}</td>
-                </tr>
+                {[
+                  ["Moneda:", "Dólares Americanos (USD)"],
+                  ["Forma de Pago:", quotation.paymentTerms],
+                  ["Condiciones de Entrega:", quotation.deliveryTerms ?? "—"],
+                  ["Tiempo de Entrega:", `${quotation.deliveryWeeksMin}-${quotation.deliveryWeeksMax} semanas`],
+                  ["Validez de la Oferta:", `${quotation.validityDays} días`],
+                  ["Lugar de Entrega:", quotation.deliveryLocation],
+                ].map(([label, value]) => (
+                  <tr key={label} style={{ borderBottom: "1px solid #eee" }}>
+                    <td style={{ fontWeight: 600, padding: "5px 0", width: "175px", color: "#555" }}>{label}</td>
+                    <td style={{ padding: "5px 0" }}>{value}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
-          {/* Garantía */}
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px" }}>Garantía</h3>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.warrantyText}</div>
-          </div>
+          <PageFooter />
+        </div>
 
-          {/* Responsabilidad */}
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px" }}>Responsabilidad</h3>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.responsibilityText}</div>
-          </div>
 
-          {/* Riesgos */}
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px" }}>Riesgos</h3>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.risksText}</div>
-          </div>
+        {/* ══════════════════════════════════════════════════
+            PÁGINA 3 — TÉRMINOS, CONDICIONES Y FIRMA
+        ══════════════════════════════════════════════════ */}
+        <div className="pdf-page bg-white shadow-lg print:shadow-none mb-6" style={PAGE_STYLE}>
+          <PageHeader pageNum={3} />
 
-          {/* Instalación */}
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px" }}>Instalación</h3>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.installationText}</div>
-          </div>
+          {[
+            { title: "Garantía", text: s.warrantyText },
+            { title: "Responsabilidad", text: s.responsibilityText },
+            { title: "Riesgos", text: s.risksText },
+            { title: "Instalación", text: s.installationText },
+          ].map(({ title, text }) => text ? (
+            <div key={title} className="pdf-no-break" style={{ marginBottom: "14px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>{title}</h3>
+              <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{text}</div>
+            </div>
+          ) : null)}
 
-          {/* Vigencia de la propuesta */}
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px" }}>Vigencia de la propuesta</h3>
+          <div className="pdf-no-break" style={{ marginBottom: "14px" }}>
+            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>Vigencia de la propuesta</h3>
             <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>
               La presente oferta tiene una vigencia de <strong>{quotation.validityDays} días</strong> a partir de la fecha de emisión.
               {s.validityText ? ` ${s.validityText}` : ""}
             </div>
           </div>
 
-          {/* Devoluciones y/o cancelaciones */}
-          <div style={{ marginBottom: "16px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px" }}>Devoluciones y/o cancelaciones</h3>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.returnsText}</div>
-          </div>
+          {s.returnsText ? (
+            <div className="pdf-no-break" style={{ marginBottom: "14px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>Devoluciones y/o cancelaciones</h3>
+              <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.returnsText}</div>
+            </div>
+          ) : null}
 
-          {/* Términos y Condiciones */}
-          <div style={{ marginBottom: "20px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0097A7", marginBottom: "8px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
-              Términos y Condiciones
-            </h3>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.legalClauses}</div>
-          </div>
+          {s.legalClauses ? (
+            <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
+                Términos y Condiciones
+              </h3>
+              <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.legalClauses}</div>
+            </div>
+          ) : null}
 
           {/* Datos para Orden de Compra */}
-          <div style={{ marginBottom: "20px" }}>
-            <p style={{ fontSize: "12px", margin: "0 0 10px 0", lineHeight: "1.7" }}>
+          <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
+            <p style={{ fontSize: "12px", margin: "0 0 8px 0", lineHeight: "1.7" }}>
               En caso de ser favorecidos con su pedido, les agradeceremos emitir la orden de compra a nombre de:
             </p>
             <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.8", fontWeight: 500 }}>{s.purchaseOrderInfo}</div>
-            <div style={{ marginTop: "14px", fontSize: "12px", lineHeight: "1.7" }}>
+            <div style={{ marginTop: "12px", fontSize: "12px", lineHeight: "1.7" }}>
               <p style={{ margin: "0 0 2px 0" }}>Con atención a {sigName}</p>
               <p style={{ margin: "0 0 2px 0" }}>Teléfono: {sigPhone}</p>
               <p style={{ margin: 0 }}>{sigEmail}</p>
             </div>
           </div>
 
-          {/* Closing text */}
-          <p style={{ fontSize: "12px", margin: "0 0 30px 0", lineHeight: "1.7" }}>{s.closingText}</p>
+          {s.closingText ? (
+            <p className="pdf-no-break" style={{ fontSize: "12px", margin: "0 0 24px 0", lineHeight: "1.7" }}>{s.closingText}</p>
+          ) : null}
 
-          {/* Atentamente + Signature */}
-          <p style={{ margin: "0 0 12px 0", fontSize: "13px" }}>Atentamente,</p>
-          {isApproved ? (
-            <div style={{ position: "relative" }}>
-              {sigImageUrl && (
-                <img
-                  src={sigImageUrl}
-                  alt="Firma"
-                  style={{
-                    display: "block",
-                    height: "60px",
-                    maxWidth: "220px",
-                    objectFit: "contain",
-                    objectPosition: "left bottom",
-                    position: "relative",
-                    zIndex: 2,
-                    marginBottom: "-18px",
-                    opacity: 0.92,
-                    mixBlendMode: "multiply",
-                  }}
-                />
-              )}
-              {!sigImageUrl && <div style={{ height: "20px" }} />}
-              <div style={{ position: "relative", zIndex: 1 }}>
-                <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
-                <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigTitle}</p>
-                <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
-              </div>
-            </div>
-          ) : (
-            <div style={{ padding: "15px 0", color: "#999", fontSize: "12px", fontStyle: "italic" }}>
-              Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
-            </div>
-          )}
-
-          {/* Page Footer */}
-          <PageFooter pageNum={2} totalPages={2} />
+          <SignatureBlock />
+          <PageFooter />
         </div>
+
       </div>
     </div>
   );

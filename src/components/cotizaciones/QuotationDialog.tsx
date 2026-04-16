@@ -50,13 +50,14 @@ interface Props {
 interface ClientData {
   company: string;
   attention: string;
+  gender: "Sr." | "Sra.";
   address: string;
   rnc: string;
   phone: string;
   email: string;
 }
 
-const emptyClientData: ClientData = { company: "", attention: "", address: "", rnc: "", phone: "", email: "" };
+const emptyClientData: ClientData = { company: "", attention: "", gender: "Sra.", address: "", rnc: "", phone: "", email: "" };
 
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = { managerApprovalLimit: 300000 };
 /* ── Searchable Prospect Combobox ── */
@@ -229,7 +230,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setSelectedProspectId(quotation.prospectId ?? "none");
         setSelectedClientId(quotation.clientId ?? "none");
         setSelectedContactId(quotation.contactId ?? "none");
-        setClientData(quotation.client);
+        setClientData({ ...emptyClientData, ...quotation.client, gender: quotation.client.gender ?? "Sra." });
         setCode(quotation.code);
         setCodeManuallyEdited(false);
         setStatus(quotation.status);
@@ -723,7 +724,18 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               </div>
               <div>
                 <Label>Atención</Label>
-                <Input value={clientData.attention} onChange={(e) => setClientData((prev) => ({ ...prev, attention: e.target.value }))} />
+                <div className="flex gap-2">
+                  <Select value={clientData.gender} onValueChange={(v) => setClientData((prev) => ({ ...prev, gender: v as "Sr." | "Sra." }))}>
+                    <SelectTrigger className="w-[80px] shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Sr.">Sr.</SelectItem>
+                      <SelectItem value="Sra.">Sra.</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input value={clientData.attention} onChange={(e) => setClientData((prev) => ({ ...prev, attention: e.target.value }))} className="flex-1" />
+                </div>
               </div>
               <div>
                 <Label>Dirección</Label>

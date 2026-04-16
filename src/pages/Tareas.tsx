@@ -243,7 +243,7 @@ const Tareas = () => {
     }
   }, [tasks, searchParams]);
 
-  const currentUserName = systemUsers.find((u) => u.id === (user as any)?.id)?.name ?? systemUsers[0]?.name ?? "Usuario";
+  const currentUserName = systemUsers.find((u) => u.id === currentAppUserId)?.name ?? "Usuario";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -764,13 +764,13 @@ const Tareas = () => {
 
             return (
               <>
-                <DialogHeader>
+                <DialogHeader className="pr-8">
                   <div className="flex items-start justify-between gap-3">
-                    <DialogTitle className="text-lg leading-tight">{freshTask.title}</DialogTitle>
+                    <DialogTitle className="text-lg leading-tight pr-2">{freshTask.title}</DialogTitle>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <Button variant="outline" size="sm" onClick={() => { openEdit(freshTask); setDetailTask(null); }}>Editar</Button>
-                      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(freshTask)}>
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(freshTask)}>
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>

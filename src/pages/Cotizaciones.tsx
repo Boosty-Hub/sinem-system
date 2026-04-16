@@ -100,6 +100,7 @@ const Cotizaciones = () => {
       client: {
         company: q.client_company,
         attention: q.client_attention,
+        gender: ((q as any).client_gender ?? "Sra.") as "Sr." | "Sra.",
         address: q.client_address,
         phone: q.client_phone,
         email: q.client_email,
@@ -198,6 +199,7 @@ const Cotizaciones = () => {
       contact_id: updated.contactId ?? null,
       client_company: updated.client.company,
       client_attention: updated.client.attention,
+      client_gender: updated.client.gender ?? "Sra.",
       client_address: updated.client.address,
       client_phone: updated.client.phone,
       client_email: updated.client.email,

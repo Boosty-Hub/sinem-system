@@ -158,6 +158,7 @@ export interface QuotationLineItem {
 export interface QuotationClient {
   company: string;
   attention: string;
+  gender?: "Sr." | "Sra.";
   address: string;
   phone: string;
   email: string;
