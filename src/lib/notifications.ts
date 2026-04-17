@@ -63,7 +63,6 @@ const sendEmailNotification = async (params: CreateNotificationParams) => {
 export const createNotification = async (params: CreateNotificationParams) => {
   const prefs = await getUserPrefs(params.userId);
 
-  // Insert into notification center only if system notifications are enabled
   if (prefs.notif_system) {
     const { error } = await supabase.from("notifications").insert({
       user_id: params.userId,
@@ -75,12 +74,14 @@ export const createNotification = async (params: CreateNotificationParams) => {
       reference_type: params.referenceType ?? null,
       triggered_by: params.triggeredBy ?? null,
     } as any);
-    if (error) console.error("Failed to create notification:", error);
+    if (error) {
+      console.error("[notifications] insert failed:", error);
+      return;
+    }
   }
 
-  // Send email if email notifications are enabled
   if (prefs.notif_email) {
-    await sendEmailNotification(params);
+    sendEmailNotification(params);
   }
 };
 

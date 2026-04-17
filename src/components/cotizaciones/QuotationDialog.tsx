@@ -130,6 +130,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [showVersionPrompt, setShowVersionPrompt] = useState(false);
   const [showSignatureWarning, setShowSignatureWarning] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<(() => void) | null>(null);
+  const [showUndoApproval, setShowUndoApproval] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Controlled fields for save logic ──
@@ -1129,8 +1130,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               <span className="text-sm font-semibold">Aprobación de Cotización</span>
             </div>
             {quotation.approvalStatus === "approved" && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
-                <CheckCircle2 className="h-5 w-5 text-sinem-success shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
+                <CheckCircle2 className="h-5 w-5 text-sinem-success shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-green-800 dark:text-green-300">Aprobada</p>
                   <p className="text-xs text-green-600 dark:text-green-400">
@@ -1138,11 +1139,20 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     {quotation.approvedAt && ` el ${quotation.approvedAt}`}
                   </p>
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 text-xs h-7 border-green-300 text-green-800 hover:bg-green-100 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900/30"
+                  onClick={() => setShowUndoApproval(true)}
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" /> Deshacer
+                </Button>
               </div>
             )}
             {quotation.approvalStatus === "rejected" && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
-                <XCircle className="h-5 w-5 text-destructive shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
+                <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-red-800 dark:text-red-300">Rechazada</p>
                   <p className="text-xs text-red-600 dark:text-red-400">
@@ -1151,6 +1161,15 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   </p>
                   {quotation.approvalNote && <p className="text-xs text-red-600 dark:text-red-400 mt-1">Motivo: {quotation.approvalNote}</p>}
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 text-xs h-7 border-red-300 text-red-800 hover:bg-red-100 dark:text-red-300 dark:border-red-700 dark:hover:bg-red-900/30"
+                  onClick={() => setShowUndoApproval(true)}
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" /> Deshacer
+                </Button>
               </div>
             )}
             {quotation.approvalStatus === "pending" && (
@@ -1297,6 +1316,45 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 }}
               >
                 Aprobar de todas formas
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Undo approval confirmation */}
+        <AlertDialog open={showUndoApproval} onOpenChange={setShowUndoApproval}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                  <RotateCcw className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <AlertDialogTitle>Deshacer aprobación</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    La cotización volverá a estado <strong>Pendiente</strong> y se eliminarán los datos del aprobador.
+                  </AlertDialogDescription>
+                </div>
+              </div>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+                onClick={() => {
+                  if (!onSave || !quotation) return;
+                  onSave({
+                    ...quotation,
+                    approvalStatus: "pending",
+                    approvedBy: undefined,
+                    approvedAt: undefined,
+                    approvalNote: undefined,
+                  });
+                  setShowUndoApproval(false);
+                  onOpenChange(false);
+                }}
+              >
+                Sí, deshacer
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { TASK_STATUSES, TASK_PRIORITIES, type Task, type TaskStatus, type TaskComment } from "@/lib/types";
 import {
@@ -150,6 +150,7 @@ const Tareas = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [currentAppUserId, setCurrentAppUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -234,21 +235,41 @@ const Tareas = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Open task from URL param (e.g. /tareas?task=<id> from notification link)
+  // Open task from URL param (e.g. /tareas?task=<id>&comment=<id> from notification link)
   useEffect(() => {
     const taskId = searchParams.get("task");
+    const commentId = searchParams.get("comment");
     if (taskId && tasks.length > 0) {
       const task = tasks.find((t) => t.id === taskId);
-      if (task) setDetailTask(task);
+      if (task) {
+        setDetailTask(task);
+        if (commentId) setTargetCommentId(commentId);
+      }
     }
-  }, [tasks, searchParams]);
+  }, [tasks, searchParams, location.state]);
 
   const currentUserName = systemUsers.find((u) => u.id === currentAppUserId)?.name ?? "Usuario";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [targetCommentId, setTargetCommentId] = useState<string | null>(null);
   const [newComment, setNewComment] = useState("");
+
+  // Scroll to target comment when task detail opens from a mention notification
+  useEffect(() => {
+    if (!detailTask || !targetCommentId) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`comment-${targetCommentId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-primary/60", "rounded-lg");
+        setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-lg"), 3000);
+      }
+      setTargetCommentId(null);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [detailTask, targetCommentId]);
 
 
   const filtered = tasks.filter((t) => {
@@ -361,25 +382,36 @@ const Tareas = () => {
       setDetailTask((d) => d ? { ...d, comments: [...d.comments, comment] } : null);
     }
 
-    // Detect @mentions and notify — runs regardless of data being null
-    const mentionedUsers = systemUsers.filter(
-      (u) => commentText.includes(`@${u.name}`) && u.id !== currentAppUserId
-    );
+    // Detect @mentions and notify
+    const commentId = data?.id;
     const preview = commentText.length > 80 ? `${commentText.slice(0, 80)}…` : commentText;
-    await Promise.all(
-      mentionedUsers.map((mentioned) =>
-        createNotification({
-          userId: mentioned.id,
-          type: "mention",
-          title: "Usted ha sido mencionado en una Tarea",
-          message: `"${taskTitle}": ${preview}`,
-          link: `/tareas?task=${taskId}`,
-          referenceId: taskId,
-          referenceType: "task",
-          triggeredBy: currentAppUserId ?? undefined,
-        })
-      )
-    );
+    const mentionLink = `/tareas?task=${taskId}${commentId ? `&comment=${commentId}` : ""}`;
+
+    // Query users fresh from DB — longest name first to avoid substring false matches
+    const { data: allUsers } = await supabase
+      .from("app_users")
+      .select("id, name")
+      .eq("status", "activo");
+
+    const sortedUsers = (allUsers ?? []).slice().sort((a, b) => b.name.length - a.name.length);
+    const mentionedUsers = sortedUsers.filter((u) => commentText.includes(`@${u.name}`));
+
+    if (mentionedUsers.length > 0) {
+      await Promise.all(
+        mentionedUsers.map((mentioned) =>
+          createNotification({
+            userId: mentioned.id,
+            type: "mention",
+            title: "Usted ha sido mencionado en una Tarea",
+            message: `"${taskTitle}": ${preview}`,
+            link: mentionLink,
+            referenceId: taskId,
+            referenceType: "task",
+            triggeredBy: currentAppUserId ?? undefined,
+          })
+        )
+      );
+    }
 
     setNewComment("");
     toast({ title: "Comentario agregado" });
@@ -751,7 +783,7 @@ const Tareas = () => {
       </Dialog>
 
       {/* Task Detail / Comments Panel */}
-      <Dialog open={!!detailTask} onOpenChange={(open) => { if (!open) setDetailTask(null); }}>
+      <Dialog open={!!detailTask} onOpenChange={(open) => { if (!open) { setDetailTask(null); setTargetCommentId(null); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           {detailTask && (() => {
             const PriorityIcon = priorityIcon[detailTask.priority];
@@ -856,7 +888,7 @@ const Tareas = () => {
                     {freshTask.comments.length > 0 ? (
                       <div className="space-y-3 mb-4">
                         {freshTask.comments.map((c) => (
-                          <div key={c.id} className="flex gap-3">
+                          <div key={c.id} id={`comment-${c.id}`} className="flex gap-3 transition-all duration-300">
                             <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                               <span className="text-[10px] font-semibold text-primary">{c.author.split(" ").map((n) => n[0]).join("")}</span>
                             </div>

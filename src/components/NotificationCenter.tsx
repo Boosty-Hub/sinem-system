@@ -95,9 +95,11 @@ const NotificationCenter = () => {
 
   const handleClick = (notif: Notification) => {
     if (!notif.isRead) markAsRead(notif.id);
+    setOpen(false);
     if (notif.link) {
-      navigate(notif.link);
-      setOpen(false);
+      // Use replace:false + state trick to force re-evaluation of search params
+      // even when already on the same path
+      navigate(notif.link, { replace: false, state: { ts: Date.now() } });
     }
   };
 

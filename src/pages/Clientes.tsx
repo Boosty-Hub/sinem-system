@@ -242,8 +242,8 @@ const Clientes = () => {
         </div>
       )}
 
-      <div className="stat-card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="stat-card overflow-x-auto">
+        <table className="w-full min-w-[960px] text-sm">
           <thead>
             <tr className="border-b bg-muted/30">
               <th className="py-2.5 px-3 w-10">
