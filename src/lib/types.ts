@@ -153,6 +153,14 @@ export interface QuotationLineItem {
   quantity: number;
   unitPriceUSD: number;
   totalUSD: number;
+  unitCostUSD?: number;
+  itemMarginPercent?: number | null;
+}
+
+export interface CostEntry {
+  id: string;
+  label: string;
+  amountUSD: number;
 }
 
 export interface QuotationClient {
@@ -202,6 +210,8 @@ export interface Quotation {
   approvedBy?: string;
   approvedAt?: string;
   approvalNote?: string;
+  distributedCosts?: CostEntry[];
+  otherCosts?: CostEntry[];
 }
 
 export interface GeneralSettings {

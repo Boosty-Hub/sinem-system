@@ -53,6 +53,8 @@ const Cotizaciones = () => {
         quantity: li.quantity,
         unitPriceUSD: Number(li.unit_price_usd),
         totalUSD: Number(li.total_usd),
+        unitCostUSD: li.unit_cost_usd != null ? Number(li.unit_cost_usd) : undefined,
+        itemMarginPercent: li.item_margin_percent != null ? Number(li.item_margin_percent) : undefined,
       });
       itemsByQuotation.set(li.quotation_id, list);
     });
@@ -135,6 +137,8 @@ const Cotizaciones = () => {
       exchangeRate: Number(q.exchange_rate),
       isOriginalCurrency: (q as any).is_original_currency ?? false,
       partner: (q as any).partner ?? "Siemens",
+      distributedCosts: (q as any).distributed_costs ?? [],
+      otherCosts: (q as any).other_costs ?? [],
     })));
     setLoading(false);
   };
@@ -230,6 +234,8 @@ const Cotizaciones = () => {
       exchange_rate: updated.exchangeRate ?? 1,
       is_original_currency: updated.isOriginalCurrency ?? false,
       partner: updated.partner ?? "Siemens",
+      distributed_costs: updated.distributedCosts ?? [],
+      other_costs: updated.otherCosts ?? [],
       created_by: appUserId,
     };
 
@@ -262,6 +268,8 @@ const Cotizaciones = () => {
           quantity: li.quantity,
           unit_price_usd: li.unitPriceUSD,
           total_usd: li.totalUSD,
+          unit_cost_usd: li.unitCostUSD ?? null,
+          item_margin_percent: li.itemMarginPercent ?? null,
           sort_order: idx,
         }))
       );

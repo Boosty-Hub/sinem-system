@@ -11,7 +11,7 @@ import RichTextEditor from "@/components/RichTextEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
+import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type CostEntry, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search, RotateCcw, AlertTriangle } from "lucide-react";
@@ -29,6 +29,8 @@ interface LineItem {
   quantity: number;
   unitPriceUSD: number;
   totalUSD: number;
+  unitCostUSD: number;
+  itemMarginPercent: number | null;
 }
 
 interface QuotationPrefill {
@@ -108,7 +110,7 @@ const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[
   );
 };
 
-const DRAFT_KEY = "sinem:quotation-draft";
+const DRAFT_KEY = "sinem:quotation-draft-v2";
 
 const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
@@ -139,8 +141,6 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [createdAt, setCreatedAt] = useState("");
   const [subject, setSubject] = useState("");
   const [costUSD, setCostUSD] = useState(0);
-  const [marginPercent, setMarginPercent] = useState(0);
-  const [marginUSD, setMarginUSD] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [deliveryTerms, setDeliveryTerms] = useState<DeliveryTerm>("CIF");
   const [deliveryWeeksMin, setDeliveryWeeksMin] = useState(0);
@@ -156,6 +156,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [partner, setPartner] = useState<QuotationPartner>("Siemens");
   const [selectedClientId, setSelectedClientId] = useState("none");
   const [selectedContactId, setSelectedContactId] = useState("none");
+  const [distributedCosts, setDistributedCosts] = useState<CostEntry[]>([]);
+  const [otherCosts, setOtherCosts] = useState<CostEntry[]>([]);
+  const [generalMarginInput, setGeneralMarginInput] = useState(0);
 
   // Resolve current auth user to app_users id
   useEffect(() => {
@@ -210,7 +213,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     if (isEdit) return;
     const draft = {
       code, subject, selectedProspectId, selectedClientId, selectedContactId,
-      clientData, lineItems, status, costUSD, marginPercent, marginUSD,
+      clientData, lineItems, status, costUSD, distributedCosts, otherCosts,
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax,
       validityDays, deliveryLocation, notes, applyItbis, itbisPercent,
       currency, exchangeRate, isOriginalCurrency, partner, codeManuallyEdited,
@@ -227,7 +230,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
       if (quotation) {
         // Editing existing quotation
-        setLineItems(quotation.lineItems);
+        setLineItems(quotation.lineItems.map((li) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null })));
         setSelectedProspectId(quotation.prospectId ?? "none");
         setSelectedClientId(quotation.clientId ?? "none");
         setSelectedContactId(quotation.contactId ?? "none");
@@ -238,8 +241,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setCreatedAt(quotation.createdAt);
         setSubject(quotation.subject);
         setCostUSD(quotation.costUSD);
-        setMarginPercent(quotation.marginPercent);
-        setMarginUSD(quotation.marginUSD);
+        setDistributedCosts(quotation.distributedCosts ?? []);
+        setOtherCosts(quotation.otherCosts ?? []);
+        setGeneralMarginInput(0);
         setPaymentTerms(quotation.paymentTerms);
         setDeliveryTerms(quotation.deliveryTerms);
         setDeliveryWeeksMin(quotation.deliveryWeeksMin);
@@ -257,19 +261,21 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         // New quotation — try restoring draft (only if no prefill)
         const raw = !prefill ? sessionStorage.getItem(DRAFT_KEY) : null;
         const d = raw ? JSON.parse(raw) : null;
-        setLineItems(d?.lineItems ?? []);
+        setLineItems((d?.lineItems ?? []).map((li: any) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null })));
         setSelectedProspectId(d?.selectedProspectId ?? prefill?.prospectId ?? "none");
         setSelectedClientId(d?.selectedClientId ?? prefill?.clientId ?? "none");
         setSelectedContactId(d?.selectedContactId ?? prefill?.contactId ?? "none");
         setClientData(d?.clientData ?? emptyClientData);
-        setCode(d?.code ?? "");
+        // Only restore code if the user had manually edited it; otherwise let auto-generate produce the correct version
+        setCode(d?.codeManuallyEdited ? (d?.code ?? "") : "");
         setCodeManuallyEdited(d?.codeManuallyEdited ?? false);
         setStatus(d?.status ?? "borrador");
         setCreatedAt("");
         setSubject(d?.subject ?? prefill?.subject ?? "");
         setCostUSD(d?.costUSD ?? 0);
-        setMarginPercent(d?.marginPercent ?? 0);
-        setMarginUSD(d?.marginUSD ?? 0);
+        setDistributedCosts(d?.distributedCosts ?? []);
+        setOtherCosts(d?.otherCosts ?? []);
+        setGeneralMarginInput(0);
         setPaymentTerms(d?.paymentTerms ?? "");
         setDeliveryTerms(d?.deliveryTerms ?? "CIF");
         setDeliveryWeeksMin(d?.deliveryWeeksMin ?? 0);
@@ -308,7 +314,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
     // Generate code
     const clientName = prospect.directCustomer || clientData.company;
-    generateCode(prospect.bu, clientName, 1).then((c) => {
+    generateCode(prospect.bu, clientName, 0).then((c) => {
       if (!codeManuallyEdited) setCode(c);
     });
   }, [prospects, open]);
@@ -381,7 +387,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         const prospect = prospects.find((p) => p.id === value);
         if (prospect) {
           const clientName = prospect.directCustomer || clientData.company;
-          const newCode = await generateCode(prospect.bu, clientName, quotation ? quotation.version + 1 : 1);
+          const newCode = await generateCode(prospect.bu, clientName, quotation ? quotation.version + 1 : 0);
           setCode(newCode);
         }
       }
@@ -421,7 +427,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         if (!codeManuallyEdited && !quotation) {
           const prospect = selectedProspectId !== "none" ? prospects.find((p) => p.id === selectedProspectId) : null;
           const bu = prospect?.bu || "";
-          const newCode = await generateCode(bu, client.name, 1);
+          const newCode = await generateCode(bu, client.name, 0);
           setCode(newCode);
         }
       }
@@ -446,7 +452,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const addItem = () => {
     setLineItems((prev) => [
       ...prev,
-      { id: `new-${Date.now()}`, description: "", quantity: 1, unitPriceUSD: 0, totalUSD: 0 },
+      { id: `new-${Date.now()}`, description: "", quantity: 1, unitPriceUSD: 0, totalUSD: 0, unitCostUSD: 0, itemMarginPercent: null },
     ]);
   };
 
@@ -454,15 +460,58 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setLineItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const updateItem = (id: string, field: keyof LineItem, value: string | number) => {
+  const updateItem = (id: string, field: keyof LineItem, value: string | number | null) => {
     setLineItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
         const updated = { ...item, [field]: value };
-        if (field === "quantity" || field === "unitPriceUSD") {
-          updated.totalUSD = updated.quantity * updated.unitPriceUSD;
+
+        if (field === "quantity") {
+          updated.totalUSD = Math.round(updated.quantity * updated.unitPriceUSD * 100) / 100;
         }
+
+        if (field === "unitPriceUSD") {
+          updated.totalUSD = Math.round(updated.quantity * updated.unitPriceUSD * 100) / 100;
+          // Derive margin from new price when cost is set
+          if (updated.unitCostUSD > 0 && updated.unitPriceUSD > 0) {
+            updated.itemMarginPercent = Math.round(((updated.unitPriceUSD - updated.unitCostUSD) / updated.unitPriceUSD) * 10000) / 100;
+          }
+        }
+
+        if (field === "unitCostUSD") {
+          const cost = Number(value) || 0;
+          updated.unitCostUSD = cost;
+          // Only recalculate price if margin was already explicitly set
+          if (cost > 0 && updated.itemMarginPercent !== null && updated.itemMarginPercent < 100) {
+            const newPrice = Math.round((cost / (1 - updated.itemMarginPercent / 100)) * 100) / 100;
+            updated.unitPriceUSD = newPrice;
+            updated.totalUSD = Math.round(updated.quantity * newPrice * 100) / 100;
+          }
+          // Do NOT auto-derive margin from existing price — let the user set it explicitly
+        }
+
+        if (field === "itemMarginPercent") {
+          const margin = value !== null ? Number(value) : null;
+          updated.itemMarginPercent = margin;
+          if (margin !== null && updated.unitCostUSD > 0 && margin < 100) {
+            const newPrice = Math.round((updated.unitCostUSD / (1 - margin / 100)) * 100) / 100;
+            updated.unitPriceUSD = newPrice;
+            updated.totalUSD = Math.round(updated.quantity * newPrice * 100) / 100;
+          }
+        }
+
         return updated;
+      })
+    );
+  };
+
+  const applyGeneralMargin = () => {
+    if (generalMarginInput <= 0 || generalMarginInput >= 100) return;
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (!item.unitCostUSD) return item;
+        const newPrice = Math.round((item.unitCostUSD / (1 - generalMarginInput / 100)) * 100) / 100;
+        return { ...item, itemMarginPercent: generalMarginInput, unitPriceUSD: newPrice, totalUSD: Math.round(item.quantity * newPrice * 100) / 100 };
       })
     );
   };
@@ -471,16 +520,21 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const itbisUSD = applyItbis ? Math.round(subtotal * itbisPercent / 100) : 0;
   const totalUSD = subtotal + itbisUSD;
 
-  // Auto-recalculate margins when subtotal or cost changes
-  useEffect(() => {
-    setMarginPercent(subtotal > 0 ? Math.round((1 - costUSD / subtotal) * 10000) / 100 : 0);
-    setMarginUSD(Math.round((subtotal - costUSD) * 100) / 100);
-  }, [subtotal, costUSD]);
+  // Cost breakdown (computed)
+  const itemsCostTotal = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+  const distributedTotal = distributedCosts.reduce((s, c) => s + c.amountUSD, 0);
+  const otherCostsTotal = otherCosts.reduce((s, c) => s + c.amountUSD, 0);
+  const hasDetailedCosts = itemsCostTotal > 0 || distributedTotal > 0 || otherCostsTotal > 0;
+  const effectiveCostUSD = hasDetailedCosts ? (itemsCostTotal + distributedTotal + otherCostsTotal) : costUSD;
+  const marginUSD = Math.round((subtotal - effectiveCostUSD) * 100) / 100;
+  const marginPercent = subtotal > 0 ? Math.round((subtotal - effectiveCostUSD) / subtotal * 10000) / 100 : 0;
 
   const buildCurrentData = () => {
     const currentLineItems: QuotationLineItem[] = lineItems.map((li) => ({
       id: li.id, description: li.description, quantity: li.quantity,
       unitPriceUSD: li.unitPriceUSD, totalUSD: li.totalUSD,
+      unitCostUSD: li.unitCostUSD || undefined,
+      itemMarginPercent: li.itemMarginPercent ?? undefined,
     }));
     return {
       code, status, createdAt, subject,
@@ -491,7 +545,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       lineItems: currentLineItems,
       subtotalUSD: subtotal, applyItbis, itbisPercent, itbisUSD, totalUSD,
       currency, exchangeRate, isOriginalCurrency, partner,
-      costUSD, marginPercent, marginUSD,
+      costUSD: effectiveCostUSD, marginPercent, marginUSD,
+      distributedCosts, otherCosts,
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
     };
   };
@@ -529,7 +584,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       id: `q-${Date.now()}`,
       ...data,
       createdAt: data.createdAt || new Date().toISOString().split("T")[0],
-      version: 1,
+      version: 0,
       history: [],
       approvalStatus: "pending",
     };
@@ -608,10 +663,10 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const restoreVersion = (snap: QuotationSnapshot) => {
     setCode(snap.code);
     setSubject(snap.subject);
-    setLineItems(snap.lineItems.map((li) => ({ ...li })));
+    setLineItems(snap.lineItems.map((li) => ({ ...li, unitCostUSD: (li as any).unitCostUSD ?? 0, itemMarginPercent: (li as any).itemMarginPercent ?? null })));
     setCostUSD(snap.costUSD);
-    setMarginPercent(snap.marginPercent);
-    setMarginUSD(snap.marginUSD);
+    setDistributedCosts([]);
+    setOtherCosts([]);
     setPaymentTerms(snap.paymentTerms);
     setDeliveryTerms(snap.deliveryTerms);
     setDeliveryWeeksMin(snap.deliveryWeeksMin);
@@ -626,7 +681,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Cotización ${quotation.code}` : "Nueva Cotización"}</DialogTitle>
         </DialogHeader>
@@ -810,7 +865,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                           const desc = String(r[0] ?? "").trim();
                           const qty = Number(r[1]) || 1;
                           const price = Number(r[2]) || 0;
-                          return { id: crypto.randomUUID(), description: desc, quantity: qty, unitPriceUSD: price, totalUSD: qty * price };
+                          return { id: crypto.randomUUID(), description: desc, quantity: qty, unitPriceUSD: price, totalUSD: qty * price, unitCostUSD: 0, itemMarginPercent: null };
                         });
                       if (imported.length > 0) setLineItems((prev) => [...prev, ...imported]);
                     };
@@ -827,9 +882,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   <tr className="bg-muted/50 border-b">
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Descripción</th>
                     <th className="text-center py-2 px-3 font-medium text-muted-foreground text-xs w-20">Cant.</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Unit.</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-24">Margen %</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">P. Unit. {isOriginalCurrency ? currency : "USD"}</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Total {isOriginalCurrency ? currency : "USD"}</th>
-                    <th className="w-10"></th>
+                    <th className="w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -847,16 +904,38 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                           type="number"
                           value={item.quantity}
                           onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value))}
-                          className="h-8 text-xs text-center"
+                          className="h-8 text-xs text-center px-1"
                           min={1}
                         />
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-2">
+                        <Input
+                          type="number"
+                          value={item.unitCostUSD || ""}
+                          onChange={(e) => updateItem(item.id, "unitCostUSD", Number(e.target.value))}
+                          className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          min={0}
+                          placeholder="0"
+                        />
+                      </td>
+                      <td className="py-2 px-2">
+                        <Input
+                          type="number"
+                          value={item.itemMarginPercent ?? ""}
+                          onChange={(e) => updateItem(item.id, "itemMarginPercent", e.target.value === "" ? null : Number(e.target.value))}
+                          className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          min={0}
+                          max={99.99}
+                          step={0.01}
+                          placeholder="—"
+                        />
+                      </td>
+                      <td className="py-2 px-2">
                         <Input
                           type="number"
                           value={item.unitPriceUSD}
                           onChange={(e) => updateItem(item.id, "unitPriceUSD", Number(e.target.value))}
-                          className="h-8 text-xs text-right"
+                          className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           min={0}
                         />
                       </td>
@@ -870,7 +949,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   ))}
                   {lineItems.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-muted-foreground text-xs">
+                      <td colSpan={7} className="py-6 text-center text-muted-foreground text-xs">
                         Sin ítems. Haz clic en "Agregar Ítem" para comenzar.
                       </td>
                     </tr>
@@ -955,18 +1034,153 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           {/* Costos internos */}
           <div>
             <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">Costos Internos</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label>Costo USD</Label>
-                <Input type="number" value={costUSD || ""} onChange={(e) => { const c = Number(e.target.value) || 0; setCostUSD(c); setMarginPercent(subtotal > 0 ? Math.round((1 - c / subtotal) * 10000) / 100 : 0); setMarginUSD(Math.round((subtotal - c) * 100) / 100); }} />
+            <div className="space-y-4">
+              {/* Margen general */}
+              <div className="flex items-end gap-3 p-3 rounded-lg bg-muted/30 border">
+                <div className="flex-1">
+                  <Label className="text-xs">Aplicar Margen General a ítems con costo</Label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Aplica el % a todos los ítems que tengan costo unitario definido, recalculando su precio.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={generalMarginInput || ""}
+                    onChange={(e) => setGeneralMarginInput(Number(e.target.value) || 0)}
+                    className="w-20 h-8 text-xs text-right"
+                    min={0}
+                    max={99.99}
+                    step={0.01}
+                    placeholder="0"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                  <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={applyGeneralMargin}>
+                    Aplicar
+                  </Button>
+                </div>
               </div>
+
+              {/* Costos Distribuidos */}
               <div>
-                <Label>Margen %</Label>
-                <Input value={marginPercent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} readOnly className="bg-muted/50" />
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-semibold">Costos Distribuidos</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs text-muted-foreground"
+                    onClick={() => setDistributedCosts((prev) => [...prev, { id: `dc-${Date.now()}`, label: "", amountUSD: 0 }])}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Agregar
+                  </Button>
+                </div>
+                {distributedCosts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Sin costos distribuidos. Ej: transporte, flete, aduanas.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {distributedCosts.map((entry) => (
+                      <div key={entry.id} className="flex items-center gap-2">
+                        <Input
+                          value={entry.label}
+                          onChange={(e) => setDistributedCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, label: e.target.value } : c))}
+                          className="h-8 text-xs flex-1"
+                          placeholder="Ej: Transporte marítimo"
+                        />
+                        <Input
+                          type="number"
+                          value={entry.amountUSD || ""}
+                          onChange={(e) => setDistributedCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, amountUSD: Number(e.target.value) || 0 } : c))}
+                          className="h-8 text-xs w-28 text-right"
+                          min={0}
+                          placeholder="0.00"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDistributedCosts((prev) => prev.filter((c) => c.id !== entry.id))}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Otros Costos */}
               <div>
-                <Label>Margen USD</Label>
-                <Input value={marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} readOnly className="bg-muted/50" />
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-semibold">Otros Costos</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs text-muted-foreground"
+                    onClick={() => setOtherCosts((prev) => [...prev, { id: `oc-${Date.now()}`, label: "", amountUSD: 0 }])}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Agregar
+                  </Button>
+                </div>
+                {otherCosts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Sin otros costos. Ej: comisiones, honorarios.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {otherCosts.map((entry) => (
+                      <div key={entry.id} className="flex items-center gap-2">
+                        <Input
+                          value={entry.label}
+                          onChange={(e) => setOtherCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, label: e.target.value } : c))}
+                          className="h-8 text-xs flex-1"
+                          placeholder="Ej: Comisión de ventas"
+                        />
+                        <Input
+                          type="number"
+                          value={entry.amountUSD || ""}
+                          onChange={(e) => setOtherCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, amountUSD: Number(e.target.value) || 0 } : c))}
+                          className="h-8 text-xs w-28 text-right"
+                          min={0}
+                          placeholder="0.00"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => setOtherCosts((prev) => prev.filter((c) => c.id !== entry.id))}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Costo manual (fallback cuando no hay costos detallados) */}
+              {!hasDetailedCosts && (
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Label className="text-xs">Costo Total USD (manual)</Label>
+                    <Input type="number" value={costUSD || ""} onChange={(e) => setCostUSD(Number(e.target.value) || 0)} className="h-8 text-xs mt-1" />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Se usa cuando no hay costos por ítem ni distribuidos.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Resumen de costos */}
+              <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5 text-xs">
+                {hasDetailedCosts && itemsCostTotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground"><span>Costo ítems:</span><span>${itemsCostTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                )}
+                {distributedTotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground"><span>Costos distribuidos:</span><span>${distributedTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                )}
+                {otherCostsTotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground"><span>Otros costos:</span><span>${otherCostsTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                )}
+                <div className="flex justify-between font-semibold border-t pt-1.5"><span>Costo total:</span><span>${effectiveCostUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between font-semibold text-sinem-success"><span>Margen:</span><span>{marginPercent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% — ${marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
               </div>
             </div>
           </div>
