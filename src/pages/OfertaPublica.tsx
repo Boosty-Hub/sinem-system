@@ -129,6 +129,7 @@ const OfertaPublica = () => {
           deliveryTerms: qRow.delivery_terms as any,
           deliveryWeeksMin: qRow.delivery_weeks_min,
           deliveryWeeksMax: qRow.delivery_weeks_max,
+          deliveryTimeNote: (qRow as any).delivery_time_note ?? "",
           validityDays: qRow.validity_days,
           deliveryLocation: qRow.delivery_location,
           notes: qRow.notes,
@@ -141,6 +142,7 @@ const OfertaPublica = () => {
           approvedAt: qRow.approved_at ?? undefined,
           approvalNote: qRow.approval_note ?? undefined,
           proposalTexts: (qRow as any).proposal_texts ?? undefined,
+          distributedCosts: ((qRow as any).distributed_costs ?? []) as any,
         });
       }
 
@@ -563,6 +565,12 @@ const OfertaPublica = () => {
                   <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>Subtotal:</td>
                   <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.subtotalUSD)}</td>
                 </tr>
+                {((quotation.distributedCosts ?? []) as any[]).reduce((s: number, c: any) => s + (c.amountUSD ?? 0), 0) > 0 && (
+                  <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
+                    <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>Costos distribuidos:</td>
+                    <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(((quotation.distributedCosts ?? []) as any[]).reduce((s: number, c: any) => s + (c.amountUSD ?? 0), 0))}</td>
+                  </tr>
+                )}
                 {quotation.applyItbis && (
                   <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
                     <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>ITBIS ({quotation.itbisPercent}%):</td>
@@ -600,7 +608,7 @@ const OfertaPublica = () => {
                   ["Moneda:", "Dólares Americanos (USD)"],
                   ["Forma de Pago:", quotation.paymentTerms],
                   ["Condiciones de Entrega:", quotation.deliveryTerms ?? "—"],
-                  ["Tiempo de Entrega:", `${quotation.deliveryWeeksMin}-${quotation.deliveryWeeksMax} semanas`],
+                  ["Tiempo de Entrega:", [quotation.deliveryWeeksMin || quotation.deliveryWeeksMax ? `${quotation.deliveryWeeksMin}-${quotation.deliveryWeeksMax} semanas` : null, quotation.deliveryTimeNote].filter(Boolean).join(" — ") || "—"],
                   ["Validez de la Oferta:", `${quotation.validityDays} días`],
                   ["Lugar de Entrega:", quotation.deliveryLocation],
                 ].map(([label, value]) => (

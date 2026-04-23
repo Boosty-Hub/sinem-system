@@ -145,6 +145,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [deliveryTerms, setDeliveryTerms] = useState<DeliveryTerm>("CIF");
   const [deliveryWeeksMin, setDeliveryWeeksMin] = useState(0);
   const [deliveryWeeksMax, setDeliveryWeeksMax] = useState(0);
+  const [deliveryTimeNote, setDeliveryTimeNote] = useState("");
   const [validityDays, setValidityDays] = useState(30);
   const [deliveryLocation, setDeliveryLocation] = useState("");
   const [notes, setNotes] = useState("");
@@ -272,6 +273,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setDeliveryTerms(quotation.deliveryTerms);
         setDeliveryWeeksMin(quotation.deliveryWeeksMin);
         setDeliveryWeeksMax(quotation.deliveryWeeksMax);
+        setDeliveryTimeNote(quotation.deliveryTimeNote ?? "");
         setValidityDays(quotation.validityDays);
         setDeliveryLocation(quotation.deliveryLocation);
         setNotes(quotation.notes);
@@ -304,6 +306,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setDeliveryTerms(d?.deliveryTerms ?? "CIF");
         setDeliveryWeeksMin(d?.deliveryWeeksMin ?? 0);
         setDeliveryWeeksMax(d?.deliveryWeeksMax ?? 0);
+        setDeliveryTimeNote(d?.deliveryTimeNote ?? "");
         setValidityDays(d?.validityDays ?? 30);
         setDeliveryLocation(d?.deliveryLocation ?? "");
         setNotes(d?.notes ?? "");
@@ -541,8 +544,6 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   };
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.totalUSD, 0);
-  const itbisUSD = applyItbis ? Math.round(subtotal * itbisPercent / 100) : 0;
-  const totalUSD = subtotal + itbisUSD;
 
   // Cost breakdown (computed)
   const itemsCostTotal = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
@@ -550,8 +551,13 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const otherCostsTotal = otherCosts.reduce((s, c) => s + c.amountUSD, 0);
   const hasDetailedCosts = itemsCostTotal > 0 || distributedTotal > 0 || otherCostsTotal > 0;
   const effectiveCostUSD = hasDetailedCosts ? (itemsCostTotal + distributedTotal + otherCostsTotal) : costUSD;
-  const marginUSD = Math.round((subtotal - effectiveCostUSD) * 100) / 100;
-  const marginPercent = subtotal > 0 ? Math.round((subtotal - effectiveCostUSD) / subtotal * 10000) / 100 : 0;
+
+  // Distributed costs are billed to client — they add to the price base
+  const priceBase = subtotal + distributedTotal;
+  const itbisUSD = applyItbis ? priceBase * itbisPercent / 100 : 0;
+  const totalUSD = priceBase + itbisUSD;
+  const marginUSD = Math.round((priceBase - effectiveCostUSD) * 100) / 100;
+  const marginPercent = priceBase > 0 ? Math.round((priceBase - effectiveCostUSD) / priceBase * 10000) / 100 : 0;
 
   const buildCurrentData = () => {
     const currentLineItems: QuotationLineItem[] = lineItems.map((li) => ({
@@ -571,7 +577,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       currency, exchangeRate, isOriginalCurrency, partner,
       costUSD: effectiveCostUSD, marginPercent, marginUSD,
       distributedCosts, otherCosts,
-      paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
+      paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, deliveryTimeNote, validityDays, deliveryLocation, notes,
       proposalTexts,
     };
   };
@@ -696,6 +702,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setDeliveryTerms(snap.deliveryTerms);
     setDeliveryWeeksMin(snap.deliveryWeeksMin);
     setDeliveryWeeksMax(snap.deliveryWeeksMax);
+    setDeliveryTimeNote(snap.deliveryTimeNote ?? "");
     setValidityDays(snap.validityDays);
     setDeliveryLocation(snap.deliveryLocation);
     setNotes(snap.notes);
@@ -1042,6 +1049,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 return (
                   <>
                     <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">{sym}{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                    {distributedTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Costos distribuidos:</span><span className="font-medium">{sym}{distributedTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>}
                     {applyItbis && <div className="flex justify-between"><span className="text-muted-foreground">ITBIS ({itbisPercent}%):</span><span className="font-medium">{sym}{itbisUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>}
                     <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total {label}:</span><span className="text-primary">{sym}{totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                     {currency !== "USD" && !isOriginalCurrency && exchangeRate > 0 && (
@@ -1133,55 +1141,6 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 )}
               </div>
 
-              {/* Otros Costos */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-xs font-semibold">Otros Costos</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs text-muted-foreground"
-                    onClick={() => setOtherCosts((prev) => [...prev, { id: `oc-${Date.now()}`, label: "", amountUSD: 0 }])}
-                  >
-                    <Plus className="h-3 w-3 mr-1" /> Agregar
-                  </Button>
-                </div>
-                {otherCosts.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">Sin otros costos. Ej: comisiones, honorarios.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {otherCosts.map((entry) => (
-                      <div key={entry.id} className="flex items-center gap-2">
-                        <Input
-                          value={entry.label}
-                          onChange={(e) => setOtherCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, label: e.target.value } : c))}
-                          className="h-8 text-xs flex-1"
-                          placeholder="Ej: Comisión de ventas"
-                        />
-                        <Input
-                          type="number"
-                          value={entry.amountUSD || ""}
-                          onChange={(e) => setOtherCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, amountUSD: Number(e.target.value) || 0 } : c))}
-                          className="h-8 text-xs w-28 text-right"
-                          min={0}
-                          placeholder="0.00"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => setOtherCosts((prev) => prev.filter((c) => c.id !== entry.id))}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               {/* Costo manual (fallback cuando no hay costos detallados) */}
               {!hasDetailedCosts && (
                 <div className="flex items-center gap-4">
@@ -1200,9 +1159,6 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 )}
                 {distributedTotal > 0 && (
                   <div className="flex justify-between text-muted-foreground"><span>Costos distribuidos:</span><span>${distributedTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                )}
-                {otherCostsTotal > 0 && (
-                  <div className="flex justify-between text-muted-foreground"><span>Otros costos:</span><span>${otherCostsTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                 )}
                 <div className="flex justify-between font-semibold border-t pt-1.5"><span>Costo total:</span><span>${effectiveCostUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                 <div className="flex justify-between font-semibold text-sinem-success"><span>Margen:</span><span>{marginPercent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% — ${marginUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
@@ -1240,6 +1196,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   <Input type="number" value={deliveryWeeksMax || ""} onChange={(e) => setDeliveryWeeksMax(Number(e.target.value) || 0)} placeholder="Max" min={1} className="w-20" />
                   <span className="text-muted-foreground text-xs">semanas</span>
                 </div>
+                <Input value={deliveryTimeNote} onChange={(e) => setDeliveryTimeNote(e.target.value)} placeholder="Nota adicional (opcional)" className="mt-2" />
               </div>
               <div>
                 <Label>Validez (días)</Label>

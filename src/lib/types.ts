@@ -211,6 +211,7 @@ export interface Quotation {
   deliveryTerms: DeliveryTerm;
   deliveryWeeksMin: number;
   deliveryWeeksMax: number;
+  deliveryTimeNote?: string;
   validityDays: number;
   deliveryLocation: string;
   notes: string;
@@ -248,6 +249,7 @@ export interface QuotationSnapshot {
   deliveryTerms: DeliveryTerm;
   deliveryWeeksMin: number;
   deliveryWeeksMax: number;
+  deliveryTimeNote?: string;
   validityDays: number;
   deliveryLocation: string;
   notes: string;
