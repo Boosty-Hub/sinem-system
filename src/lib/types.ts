@@ -173,6 +173,18 @@ export interface QuotationClient {
   rnc: string;
 }
 
+export interface QuotationProposalTexts {
+  greetingText?: string;
+  warrantyText?: string;
+  responsibilityText?: string;
+  risksText?: string;
+  installationText?: string;
+  validityText?: string;
+  returnsText?: string;
+  legalClauses?: string;
+  closingText?: string;
+}
+
 export interface Quotation {
   id: string;
   code: string;
@@ -212,6 +224,7 @@ export interface Quotation {
   approvalNote?: string;
   distributedCosts?: CostEntry[];
   otherCosts?: CostEntry[];
+  proposalTexts?: QuotationProposalTexts;
 }
 
 export interface GeneralSettings {

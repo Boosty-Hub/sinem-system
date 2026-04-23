@@ -11,7 +11,7 @@ import RichTextEditor from "@/components/RichTextEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type CostEntry, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact } from "@/lib/types";
+import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type CostEntry, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact, type ProposalSettings, type QuotationProposalTexts } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search, RotateCcw, AlertTriangle } from "lucide-react";
@@ -159,6 +159,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [distributedCosts, setDistributedCosts] = useState<CostEntry[]>([]);
   const [otherCosts, setOtherCosts] = useState<CostEntry[]>([]);
   const [generalMarginInput, setGeneralMarginInput] = useState(0);
+  const [proposalTexts, setProposalTexts] = useState<QuotationProposalTexts>({});
+  const [textsExpanded, setTextsExpanded] = useState(false);
 
   // Resolve current auth user to app_users id
   useEffect(() => {
@@ -167,18 +169,39 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
   }, [authUser]);
 
-  // Fetch prospects, clients, contacts from Supabase
+  // Fetch prospects, clients, contacts, and proposal settings from Supabase
   useEffect(() => {
     if (!open) return;
     const fetchData = async () => {
-      const [{ data: dbP }, { data: dbCl }, { data: dbCt }] = await Promise.all([
+      const [{ data: dbP }, { data: dbCl }, { data: dbCt }, { data: psRow }] = await Promise.all([
         supabase.from("prospects").select("*").order("project_name"),
         supabase.from("clients").select("*").order("name"),
         supabase.from("contacts").select("*").order("first_name"),
+        supabase.from("proposal_settings").select("*").limit(1).single(),
       ]);
       if (dbP) setProspects(dbP.map(dbToProspect));
       if (dbCl) setClients(dbCl.map(dbToClient));
       if (dbCt) setContacts(dbCt.map(dbToContact));
+
+      const defaultTexts: QuotationProposalTexts = psRow ? {
+        greetingText: psRow.greeting_text ?? "",
+        warrantyText: psRow.warranty_text ?? "",
+        responsibilityText: psRow.responsibility_text ?? "",
+        risksText: psRow.risks_text ?? "",
+        installationText: psRow.installation_text ?? "",
+        validityText: psRow.validity_text ?? "",
+        returnsText: psRow.returns_text ?? "",
+        legalClauses: psRow.legal_clauses ?? "",
+        closingText: psRow.closing_text ?? "",
+      } : {};
+
+      if (quotation) {
+        setProposalTexts(quotation.proposalTexts ?? defaultTexts);
+      } else {
+        const raw = !prefill ? sessionStorage.getItem(DRAFT_KEY) : null;
+        const d = raw ? JSON.parse(raw) : null;
+        setProposalTexts(d?.proposalTexts ?? defaultTexts);
+      }
     };
     fetchData();
   }, [open]);
@@ -217,6 +240,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax,
       validityDays, deliveryLocation, notes, applyItbis, itbisPercent,
       currency, exchangeRate, isOriginalCurrency, partner, codeManuallyEdited,
+      proposalTexts,
     };
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
   };
@@ -548,6 +572,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       costUSD: effectiveCostUSD, marginPercent, marginUSD,
       distributedCosts, otherCosts,
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, validityDays, deliveryLocation, notes,
+      proposalTexts,
     };
   };
 
@@ -1230,6 +1255,113 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           <div>
             <Label>Notas</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+          </div>
+
+          {/* Textos de la Propuesta */}
+          <div className="border rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setTextsExpanded(!textsExpanded)}
+              className="flex items-center justify-between w-full px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors"
+            >
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Condiciones y Garantía
+              </h3>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                {textsExpanded ? "Ocultar" : "Editar garantía, términos y condiciones"}
+                {textsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </span>
+            </button>
+            {textsExpanded && (
+              <div className="p-4 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Estos textos se pre-cargan desde la configuración global y pueden modificarse para esta cotización en particular.
+                </p>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <Label>Saludo introductorio</Label>
+                    <Textarea
+                      rows={2}
+                      value={proposalTexts.greetingText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, greetingText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Garantía</Label>
+                    <Textarea
+                      rows={4}
+                      value={proposalTexts.warrantyText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, warrantyText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Responsabilidad</Label>
+                    <Textarea
+                      rows={3}
+                      value={proposalTexts.responsibilityText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, responsibilityText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Riesgos</Label>
+                    <Textarea
+                      rows={3}
+                      value={proposalTexts.risksText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, risksText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Instalación</Label>
+                    <Textarea
+                      rows={3}
+                      value={proposalTexts.installationText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, installationText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Vigencia (texto adicional)</Label>
+                    <Textarea
+                      rows={2}
+                      value={proposalTexts.validityText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, validityText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Devoluciones y/o cancelaciones</Label>
+                    <Textarea
+                      rows={3}
+                      value={proposalTexts.returnsText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, returnsText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Términos y Condiciones</Label>
+                    <Textarea
+                      rows={6}
+                      value={proposalTexts.legalClauses ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, legalClauses: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div>
+                    <Label>Texto de cierre</Label>
+                    <Textarea
+                      rows={2}
+                      value={proposalTexts.closingText ?? ""}
+                      onChange={(e) => setProposalTexts((p) => ({ ...p, closingText: e.target.value }))}
+                      className="resize-y"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Version info */}

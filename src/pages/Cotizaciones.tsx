@@ -139,6 +139,7 @@ const Cotizaciones = () => {
       partner: (q as any).partner ?? "Siemens",
       distributedCosts: (q as any).distributed_costs ?? [],
       otherCosts: (q as any).other_costs ?? [],
+      proposalTexts: (q as any).proposal_texts ?? undefined,
     })));
     setLoading(false);
   };
@@ -236,6 +237,7 @@ const Cotizaciones = () => {
       partner: updated.partner ?? "Siemens",
       distributed_costs: updated.distributedCosts ?? [],
       other_costs: updated.otherCosts ?? [],
+      proposal_texts: updated.proposalTexts ?? null,
       created_by: appUserId,
     };
 

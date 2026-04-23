@@ -140,6 +140,7 @@ const OfertaPublica = () => {
           approvedBy: qRow.approved_by ?? undefined,
           approvedAt: qRow.approved_at ?? undefined,
           approvalNote: qRow.approval_note ?? undefined,
+          proposalTexts: (qRow as any).proposal_texts ?? undefined,
         });
       }
 
@@ -174,6 +175,21 @@ const OfertaPublica = () => {
   const sigPhone = (isApproved && approver?.phone)  ? approver.phone : s?.signaturePhone ?? "";
   const sigEmail = (isApproved && approver?.email)  ? approver.email : s?.signatureEmail ?? "";
   const sigImageUrl = (isApproved && approver?.signatureImageUrl) ? approver.signatureImageUrl : s?.signatureImageUrl ?? "";
+
+  // Merge per-quotation text overrides with global proposal settings
+  const pt = quotation?.proposalTexts;
+  const eff: ProposalSettings | null = s ? {
+    ...s,
+    greetingText: pt?.greetingText || s.greetingText,
+    warrantyText: pt?.warrantyText || s.warrantyText,
+    responsibilityText: pt?.responsibilityText || s.responsibilityText,
+    risksText: pt?.risksText || s.risksText,
+    installationText: pt?.installationText || s.installationText,
+    validityText: pt?.validityText || s.validityText,
+    returnsText: pt?.returnsText || s.returnsText,
+    legalClauses: pt?.legalClauses || s.legalClauses,
+    closingText: pt?.closingText || s.closingText,
+  } : null;
   const qCurrency = quotation?.currency ?? "USD";
   const qRate = quotation?.exchangeRate ?? 1;
   const qIsOriginal = quotation?.isOriginalCurrency ?? false;
@@ -513,7 +529,7 @@ const OfertaPublica = () => {
         <div className="pdf-page bg-white shadow-lg print:shadow-none mb-6" style={PAGE_STYLE}>
           <PageHeader pageNum={2} />
 
-          <p style={{ margin: "0 0 18px 0", fontSize: "13px" }}>{s.greetingText}</p>
+          <p style={{ margin: "0 0 18px 0", fontSize: "13px" }}>{eff?.greetingText}</p>
 
           {/* Items table */}
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
@@ -608,10 +624,10 @@ const OfertaPublica = () => {
           <PageHeader pageNum={3} />
 
           {[
-            { title: "Garantía", text: s.warrantyText },
-            { title: "Responsabilidad", text: s.responsibilityText },
-            { title: "Riesgos", text: s.risksText },
-            { title: "Instalación", text: s.installationText },
+            { title: "Garantía", text: eff?.warrantyText },
+            { title: "Responsabilidad", text: eff?.responsibilityText },
+            { title: "Riesgos", text: eff?.risksText },
+            { title: "Instalación", text: eff?.installationText },
           ].map(({ title, text }) => text ? (
             <div key={title} className="pdf-no-break" style={{ marginBottom: "14px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>{title}</h3>
@@ -623,23 +639,23 @@ const OfertaPublica = () => {
             <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>Vigencia de la propuesta</h3>
             <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>
               La presente oferta tiene una vigencia de <strong>{quotation.validityDays} días</strong> a partir de la fecha de emisión.
-              {s.validityText ? ` ${s.validityText}` : ""}
+              {eff?.validityText ? ` ${eff.validityText}` : ""}
             </div>
           </div>
 
-          {s.returnsText ? (
+          {eff?.returnsText ? (
             <div className="pdf-no-break" style={{ marginBottom: "14px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>Devoluciones y/o cancelaciones</h3>
-              <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.returnsText}</div>
+              <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{eff.returnsText}</div>
             </div>
           ) : null}
 
-          {s.legalClauses ? (
+          {eff?.legalClauses ? (
             <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
                 Términos y Condiciones
               </h3>
-              <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{s.legalClauses}</div>
+              <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{eff.legalClauses}</div>
             </div>
           ) : null}
 
@@ -656,8 +672,8 @@ const OfertaPublica = () => {
             </div>
           </div>
 
-          {s.closingText ? (
-            <p className="pdf-no-break" style={{ fontSize: "12px", margin: "0 0 24px 0", lineHeight: "1.7" }}>{s.closingText}</p>
+          {eff?.closingText ? (
+            <p className="pdf-no-break" style={{ fontSize: "12px", margin: "0 0 24px 0", lineHeight: "1.7" }}>{eff.closingText}</p>
           ) : null}
 
           <SignatureBlock />
