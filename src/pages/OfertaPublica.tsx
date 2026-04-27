@@ -192,6 +192,16 @@ const OfertaPublica = () => {
     legalClauses: pt?.legalClauses || s.legalClauses,
     closingText: pt?.closingText || s.closingText,
   } : null;
+  const distributedTotal = ((quotation?.distributedCosts ?? []) as any[]).reduce((sum: number, c: any) => sum + (c.amountUSD ?? 0), 0);
+  const rawSubtotal = quotation?.subtotalUSD ?? 0;
+  const adjustedLineItems = (quotation?.lineItems ?? []).map((item) => {
+    const share = rawSubtotal > 0 ? item.totalUSD / rawSubtotal : 0;
+    const adjustedTotal = item.totalUSD + share * distributedTotal;
+    const adjustedUnit = item.quantity > 0 ? adjustedTotal / item.quantity : 0;
+    return { ...item, unitPriceUSD: adjustedUnit, totalUSD: adjustedTotal };
+  });
+  const clientSubtotal = rawSubtotal + distributedTotal;
+
   const qCurrency = quotation?.currency ?? "USD";
   const qRate = quotation?.exchangeRate ?? 1;
   const qIsOriginal = quotation?.isOriginalCurrency ?? false;
@@ -545,7 +555,7 @@ const OfertaPublica = () => {
               </tr>
             </thead>
             <tbody>
-              {quotation.lineItems.map((item, i) => (
+              {adjustedLineItems.map((item, i) => (
                 <tr key={item.id} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
                   <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
                   <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
@@ -563,14 +573,8 @@ const OfertaPublica = () => {
               <tbody>
                 <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
                   <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>Subtotal:</td>
-                  <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.subtotalUSD)}</td>
+                  <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(clientSubtotal)}</td>
                 </tr>
-                {((quotation.distributedCosts ?? []) as any[]).reduce((s: number, c: any) => s + (c.amountUSD ?? 0), 0) > 0 && (
-                  <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
-                    <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>Costos distribuidos:</td>
-                    <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(((quotation.distributedCosts ?? []) as any[]).reduce((s: number, c: any) => s + (c.amountUSD ?? 0), 0))}</td>
-                  </tr>
-                )}
                 {quotation.applyItbis && (
                   <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
                     <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>ITBIS ({quotation.itbisPercent}%):</td>

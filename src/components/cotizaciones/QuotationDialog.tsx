@@ -267,7 +267,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setSubject(quotation.subject);
         setCostUSD(quotation.costUSD);
         setDistributedCosts(quotation.distributedCosts ?? []);
-        setOtherCosts(quotation.otherCosts ?? []);
+        setOtherCosts([]);
         setGeneralMarginInput(0);
         setPaymentTerms(quotation.paymentTerms);
         setDeliveryTerms(quotation.deliveryTerms);
@@ -534,10 +534,17 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
   const applyGeneralMargin = () => {
     if (generalMarginInput <= 0 || generalMarginInput >= 100) return;
+    const m = generalMarginInput / 100;
+    const totalItemCost = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+    if (totalItemCost <= 0) return;
+    const distTotal = distributedCosts.reduce((s, c) => s + c.amountUSD, 0);
+    // Target subtotal such that margin on (subtotal + distributed) equals exactly m%
+    const targetSubtotal = (totalItemCost + m * distTotal) / (1 - m);
+    const scaleFactor = targetSubtotal / totalItemCost;
     setLineItems((prev) =>
       prev.map((item) => {
         if (!item.unitCostUSD) return item;
-        const newPrice = Math.round((item.unitCostUSD / (1 - generalMarginInput / 100)) * 100) / 100;
+        const newPrice = Math.round(item.unitCostUSD * scaleFactor * 100) / 100;
         return { ...item, itemMarginPercent: generalMarginInput, unitPriceUSD: newPrice, totalUSD: Math.round(item.quantity * newPrice * 100) / 100 };
       })
     );
@@ -548,9 +555,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   // Cost breakdown (computed)
   const itemsCostTotal = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
   const distributedTotal = distributedCosts.reduce((s, c) => s + c.amountUSD, 0);
-  const otherCostsTotal = otherCosts.reduce((s, c) => s + c.amountUSD, 0);
-  const hasDetailedCosts = itemsCostTotal > 0 || distributedTotal > 0 || otherCostsTotal > 0;
-  const effectiveCostUSD = hasDetailedCosts ? (itemsCostTotal + distributedTotal + otherCostsTotal) : costUSD;
+  const hasDetailedCosts = itemsCostTotal > 0 || distributedTotal > 0;
+  const effectiveCostUSD = hasDetailedCosts ? (itemsCostTotal + distributedTotal) : costUSD;
 
   // Distributed costs are billed to client — they add to the price base
   const priceBase = subtotal + distributedTotal;
