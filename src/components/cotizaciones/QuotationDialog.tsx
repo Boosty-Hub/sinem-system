@@ -538,9 +538,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     const totalItemCost = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
     if (totalItemCost <= 0) return;
     const distTotal = distributedCosts.reduce((s, c) => s + c.amountUSD, 0);
-    // Target subtotal such that margin on (subtotal + distributed) equals exactly m%
-    const targetSubtotal = (totalItemCost + m * distTotal) / (1 - m);
-    const scaleFactor = targetSubtotal / totalItemCost;
+    const itbisFactor = applyItbis ? (1 + itbisPercent / 100) : 1;
+    // Target subtotal such that margin = (totalUSD - cost) / totalUSD = m%
+    // where totalUSD = (subtotal + distributed) * itbisFactor
+    const targetSubtotal = (totalItemCost + distTotal) / ((1 - m) * itbisFactor) - distTotal;
+    const scaleFactor = totalItemCost > 0 ? targetSubtotal / totalItemCost : 1;
     setLineItems((prev) =>
       prev.map((item) => {
         if (!item.unitCostUSD) return item;
@@ -562,8 +564,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const priceBase = subtotal + distributedTotal;
   const itbisUSD = applyItbis ? priceBase * itbisPercent / 100 : 0;
   const totalUSD = priceBase + itbisUSD;
-  const marginUSD = Math.round((priceBase - effectiveCostUSD) * 100) / 100;
-  const marginPercent = priceBase > 0 ? Math.round((priceBase - effectiveCostUSD) / priceBase * 10000) / 100 : 0;
+  const marginUSD = Math.round((totalUSD - effectiveCostUSD) * 100) / 100;
+  const marginPercent = totalUSD > 0 ? Math.round((totalUSD - effectiveCostUSD) / totalUSD * 10000) / 100 : 0;
 
   const buildCurrentData = () => {
     const currentLineItems: QuotationLineItem[] = lineItems.map((li) => ({
