@@ -487,66 +487,72 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setLineItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const recalcPrices = (items: LineItem[], distTotal: number) => {
+    const weighted = items.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+    return items.map((item) => {
+      if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
+      const unitDist = distTotal > 0 && weighted > 0 ? distTotal * (item.unitCostUSD / weighted) : 0;
+      const newPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
+      return { ...item, unitPriceUSD: newPrice, totalUSD: Math.round(item.quantity * newPrice * 100) / 100 };
+    });
+  };
+
   const updateItem = (id: string, field: keyof LineItem, value: string | number | null) => {
-    setLineItems((prev) =>
-      prev.map((item) => {
+    setLineItems((prev) => {
+      // Pass 1: apply the direct field change
+      const step1 = prev.map((item) => {
         if (item.id !== id) return item;
         const updated = { ...item, [field]: value };
 
         if (field === "quantity") {
           updated.totalUSD = Math.round(updated.quantity * updated.unitPriceUSD * 100) / 100;
         }
-
         if (field === "unitPriceUSD") {
           updated.totalUSD = Math.round(updated.quantity * updated.unitPriceUSD * 100) / 100;
-          // Derive margin from new price when cost is set
+          // Derive margin from price vs (cost + unitDist); simplified to raw cost for now
           if (updated.unitCostUSD > 0 && updated.unitPriceUSD > 0) {
             updated.itemMarginPercent = Math.round(((updated.unitPriceUSD - updated.unitCostUSD) / updated.unitPriceUSD) * 10000) / 100;
           }
         }
-
         if (field === "unitCostUSD") {
-          const cost = Number(value) || 0;
-          updated.unitCostUSD = cost;
-          // Only recalculate price if margin was already explicitly set
-          if (cost > 0 && updated.itemMarginPercent !== null && updated.itemMarginPercent < 100) {
-            const newPrice = Math.round((cost / (1 - updated.itemMarginPercent / 100)) * 100) / 100;
-            updated.unitPriceUSD = newPrice;
-            updated.totalUSD = Math.round(updated.quantity * newPrice * 100) / 100;
-          }
-          // Do NOT auto-derive margin from existing price — let the user set it explicitly
+          updated.unitCostUSD = Number(value) || 0;
         }
-
         if (field === "itemMarginPercent") {
-          const margin = value !== null ? Number(value) : null;
-          updated.itemMarginPercent = margin;
-          if (margin !== null && updated.unitCostUSD > 0 && margin < 100) {
-            const newPrice = Math.round((updated.unitCostUSD / (1 - margin / 100)) * 100) / 100;
-            updated.unitPriceUSD = newPrice;
-            updated.totalUSD = Math.round(updated.quantity * newPrice * 100) / 100;
-          }
+          updated.itemMarginPercent = value !== null ? Number(value) : null;
         }
-
         return updated;
-      })
-    );
+      });
+
+      // Pass 2: recalculate prices for all items with margins using (cost + unitDist)
+      // Skip recalc for the item whose price was manually set by the user
+      const weighted = step1.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+      return step1.map((item) => {
+        if (field === "unitPriceUSD" && item.id === id) return item; // user set price manually
+        if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
+        const unitDist = distributedTotal > 0 && weighted > 0 ? distributedTotal * (item.unitCostUSD / weighted) : 0;
+        const newPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
+        return { ...item, unitPriceUSD: newPrice, totalUSD: Math.round(item.quantity * newPrice * 100) / 100 };
+      });
+    });
   };
+
+  // Recalculate prices whenever distributed costs change
+  useEffect(() => {
+    setLineItems((prev) => recalcPrices(prev, distributedTotal));
+  }, [distributedCosts]);
 
   const applyGeneralMargin = () => {
     if (generalMarginInput <= 0 || generalMarginInput >= 100) return;
+    const weighted = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+    if (weighted <= 0) return;
     const m = generalMarginInput / 100;
-    const totalItemCost = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
-    if (totalItemCost <= 0) return;
-    const distTotal = distributedCosts.reduce((s, c) => s + c.amountUSD, 0);
-    const itbisFactor = applyItbis ? (1 + itbisPercent / 100) : 1;
-    // Target subtotal such that margin = (totalUSD - cost) / totalUSD = m%
-    // where totalUSD = (subtotal + distributed) * itbisFactor
-    const targetSubtotal = (totalItemCost + distTotal) / ((1 - m) * itbisFactor) - distTotal;
-    const scaleFactor = totalItemCost > 0 ? targetSubtotal / totalItemCost : 1;
     setLineItems((prev) =>
       prev.map((item) => {
         if (!item.unitCostUSD) return item;
-        const newPrice = Math.round(item.unitCostUSD * scaleFactor * 100) / 100;
+        const unitDist = distributedTotal > 0 && weighted > 0
+          ? distributedTotal * (item.unitCostUSD / weighted)
+          : 0;
+        const newPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - m)) * 100) / 100;
         return { ...item, itemMarginPercent: generalMarginInput, unitPriceUSD: newPrice, totalUSD: Math.round(item.quantity * newPrice * 100) / 100 };
       })
     );
@@ -557,11 +563,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   // Cost breakdown (computed)
   const itemsCostTotal = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
   const distributedTotal = distributedCosts.reduce((s, c) => s + c.amountUSD, 0);
+  const totalWeightedCost = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
   const hasDetailedCosts = itemsCostTotal > 0 || distributedTotal > 0;
   const effectiveCostUSD = hasDetailedCosts ? (itemsCostTotal + distributedTotal) : costUSD;
 
-  // Distributed costs are billed to client — they add to the price base
-  const priceBase = subtotal + distributedTotal;
+  const priceBase = subtotal;
   const itbisUSD = applyItbis ? priceBase * itbisPercent / 100 : 0;
   const totalUSD = priceBase + itbisUSD;
   const marginUSD = Math.round((totalUSD - effectiveCostUSD) * 100) / 100;
@@ -922,7 +928,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   <tr className="bg-muted/50 border-b">
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Descripción</th>
                     <th className="text-center py-2 px-3 font-medium text-muted-foreground text-xs w-20">Cant.</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Unit.</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Dist.</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Unit. Total</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-24">Margen %</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">P. Unit. {isOriginalCurrency ? currency : "USD"}</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Total {isOriginalCurrency ? currency : "USD"}</th>
@@ -930,66 +938,79 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   </tr>
                 </thead>
                 <tbody>
-                  {lineItems.map((item) => (
-                    <tr key={item.id} className="border-b last:border-0">
-                      <td className="py-2 px-3">
-                        <RichTextEditor
-                          value={item.description}
-                          onChange={(val) => updateItem(item.id, "description", val)}
-                          placeholder="Descripción del ítem"
-                        />
-                      </td>
-                      <td className="py-2 px-3">
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value))}
-                          className="h-8 text-xs text-center px-1"
-                          min={1}
-                        />
-                      </td>
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={item.unitCostUSD || ""}
-                          onChange={(e) => updateItem(item.id, "unitCostUSD", Number(e.target.value))}
-                          className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          min={0}
-                          placeholder="0"
-                        />
-                      </td>
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={item.itemMarginPercent ?? ""}
-                          onChange={(e) => updateItem(item.id, "itemMarginPercent", e.target.value === "" ? null : Number(e.target.value))}
-                          className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          min={0}
-                          max={99.99}
-                          step={0.01}
-                          placeholder="—"
-                        />
-                      </td>
-                      <td className="py-2 px-2">
-                        <Input
-                          type="number"
-                          value={item.unitPriceUSD}
-                          onChange={(e) => updateItem(item.id, "unitPriceUSD", Number(e.target.value))}
-                          className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          min={0}
-                        />
-                      </td>
-                      <td className="py-2 px-3 text-right font-medium text-xs">{isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$"}{item.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="py-2 px-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {lineItems.map((item) => {
+                    const unitDistCost = distributedTotal > 0 && totalWeightedCost > 0 && item.unitCostUSD > 0
+                      ? distributedTotal * (item.unitCostUSD / totalWeightedCost)
+                      : 0;
+                    const costUnitTotal = (item.unitCostUSD + unitDistCost) * item.quantity;
+                    const sym = isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$";
+                    return (
+                      <tr key={item.id} className="border-b last:border-0">
+                        <td className="py-2 px-3">
+                          <RichTextEditor
+                            value={item.description}
+                            onChange={(val) => updateItem(item.id, "description", val)}
+                            placeholder="Descripción del ítem"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <Input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value))}
+                            className="h-8 text-xs text-center px-1"
+                            min={1}
+                          />
+                        </td>
+                        <td className="py-2 px-2">
+                          <Input
+                            type="number"
+                            value={item.unitCostUSD || ""}
+                            onChange={(e) => updateItem(item.id, "unitCostUSD", Number(e.target.value))}
+                            className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            min={0}
+                            placeholder="0"
+                          />
+                        </td>
+                        <td className="py-2 px-3 text-right text-xs text-muted-foreground">
+                          {unitDistCost > 0 ? `$${unitDistCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right text-xs font-medium">
+                          {costUnitTotal > 0 ? `$${costUnitTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="py-2 px-2">
+                          <Input
+                            type="number"
+                            value={item.itemMarginPercent ?? ""}
+                            onChange={(e) => updateItem(item.id, "itemMarginPercent", e.target.value === "" ? null : Number(e.target.value))}
+                            className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            min={0}
+                            max={99.99}
+                            step={0.01}
+                            placeholder="—"
+                          />
+                        </td>
+                        <td className="py-2 px-2">
+                          <Input
+                            type="number"
+                            value={item.unitPriceUSD}
+                            onChange={(e) => updateItem(item.id, "unitPriceUSD", Number(e.target.value))}
+                            className="h-8 text-xs text-right px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            min={0}
+                          />
+                        </td>
+                        <td className="py-2 px-3 text-right font-medium text-xs">{sym}{item.totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-1">
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {lineItems.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-6 text-center text-muted-foreground text-xs">
+                      <td colSpan={9} className="py-6 text-center text-muted-foreground text-xs">
                         Sin ítems. Haz clic en "Agregar Ítem" para comenzar.
                       </td>
                     </tr>
@@ -1057,7 +1078,6 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 return (
                   <>
                     <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">{sym}{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                    {distributedTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Costos distribuidos:</span><span className="font-medium">{sym}{distributedTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>}
                     {applyItbis && <div className="flex justify-between"><span className="text-muted-foreground">ITBIS ({itbisPercent}%):</span><span className="font-medium">{sym}{itbisUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>}
                     <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total {label}:</span><span className="text-primary">{sym}{totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                     {currency !== "USD" && !isOriginalCurrency && exchangeRate > 0 && (
