@@ -492,8 +492,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     return items.map((item) => {
       if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
       const unitDist = distTotal > 0 && weighted > 0 ? distTotal * (item.unitCostUSD / weighted) : 0;
-      const basePrice = (item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100);
-      const effectiveUnitPrice = Math.round((basePrice + unitDist) * 100) / 100;
+      const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
       return { ...item, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
     });
   };
@@ -511,13 +510,12 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         if (field === "unitPriceUSD") {
           updated.totalUSD = Math.round(updated.quantity * updated.unitPriceUSD * 100) / 100;
           if (updated.unitCostUSD > 0 && updated.unitPriceUSD > 0) {
-            // Back-derive base margin from effective price (effectivePrice = basePrice + unitDist)
+            // Back-derive margin from effective price: price = (cost + unitDist) / (1 - margin)
             const w = prev.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
             const uDist = distributedTotal > 0 && w > 0 ? distributedTotal * (updated.unitCostUSD / w) : 0;
-            const priceMinusDist = updated.unitPriceUSD - uDist;
             const effCost = updated.unitCostUSD + uDist;
-            if (priceMinusDist > 0 && priceMinusDist > effCost) {
-              updated.itemMarginPercent = Math.round((1 - effCost / priceMinusDist) * 10000) / 100;
+            if (updated.unitPriceUSD > effCost) {
+              updated.itemMarginPercent = Math.round((1 - effCost / updated.unitPriceUSD) * 10000) / 100;
             } else {
               updated.itemMarginPercent = Math.round(((updated.unitPriceUSD - updated.unitCostUSD) / updated.unitPriceUSD) * 10000) / 100;
             }
@@ -539,8 +537,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         if (field === "unitPriceUSD" && item.id === id) return item; // user set price manually
         if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
         const unitDist = distributedTotal > 0 && weighted > 0 ? distributedTotal * (item.unitCostUSD / weighted) : 0;
-        const basePrice = (item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100);
-        const effectiveUnitPrice = Math.round((basePrice + unitDist) * 100) / 100;
+        const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
         return { ...item, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
       });
     });
@@ -560,8 +557,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       prev.map((item) => {
         if (!item.unitCostUSD) return item;
         const unitDist = distributedTotal > 0 && weighted > 0 ? distributedTotal * (item.unitCostUSD / weighted) : 0;
-        const basePrice = (item.unitCostUSD + unitDist) / (1 - m);
-        const effectiveUnitPrice = Math.round((basePrice + unitDist) * 100) / 100;
+        const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - m)) * 100) / 100;
         return { ...item, itemMarginPercent: generalMarginInput, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
       })
     );
