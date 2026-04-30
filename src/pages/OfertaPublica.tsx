@@ -192,15 +192,9 @@ const OfertaPublica = () => {
     legalClauses: pt?.legalClauses || s.legalClauses,
     closingText: pt?.closingText || s.closingText,
   } : null;
-  const distributedTotal = ((quotation?.distributedCosts ?? []) as any[]).reduce((sum: number, c: any) => sum + (c.amountUSD ?? 0), 0);
-  const rawSubtotal = quotation?.subtotalUSD ?? 0;
-  const adjustedLineItems = (quotation?.lineItems ?? []).map((item) => {
-    const share = rawSubtotal > 0 ? item.totalUSD / rawSubtotal : 0;
-    const adjustedTotal = item.totalUSD + share * distributedTotal;
-    const adjustedUnit = item.quantity > 0 ? adjustedTotal / item.quantity : 0;
-    return { ...item, unitPriceUSD: adjustedUnit, totalUSD: adjustedTotal };
-  });
-  const clientSubtotal = rawSubtotal + distributedTotal;
+  const clientSubtotal = quotation?.subtotalUSD ?? 0;
+  const clientItbis = quotation?.applyItbis ? Math.round(clientSubtotal * (quotation?.itbisPercent ?? 18) / 100 * 100) / 100 : 0;
+  const clientTotal = clientSubtotal + clientItbis;
 
   const qCurrency = quotation?.currency ?? "USD";
   const qRate = quotation?.exchangeRate ?? 1;
@@ -555,7 +549,7 @@ const OfertaPublica = () => {
               </tr>
             </thead>
             <tbody>
-              {adjustedLineItems.map((item, i) => (
+              {(quotation?.lineItems ?? []).map((item, i) => (
                 <tr key={item.id} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
                   <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
                   <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
@@ -578,12 +572,12 @@ const OfertaPublica = () => {
                 {quotation.applyItbis && (
                   <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
                     <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>ITBIS ({quotation.itbisPercent}%):</td>
-                    <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(quotation.itbisUSD)}</td>
+                    <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(clientItbis)}</td>
                   </tr>
                 )}
                 <tr style={{ backgroundColor: "#0097A7" }}>
                   <td style={{ padding: "8px 12px", fontWeight: 700, fontSize: "13px", color: "white" }}>Total General:</td>
-                  <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, fontSize: "13px", color: "white" }}>{fmt(quotation.totalUSD)}</td>
+                  <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, fontSize: "13px", color: "white" }}>{fmt(clientTotal)}</td>
                 </tr>
               </tbody>
             </table>
