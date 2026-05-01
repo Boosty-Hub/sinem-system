@@ -429,10 +429,10 @@ const OfertaPublica = () => {
   );
 
   const SignatureBlock = () => (
-    <>
-      <p style={{ margin: "0 0 12px 0", fontSize: "13px" }}>Atentamente,</p>
+    <div style={{ marginBottom: "16px" }}>
+      <p style={{ margin: "0 0 8px 0", fontSize: "13px" }}>Atentamente,</p>
       {isApproved ? (
-        <div style={{ position: "relative" }}>
+        <div>
           {sigImageUrl && (
             <img
               src={sigImageUrl}
@@ -440,29 +440,27 @@ const OfertaPublica = () => {
               crossOrigin="anonymous"
               style={{
                 display: "block",
-                height: "60px",
-                maxWidth: "220px",
+                height: "56px",
+                maxWidth: "200px",
                 objectFit: "contain",
                 objectPosition: "left bottom",
-                position: "relative",
-                zIndex: 2,
-                marginBottom: "-18px",
+                marginBottom: "6px",
                 opacity: 0.92,
                 mixBlendMode: "multiply",
               }}
             />
           )}
-          {!sigImageUrl && <div style={{ height: "20px" }} />}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
+          {!sigImageUrl && <div style={{ height: "32px" }} />}
+          <div style={{ borderTop: "1px solid #ccc", paddingTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
-              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigTitle}</p>
-              <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyName}</p>
+              <p style={{ fontSize: "12px", margin: "0 0 2px 0", color: "#444" }}>{sigTitle}</p>
+              <p style={{ fontSize: "12px", margin: 0, color: "#444" }}>{s.companyName}</p>
             </div>
-            <div style={{ textAlign: "left" }}>
-              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#333" }}>{sigPhone}</p>
-              <p style={{ fontSize: "13px", margin: "0 0 2px 0", color: "#0097A7" }}>{sigEmail}</p>
-              <p style={{ fontSize: "13px", margin: 0, color: "#333" }}>{s.companyWebsite}</p>
+            <div style={{ textAlign: "right" }}>
+              <p style={{ fontSize: "12px", margin: "0 0 2px 0", color: "#444" }}>{sigPhone}</p>
+              <p style={{ fontSize: "12px", margin: "0 0 2px 0", color: "#0097A7" }}>{sigEmail}</p>
+              <p style={{ fontSize: "12px", margin: 0, color: "#444" }}>{s.companyWebsite}</p>
             </div>
           </div>
         </div>
@@ -471,7 +469,7 @@ const OfertaPublica = () => {
           Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
         </div>
       )}
-    </>
+    </div>
   );
 
 
@@ -525,7 +523,9 @@ const OfertaPublica = () => {
             {s.coverClosingText}
           </p>
 
-          <SignatureBlock />
+          <div className="pdf-no-break">
+            <SignatureBlock />
+          </div>
           <PageFooter />
         </div>
 
@@ -689,7 +689,9 @@ const OfertaPublica = () => {
             <p className="pdf-no-break" style={{ fontSize: "12px", margin: "0 0 24px 0", lineHeight: "1.7" }}>{eff.closingText}</p>
           ) : null}
 
-          <SignatureBlock />
+          <div className="pdf-no-break">
+            <SignatureBlock />
+          </div>
           <PageFooter />
         </div>
 
