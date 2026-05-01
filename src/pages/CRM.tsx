@@ -280,7 +280,12 @@ const CRM = () => {
     if (exists) {
       setProspects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
       const { id, ...rest } = prospectToDb(saved);
-      await supabase.from("prospects").update(rest).eq("id", saved.id);
+      const { error: updateError } = await supabase.from("prospects").update(rest).eq("id", saved.id);
+      if (updateError) {
+        setProspects((prev) => prev.map((p) => (p.id === saved.id ? exists : p)));
+        toast({ title: "Error al guardar", description: updateError.message, variant: "destructive" });
+        return;
+      }
 
       // Auto-create project when status changed to "ganado" via dialog
       if (exists.status !== saved.status && saved.status === "ganado") {
