@@ -378,10 +378,26 @@ const CRM = () => {
   const handleSetStages: React.Dispatch<React.SetStateAction<PipelineStage[]>> = async (action) => {
     const newStages = typeof action === "function" ? action(stages) : action;
     setStages(newStages);
-    // Replace all stages
-    await supabase.from("pipeline_stages").delete().neq("id", 0); // delete all
+    await supabase.from("pipeline_stages").delete().neq("id", 0);
     const inserts = newStages.map((s, i) => ({ key: s.key, label: s.label, color: s.color, sort_order: i }));
     if (inserts.length > 0) await supabase.from("pipeline_stages").insert(inserts);
+  };
+
+  const prospectCountByStage = useMemo(() =>
+    prospects.reduce((acc, p) => { acc[p.status] = (acc[p.status] ?? 0) + 1; return acc; }, {} as Record<string, number>),
+    [prospects]
+  );
+
+  const handleMigrateStage = async (fromKey: string, toKey: string | null) => {
+    const affected = prospects.filter((p) => p.status === fromKey);
+    if (affected.length === 0) return;
+    const newStatus = toKey ?? "";
+    setProspects((prev) => prev.map((p) => p.status === fromKey ? { ...p, status: newStatus } : p));
+    if (toKey !== null) {
+      await supabase.from("prospects").update({ status: toKey }).eq("status", fromKey);
+    } else {
+      await supabase.from("prospects").update({ status: "" }).eq("status", fromKey);
+    }
   };
 
   if (loading) {
@@ -625,6 +641,8 @@ const CRM = () => {
         onOpenChange={setStagesDialogOpen}
         stages={stages}
         setStages={handleSetStages}
+        prospectCountByStage={prospectCountByStage}
+        onMigrateStage={handleMigrateStage}
       />
 
       <ActivitySidebar
