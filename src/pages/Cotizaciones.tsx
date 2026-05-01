@@ -128,7 +128,7 @@ const Cotizaciones = () => {
       validityDays: q.validity_days,
       notes: q.notes,
       status: q.status as any,
-      createdAt: q.created_at?.split("T")[0] ?? "",
+      createdAt: ((q as any).updated_at ?? q.created_at)?.split("T")[0] ?? "",
       createdBy: q.created_by ?? undefined,
       version: q.version,
       history: historyByQuotation.get(q.id) ?? [],
@@ -249,7 +249,7 @@ const Cotizaciones = () => {
 
     const exists = quotations.find((q) => q.id === updated.id);
     if (exists) {
-      const { error } = await supabase.from("quotations").update(quotationRow).eq("id", updated.id);
+      const { error } = await supabase.from("quotations").update({ ...quotationRow, updated_at: new Date().toISOString() }).eq("id", updated.id);
       if (error) {
         toast({ title: "Error al actualizar cotización", description: error.message, variant: "destructive" });
         return;

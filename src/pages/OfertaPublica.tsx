@@ -135,7 +135,7 @@ const OfertaPublica = () => {
           specialConsiderations: (qRow as any).special_considerations ?? "",
           notes: qRow.notes,
           status: qRow.status as any,
-          createdAt: qRow.created_at?.split("T")[0] ?? "",
+          createdAt: ((qRow as any).updated_at ?? qRow.created_at)?.split("T")[0] ?? "",
           version: qRow.version,
           history: [],
           approvalStatus: qRow.approval_status as any,
