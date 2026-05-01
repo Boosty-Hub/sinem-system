@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Users, FolderKanban, TrendingUp, ArrowUpRight, Building2, FileText, Loader2 } from "lucide-react";
+import { Users, FolderKanban, TrendingUp, ArrowUpRight, Building2, FileText, Loader2, DollarSign, Trophy } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -10,6 +10,8 @@ interface DashboardData {
   activeProjectsCount: number;
   activeOpportunitiesCount: number;
   pipelineValue: number;
+  wonCount: number;
+  wonValue: number;
   recentQuotations: { id: string; subject: string; client_company: string; total_usd: number; status: string }[];
   activeProjects: { id: string; name: string; client: string; current_step: number; status: string }[];
   topClients: { id: string; name: string; industry: string; total_revenue: number; total_projects: number }[];
@@ -43,6 +45,8 @@ const Dashboard = () => {
     activeProjectsCount: 0,
     activeOpportunitiesCount: 0,
     pipelineValue: 0,
+    wonCount: 0,
+    wonValue: 0,
     recentQuotations: [],
     activeProjects: [],
     topClients: [],
@@ -57,16 +61,22 @@ const Dashboard = () => {
         { data: clients },
         { data: projects },
         { count: activeOpportunitiesCount },
+        { data: prospectsForKpis },
       ] = await Promise.all([
         supabase.from("prospects").select("*", { count: "exact", head: true }),
         supabase.from("quotations").select("id, subject, client_company, total_usd, status, created_at").order("created_at", { ascending: false }).limit(5),
         supabase.from("clients").select("id, name, industry, total_revenue, total_projects").order("total_revenue", { ascending: false }).limit(5),
         supabase.from("projects").select("id, name, client, current_step, status, value"),
         supabase.from("prospects").select("*", { count: "exact", head: true }).in("status", ["prospecto", "propuesta", "seguimiento"]),
+        supabase.from("prospects").select("status, price_usd"),
       ]);
 
       const activeProjects = (projects ?? []).filter((p) => p.status === "activo");
-      const pipelineValue = (quotations ?? []).reduce((sum, q) => sum + (q.total_usd || 0), 0);
+      const openProspects = (prospectsForKpis ?? []).filter((p) => ["prospecto", "propuesta", "seguimiento"].includes(p.status));
+      const wonProspects = (prospectsForKpis ?? []).filter((p) => ["ganado", "facturada", "cerrados"].includes(p.status));
+      const pipelineValue = openProspects.reduce((sum, p) => sum + (Number(p.price_usd) || 0), 0);
+      const wonValue = wonProspects.reduce((sum, p) => sum + (Number(p.price_usd) || 0), 0);
+      const wonCount = wonProspects.length;
 
       // Get total quotations count
       const { count: quotationsCount } = await supabase.from("quotations").select("*", { count: "exact", head: true });
@@ -81,6 +91,8 @@ const Dashboard = () => {
         activeProjectsCount: activeProjects.length,
         activeOpportunitiesCount: activeOpportunitiesCount ?? 0,
         pipelineValue,
+        wonCount,
+        wonValue,
         recentQuotations: quotations ?? [],
         activeProjects: activeProjects.slice(0, 4),
         topClients: clients ?? [],
@@ -90,12 +102,20 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
+  const fmt = (v: number) => v >= 1_000_000
+    ? `$${(v / 1_000_000).toFixed(1)}M`
+    : v >= 1_000
+    ? `$${(v / 1_000).toFixed(0)}K`
+    : `$${v.toFixed(0)}`;
+
   const stats = [
     { label: "Prospectos", value: data.prospectsCount.toString(), icon: Users, to: "/crm" },
     { label: "Cotizaciones", value: data.quotationsCount.toString(), icon: FileText, to: "/cotizaciones" },
     { label: "Clientes", value: data.clientsCount.toString(), icon: Building2, to: "/clientes" },
     { label: "Proyectos Activos", value: data.activeProjectsCount.toString(), icon: FolderKanban, to: "/projects" },
     { label: "Oportunidades Activas", value: data.activeOpportunitiesCount.toString(), icon: TrendingUp, to: "/crm" },
+    { label: "Ganados / Cerrados", value: data.wonCount.toString(), sub: fmt(data.wonValue), icon: Trophy, to: "/crm" },
+    { label: "Pipeline Abierto", value: fmt(data.pipelineValue), icon: DollarSign, to: "/crm" },
   ];
 
   if (loading) {
@@ -113,7 +133,7 @@ const Dashboard = () => {
         <p className="text-muted-foreground text-sm mt-1">Resumen general de operaciones SINEM</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -121,13 +141,14 @@ const Dashboard = () => {
             onClick={() => navigate(stat.to)}
           >
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center">
-                <stat.icon className="h-5 w-5 text-accent-foreground" />
+              <div className="w-9 h-9 rounded-lg bg-accent flex items-center justify-center">
+                <stat.icon className="h-4 w-4 text-accent-foreground" />
               </div>
               <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
             </div>
-            <p className="text-2xl font-bold">{stat.value}</p>
-            <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+            <p className="text-xl font-bold">{stat.value}</p>
+            {"sub" in stat && stat.sub && <p className="text-xs font-medium text-sinem-success">{stat.sub}</p>}
+            <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
           </div>
         ))}
       </div>

@@ -155,7 +155,7 @@ const Analitica = () => {
 
   // ── Order Entry data ──
   // Filter won deals by estimatedOE year for "Current" (only current year)
-  const allWonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada");
+  const allWonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada" || p.status === "cerrados");
   const wonDeals = allWonDeals.filter((p) => {
     const oeYear = getEstimatedOEYear(p.estimatedOE);
     return oeYear === currentYear;
@@ -165,7 +165,7 @@ const Analitica = () => {
   // Forecast: includes prospecto, propuesta, seguimiento, ganado (not perdido, not facturada)
   // Filter by estimatedOE year = current year
   const forecastProspects = prospects.filter((p) => {
-    if (p.status === "perdido" || p.status === "facturada") return false;
+    if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
     const oeYear = getEstimatedOEYear(p.estimatedOE);
     return oeYear === currentYear;
   });
@@ -187,13 +187,13 @@ const Analitica = () => {
     return match ? parseInt(match[1], 10) : null;
   };
 
-  const invoicedDeals = prospects.filter((p) => p.status === "facturada");
+  const invoicedDeals = prospects.filter((p) => p.status === "facturada" || p.status === "cerrados");
   const invoicedTotal = invoicedDeals.reduce((s, p) => s + p.priceUSD, 0);
   
   // Forecast: includes prospecto, propuesta, seguimiento, ganado (not perdido, not facturada)
   // Filter by revenue year = current year
   const revenueForecastDeals = prospects.filter((p) => {
-    if (p.status === "perdido" || p.status === "facturada") return false;
+    if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
     const revYear = getRevenueYear(p.revenue);
     return revYear === currentYear;
   });
@@ -210,7 +210,7 @@ const Analitica = () => {
   // ── Operative Margin data ──
   // Current: ganadas/facturadas con estimatedOE del año en curso
   const marginWonDeals = prospects.filter((p) => {
-    if (p.status !== "ganado" && p.status !== "facturada") return false;
+    if (p.status !== "ganado" && p.status !== "facturada" && p.status !== "cerrados") return false;
     const oeYear = getEstimatedOEYear(p.estimatedOE);
     return oeYear === currentYear;
   });
@@ -218,7 +218,7 @@ const Analitica = () => {
   
   // Forecast: prospecto, propuesta, seguimiento, ganado (not perdido, not facturada) con revenue del año en curso
   const marginForecastDeals = prospects.filter((p) => {
-    if (p.status === "perdido" || p.status === "facturada") return false;
+    if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
     const revYear = getRevenueYear(p.revenue);
     return revYear === currentYear;
   });

@@ -89,8 +89,10 @@ export const dbToClient = (row: DbClient): Client => ({
   rnc: (row as any).rnc ?? "",
   createdAt: row.created_at,
   totalProjects: row.total_projects,
+  activeProjects: (row as any).active_projects ?? 0,
   totalRevenue: Number(row.total_revenue),
   status: row.status as Client["status"],
+  phone: (row as any).phone ?? undefined,
   originProspectId: row.origin_prospect_id ?? undefined,
   primaryContactId: (row as any).primary_contact_id ?? undefined,
 });
@@ -107,6 +109,7 @@ export const clientToDb = (c: Client) => ({
   total_projects: c.totalProjects,
   total_revenue: c.totalRevenue,
   status: c.status,
+  phone: c.phone ?? null,
   origin_prospect_id: c.originProspectId ?? null,
   primary_contact_id: c.primaryContactId ?? null,
 });

@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { OFFER_STATUSES, type ClientOffer, type Client, type Contact } from "@/lib/types";
-import { ArrowLeft, Building2, Mail, Phone, MapPin, Plus, FileText, Eye, FolderKanban, UserCircle, Pencil, Trash2, Link2, Loader2 } from "lucide-react";
+import { ArrowLeft, Building2, Mail, Phone, MapPin, Plus, FileText, Eye, FolderKanban, UserCircle, Pencil, Trash2, Link2, Loader2, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ const ClienteDetail = () => {
   const [selectedOffer, setSelectedOffer] = useState<ClientOffer | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({
-    name: "", contactName: "", contactEmail: "", contactPhone: "", industry: "", address: "", rnc: "", status: "activo" as "activo" | "inactivo",
+    name: "", contactName: "", contactEmail: "", contactPhone: "", phone: "", industry: "", address: "", rnc: "", status: "activo" as "activo" | "inactivo",
   });
 
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
@@ -58,7 +58,7 @@ const ClienteDetail = () => {
     if (!client) return;
     setEditForm({
       name: client.name, contactName: client.contactName, contactEmail: client.contactEmail,
-      contactPhone: client.contactPhone, industry: client.industry, address: client.address, rnc: client.rnc, status: client.status,
+      contactPhone: client.contactPhone, phone: client.phone ?? "", industry: client.industry, address: client.address, rnc: client.rnc, status: client.status,
     });
     setEditOpen(true);
   };
@@ -70,6 +70,7 @@ const ClienteDetail = () => {
       contact_name: editForm.contactName.trim(),
       contact_email: editForm.contactEmail.trim(),
       contact_phone: editForm.contactPhone.trim(),
+      phone: editForm.phone.trim() || null,
       industry: editForm.industry.trim(),
       address: editForm.address.trim(),
       rnc: editForm.rnc.trim(),
@@ -132,7 +133,17 @@ const ClienteDetail = () => {
 
   const handleUnlinkContact = async (contactId: string) => {
     await supabase.from("contacts").update({ client_id: null }).eq("id", contactId);
+    if (client?.primaryContactId === contactId) {
+      await supabase.from("clients").update({ primary_contact_id: null } as any).eq("id", client.id);
+    }
     toast({ title: "Contacto desvinculado" });
+    fetchAll();
+  };
+
+  const handleSetPrimary = async (contactId: string) => {
+    if (!client) return;
+    await supabase.from("clients").update({ primary_contact_id: contactId } as any).eq("id", client.id);
+    toast({ title: "Contacto principal actualizado" });
     fetchAll();
   };
 
@@ -191,6 +202,12 @@ const ClienteDetail = () => {
                 <p className="text-sm font-medium">{client.industry}</p>
               </div>
             )}
+            {client.phone && (
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>{client.phone}</span>
+              </div>
+            )}
             {client.address && (
               <div className="flex items-center gap-2 text-sm">
                 <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
@@ -228,22 +245,51 @@ const ClienteDetail = () => {
           </div>
           {contacts.length > 0 ? (
             <div className="space-y-3">
-              {contacts.map((ct) => (
-                <div key={ct.id} className="flex items-start gap-3 py-2 border-b border-border/40 last:border-0 group">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs shrink-0">
-                    {ct.firstName[0]}{ct.lastName[0]}
+              {contacts.map((ct) => {
+                const isPrimary = ct.id === client.primaryContactId;
+                return (
+                  <div key={ct.id} className="flex items-start gap-3 py-2 border-b border-border/40 last:border-0 group">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs shrink-0 ${isPrimary ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
+                      {ct.firstName[0]}{ct.lastName[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-sm font-medium">{ct.firstName} {ct.lastName}</p>
+                        {isPrimary && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 px-1.5 py-0.5 rounded-full leading-none">
+                            <Crown className="h-2.5 w-2.5 fill-current" /> Principal
+                          </span>
+                        )}
+                      </div>
+                      {ct.position && <p className="text-xs text-muted-foreground">{ct.position}</p>}
+                      {ct.email && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <Mail className="h-3 w-3 shrink-0" />{ct.email}
+                        </div>
+                      )}
+                      {(ct.phone || ct.mobile) && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Phone className="h-3 w-3 shrink-0" />{ct.phone || ct.mobile}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      {!isPrimary && (
+                        <button
+                          onClick={() => handleSetPrimary(ct.id)}
+                          title="Marcar como principal"
+                          className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-yellow-500 transition-colors"
+                        >
+                          <Crown className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleUnlinkContact(ct.id)} title="Desvincular">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{ct.firstName} {ct.lastName}</p>
-                    <p className="text-xs text-muted-foreground">{ct.position}</p>
-                    <p className="text-xs text-muted-foreground">{ct.email}</p>
-                    {ct.phone && <p className="text-xs text-muted-foreground">{ct.phone}</p>}
-                  </div>
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" onClick={() => handleUnlinkContact(ct.id)} title="Desvincular">
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-6">Sin contactos registrados</p>
@@ -406,6 +452,10 @@ const ClienteDetail = () => {
             <div>
               <Label>Industria</Label>
               <Input value={editForm.industry} onChange={(e) => uf("industry", e.target.value)} />
+            </div>
+            <div>
+              <Label>Teléfono</Label>
+              <Input value={editForm.phone} onChange={(e) => uf("phone", e.target.value)} placeholder="809-555-0000" />
             </div>
             <div className="col-span-2">
               <Label>Dirección</Label>

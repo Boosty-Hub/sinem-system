@@ -132,6 +132,7 @@ const OfertaPublica = () => {
           deliveryTimeNote: (qRow as any).delivery_time_note ?? "",
           validityDays: qRow.validity_days,
           deliveryLocation: qRow.delivery_location,
+          specialConsiderations: (qRow as any).special_considerations ?? "",
           notes: qRow.notes,
           status: qRow.status as any,
           createdAt: qRow.created_at?.split("T")[0] ?? "",
@@ -617,6 +618,12 @@ const OfertaPublica = () => {
                 ))}
               </tbody>
             </table>
+            {quotation.specialConsiderations && (
+              <div style={{ marginTop: "10px" }}>
+                <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "4px" }}>Consideraciones Especiales:</p>
+                <p style={{ fontSize: "12px", whiteSpace: "pre-wrap", color: "#333" }}>{quotation.specialConsiderations}</p>
+              </div>
+            )}
           </div>
 
           <PageFooter />

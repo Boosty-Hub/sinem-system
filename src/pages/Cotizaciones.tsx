@@ -87,6 +87,7 @@ const Cotizaciones = () => {
         deliveryTimeNote: (s as any).delivery_time_note ?? "",
         validityDays: s.validity_days,
         deliveryLocation: s.delivery_location,
+        specialConsiderations: (s as any).special_considerations ?? "",
         notes: s.notes,
         status: s.status,
       });
@@ -141,6 +142,7 @@ const Cotizaciones = () => {
       partner: (q as any).partner ?? "Siemens",
       distributedCosts: (q as any).distributed_costs ?? [],
       otherCosts: (q as any).other_costs ?? [],
+      specialConsiderations: (q as any).special_considerations ?? "",
       proposalTexts: (q as any).proposal_texts ?? undefined,
     })));
     setLoading(false);
@@ -240,6 +242,7 @@ const Cotizaciones = () => {
       partner: updated.partner ?? "Siemens",
       distributed_costs: updated.distributedCosts ?? [],
       other_costs: updated.otherCosts ?? [],
+      special_considerations: updated.specialConsiderations ?? null,
       proposal_texts: updated.proposalTexts ?? null,
       created_by: appUserId,
     };
@@ -307,6 +310,7 @@ const Cotizaciones = () => {
           delivery_weeks_max: snap.deliveryWeeksMax,
           validity_days: snap.validityDays,
           delivery_location: snap.deliveryLocation,
+          special_considerations: snap.specialConsiderations ?? null,
           notes: snap.notes,
           status: snap.status,
         }))

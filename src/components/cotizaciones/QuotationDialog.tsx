@@ -148,6 +148,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [deliveryTimeNote, setDeliveryTimeNote] = useState("");
   const [validityDays, setValidityDays] = useState(30);
   const [deliveryLocation, setDeliveryLocation] = useState("");
+  const [specialConsiderations, setSpecialConsiderations] = useState("");
   const [notes, setNotes] = useState("");
   const [applyItbis, setApplyItbis] = useState(true);
   const [itbisPercent, setItbisPercent] = useState(18);
@@ -276,6 +277,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setDeliveryTimeNote(quotation.deliveryTimeNote ?? "");
         setValidityDays(quotation.validityDays);
         setDeliveryLocation(quotation.deliveryLocation);
+        setSpecialConsiderations(quotation.specialConsiderations ?? "");
         setNotes(quotation.notes);
         setApplyItbis(quotation.applyItbis);
         setItbisPercent(quotation.itbisPercent);
@@ -309,6 +311,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setDeliveryTimeNote(d?.deliveryTimeNote ?? "");
         setValidityDays(d?.validityDays ?? 30);
         setDeliveryLocation(d?.deliveryLocation ?? "");
+        setSpecialConsiderations(d?.specialConsiderations ?? "");
         setNotes(d?.notes ?? "");
         setApplyItbis(d?.applyItbis ?? true);
         setItbisPercent(d?.itbisPercent ?? 18);
@@ -596,7 +599,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       currency, exchangeRate, isOriginalCurrency, partner,
       costUSD: effectiveCostUSD, marginPercent, marginUSD,
       distributedCosts, otherCosts,
-      paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, deliveryTimeNote, validityDays, deliveryLocation, notes,
+      paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, deliveryTimeNote, validityDays, deliveryLocation, specialConsiderations, notes,
       proposalTexts,
     };
   };
@@ -724,6 +727,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setDeliveryTimeNote(snap.deliveryTimeNote ?? "");
     setValidityDays(snap.validityDays);
     setDeliveryLocation(snap.deliveryLocation);
+    setSpecialConsiderations(snap.specialConsiderations ?? "");
     setNotes(snap.notes);
     setStatus(snap.status as Quotation["status"]);
     setExpandedVersion(null);
@@ -1238,6 +1242,16 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               <div>
                 <Label>Lugar de Entrega</Label>
                 <Input value={deliveryLocation} onChange={(e) => setDeliveryLocation(e.target.value)} placeholder="Ej: Santo Domingo, RD" />
+              </div>
+              <div className="col-span-2">
+                <Label>Consideraciones Especiales</Label>
+                <Textarea
+                  value={specialConsiderations}
+                  onChange={(e) => setSpecialConsiderations(e.target.value)}
+                  placeholder="Ej: El equipo requiere instalación en sala climatizada. Se excluyen trabajos civiles."
+                  rows={3}
+                  className="resize-y"
+                />
               </div>
             </div>
           </div>

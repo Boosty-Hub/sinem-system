@@ -17,6 +17,7 @@ interface ClientForm {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  phone: string;
   industry: string;
   address: string;
   rnc: string;
@@ -163,7 +164,11 @@ const ClientDialog = ({ open, onOpenChange, editId, initialForm, initialContactI
             <Label>Dirección</Label>
             <Input value={form.address} onChange={(e) => u("address", e.target.value)} placeholder="Dirección completa" />
           </div>
-          <div className="col-span-2">
+          <div>
+            <Label>Teléfono</Label>
+            <Input value={form.phone} onChange={(e) => u("phone", e.target.value)} placeholder="809-555-0000" />
+          </div>
+          <div>
             <Label>RNC</Label>
             <Input value={form.rnc} onChange={(e) => u("rnc", e.target.value)} placeholder="Ej: 101-12345-6" />
           </div>

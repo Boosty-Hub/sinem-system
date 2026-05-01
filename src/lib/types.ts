@@ -95,8 +95,10 @@ export interface Client {
   rnc: string;
   createdAt: string;
   totalProjects: number;
+  activeProjects: number;
   totalRevenue: number;
   status: "activo" | "inactivo";
+  phone?: string;
   originProspectId?: string;
   primaryContactId?: string;
 }
@@ -225,6 +227,7 @@ export interface Quotation {
   approvalNote?: string;
   distributedCosts?: CostEntry[];
   otherCosts?: CostEntry[];
+  specialConsiderations?: string;
   proposalTexts?: QuotationProposalTexts;
 }
 

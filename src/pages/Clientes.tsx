@@ -13,7 +13,7 @@ import { Link, useNavigate } from "react-router-dom";
 import ClientImportDialog from "@/components/clientes/ClientImportDialog";
 import ClientDialog from "@/components/clientes/ClientDialog";
 
-type SortKey = "name" | "contactName" | "contactEmail" | "contactPhone" | "industry" | "status" | "totalProjects" | "totalRevenue" | "createdAt";
+type SortKey = "name" | "contactName" | "contactEmail" | "phone" | "industry" | "status" | "activeProjects" | "totalRevenue" | "createdAt";
 type SortDir = "asc" | "desc";
 
 const emptyForm = {
@@ -21,6 +21,7 @@ const emptyForm = {
   contactName: "",
   contactEmail: "",
   contactPhone: "",
+  phone: "",
   industry: "",
   address: "",
   rnc: "",
@@ -120,6 +121,7 @@ const Clientes = () => {
       contactName: client.contactName,
       contactEmail: client.contactEmail,
       contactPhone: client.contactPhone,
+      phone: client.phone ?? "",
       industry: client.industry,
       address: client.address,
       rnc: client.rnc,
@@ -146,6 +148,7 @@ const Clientes = () => {
         contact_name: formData.contactName.trim(),
         contact_email: formData.contactEmail.trim(),
         contact_phone: formData.contactPhone.trim(),
+        phone: formData.phone.trim() || null,
         industry: formData.industry.trim(),
         address: formData.address.trim(),
         rnc: formData.rnc.trim(),
@@ -159,6 +162,7 @@ const Clientes = () => {
         contact_name: formData.contactName.trim(),
         contact_email: formData.contactEmail.trim(),
         contact_phone: formData.contactPhone.trim(),
+        phone: formData.phone.trim() || null,
         industry: formData.industry.trim(),
         address: formData.address.trim(),
         rnc: formData.rnc.trim(),
@@ -253,9 +257,9 @@ const Clientes = () => {
                 ["name", "Cliente"],
                 ["contactName", "Contacto"],
                 ["contactEmail", "Email"],
-                ["contactPhone", "Teléfono"],
+                ["phone", "Teléfono"],
                 ["industry", "Industria"],
-                ["totalProjects", "Proyectos"],
+                ["activeProjects", "Proyectos"],
                 ["totalRevenue", "Ingresos"],
                 ["status", "Estado"],
                 ["createdAt", "Creado"],
@@ -276,9 +280,9 @@ const Clientes = () => {
                 <td className="py-3 px-3 font-medium">{client.name}</td>
                 <td className="py-3 px-3 text-muted-foreground">{client.contactName || "—"}</td>
                 <td className="py-3 px-3 text-muted-foreground">{client.contactEmail || "—"}</td>
-                <td className="py-3 px-3 text-muted-foreground">{client.contactPhone || "—"}</td>
+                <td className="py-3 px-3 text-muted-foreground">{client.phone || "—"}</td>
                 <td className="py-3 px-3 text-muted-foreground">{client.industry || "—"}</td>
-                <td className="py-3 px-3 text-center">{client.totalProjects}</td>
+                <td className="py-3 px-3 text-center">{client.activeProjects}</td>
                 <td className="py-3 px-3 text-right font-semibold text-primary">${client.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 <td className="py-3 px-3 text-center">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${

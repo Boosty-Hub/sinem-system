@@ -5,7 +5,6 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import UserAvatar from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,7 +82,8 @@ const ProjectDetail = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeStep, setActiveStep] = useState(1);
-  const [documents, setDocuments] = useLocalStorage<ProjectDocument[]>(`sinem:project-docs:${id}`, []);
+  const [documents, setDocuments] = useState<ProjectDocument[]>([]);
+  const [docsLoading, setDocsLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectDocument | null>(null);
@@ -123,6 +123,62 @@ const ProjectDetail = () => {
       setLoading(false);
     };
     load();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const loadDocs = async () => {
+      setDocsLoading(true);
+      const { data } = await supabase
+        .from("project_documents")
+        .select("*")
+        .eq("project_id", id)
+        .order("uploaded_at", { ascending: true });
+
+      if (data && data.length > 0) {
+        setDocuments(data.map((r) => ({
+          id: r.id,
+          name: r.name,
+          size: r.size,
+          type: r.type,
+          uploadedAt: r.uploaded_at,
+          stepNumber: r.step_number,
+          storagePath: r.storage_path ?? undefined,
+          uploadedBy: r.uploaded_by ?? undefined,
+          subfolder: r.subfolder ?? undefined,
+        })));
+      } else {
+        // Migrate from localStorage if data exists there
+        const localKey = `sinem:project-docs:${id}`;
+        try {
+          const raw = localStorage.getItem(localKey);
+          if (raw) {
+            const localDocs: ProjectDocument[] = JSON.parse(raw);
+            if (localDocs.length > 0) {
+              const inserts = localDocs.map((d) => ({
+                id: d.id,
+                project_id: id,
+                name: d.name,
+                size: d.size,
+                type: d.type,
+                uploaded_at: d.uploadedAt,
+                step_number: d.stepNumber,
+                storage_path: d.storagePath ?? null,
+                uploaded_by: d.uploadedBy ?? null,
+                subfolder: d.subfolder ?? null,
+              }));
+              const { data: migrated } = await supabase.from("project_documents").insert(inserts).select();
+              if (migrated) {
+                setDocuments(localDocs);
+                localStorage.removeItem(localKey);
+              }
+            }
+          }
+        } catch (_) { /* ignore migration errors */ }
+      }
+      setDocsLoading(false);
+    };
+    loadDocs();
   }, [id]);
 
   const updateProjectStep = async (newStep: number) => {
@@ -169,6 +225,19 @@ const ProjectDetail = () => {
     }
 
     if (newDocs.length > 0) {
+      const inserts = newDocs.map((d) => ({
+        id: d.id,
+        project_id: id,
+        name: d.name,
+        size: d.size,
+        type: d.type,
+        uploaded_at: d.uploadedAt,
+        step_number: d.stepNumber,
+        storage_path: d.storagePath ?? null,
+        uploaded_by: d.uploadedBy ?? null,
+        subfolder: d.subfolder ?? null,
+      }));
+      await supabase.from("project_documents").insert(inserts);
       setDocuments((prev) => {
         const updated = [...prev, ...newDocs];
         const newCurrentStep = computeCurrentStep(updated);
@@ -209,6 +278,7 @@ const ProjectDetail = () => {
     if (deleteTarget.storagePath) {
       await supabase.storage.from("project-files").remove([deleteTarget.storagePath]);
     }
+    await supabase.from("project_documents").delete().eq("id", deleteTarget.id);
     setDocuments((prev) => {
       const updated = prev.filter((d) => d.id !== deleteTarget.id);
       const newCurrentStep = computeCurrentStep(updated);
@@ -361,7 +431,11 @@ const ProjectDetail = () => {
             </div>
           )}
 
-          {stepDocs.length > 0 ? (
+          {docsLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : stepDocs.length > 0 ? (
             <div className="space-y-2">
               {stepDocs.map((doc) => {
                 const Icon = getFileIcon(doc.type);
