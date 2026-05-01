@@ -9,6 +9,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import ActivitySidebar from "@/components/crm/ActivitySidebar";
+import * as tus from "tus-js-client";
+
+const SUPABASE_URL = "https://fxsshhrxzjyjvfszaorq.supabase.co";
+const TUS_ENDPOINT = `${SUPABASE_URL}/storage/v1/upload/resumable`;
+const LARGE_FILE_THRESHOLD = 6 * 1024 * 1024; // 6MB
 
 interface ProjectDocument {
   id: string;
@@ -20,6 +25,14 @@ interface ProjectDocument {
   storagePath?: string;
   uploadedBy?: string;
   subfolder?: string;
+}
+
+interface UploadingFile {
+  id: string;
+  name: string;
+  size: number;
+  progress: number;
+  stepNumber: number;
 }
 
 const STEP_SUBFOLDERS: Record<number, { key: string; label: string }[]> = {
@@ -44,18 +57,16 @@ const sanitizeStorageName = (name: string): string => {
   const ext = lastDot >= 0 ? name.slice(lastDot) : "";
   const base = lastDot >= 0 ? name.slice(0, lastDot) : name;
 
-  const safePart = base
-    .normalize("NFD")                     // decompose: é → e + combining accent
-    .replace(/[\u0300-\u036f]/g, "")      // strip combining diacritical marks
-    .replace(/%/g, "pct")                 // % → pct (avoids URL encoding issues)
-    .replace(/[^a-zA-Z0-9._\-]/g, "_")   // anything else unsafe → _
-    .replace(/_+/g, "_")                  // collapse repeated underscores
-    .replace(/^_+|_+$/g, "");             // trim leading/trailing underscores
+  const stripDiacritics = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-  const safeExt = ext
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9.]/g, "_");
+  const safePart = stripDiacritics(base)
+    .replace(/%/g, "pct")
+    .replace(/[^a-zA-Z0-9._\-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  const safeExt = stripDiacritics(ext).replace(/[^a-zA-Z0-9.]/g, "_");
 
   return (safePart || "archivo") + safeExt;
 };
@@ -63,7 +74,8 @@ const sanitizeStorageName = (name: string): string => {
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
 
 const getFileIcon = (type: string) => {
@@ -71,6 +83,36 @@ const getFileIcon = (type: string) => {
   if (type.includes("spreadsheet") || type.includes("excel") || type.includes("csv")) return FileSpreadsheet;
   return File;
 };
+
+const uploadWithTUS = (
+  file: File,
+  storagePath: string,
+  accessToken: string,
+  onProgress: (pct: number) => void,
+): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: TUS_ENDPOINT,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "x-upsert": "false",
+      },
+      metadata: {
+        bucketName: "project-files",
+        objectName: storagePath,
+        contentType: file.type || "application/octet-stream",
+        cacheControl: "3600",
+      },
+      chunkSize: 6 * 1024 * 1024,
+      onError: reject,
+      onProgress: (uploaded, total) => {
+        onProgress(total > 0 ? Math.round((uploaded / total) * 100) : 0);
+      },
+      onSuccess: () => resolve(),
+    });
+    upload.start();
+  });
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -88,6 +130,7 @@ const ProjectDetail = () => {
   const [activityOpen, setActivityOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectDocument | null>(null);
   const [activeSubfolder, setActiveSubfolder] = useState("");
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
 
   // Auto-select first subfolder when switching to a step with subfolders
   useEffect(() => {
@@ -198,30 +241,67 @@ const ProjectDetail = () => {
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast({ title: "Sin sesión activa", description: "Recargá la página e intentá de nuevo.", variant: "destructive" });
+      return;
+    }
+
+    const slots: UploadingFile[] = fileArray.map((f) => ({
+      id: crypto.randomUUID(),
+      name: f.name,
+      size: f.size,
+      progress: 0,
+      stepNumber: activeStep,
+    }));
+    setUploadingFiles((prev) => [...prev, ...slots]);
+
     const newDocs: ProjectDocument[] = [];
 
-    for (const file of fileArray) {
-      const docId = crypto.randomUUID();
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      const slot = slots[i];
       const hasSubfolders = !!STEP_SUBFOLDERS[activeStep];
       const subPath = hasSubfolders ? `${activeSubfolder}/` : "";
       const safeName = sanitizeStorageName(file.name);
-      const storagePath = `${id}/step-${activeStep}/${subPath}${docId}-${safeName}`;
-      const { error } = await supabase.storage.from("project-files").upload(storagePath, file);
-      if (error) {
-        toast({ title: `Error al subir ${file.name}`, description: error.message, variant: "destructive" });
-        continue;
+      const storagePath = `${id}/step-${activeStep}/${subPath}${slot.id}-${safeName}`;
+
+      try {
+        if (file.size >= LARGE_FILE_THRESHOLD) {
+          await uploadWithTUS(file, storagePath, session.access_token, (pct) => {
+            setUploadingFiles((prev) =>
+              prev.map((u) => u.id === slot.id ? { ...u, progress: pct } : u)
+            );
+          });
+        } else {
+          const { error } = await supabase.storage.from("project-files").upload(storagePath, file);
+          if (error) throw error;
+          setUploadingFiles((prev) =>
+            prev.map((u) => u.id === slot.id ? { ...u, progress: 100 } : u)
+          );
+        }
+
+        newDocs.push({
+          id: slot.id,
+          name: file.name,
+          size: file.size,
+          type: file.type || "application/octet-stream",
+          uploadedAt: new Date().toISOString(),
+          stepNumber: activeStep,
+          storagePath,
+          uploadedBy: currentAppUserId ?? undefined,
+          ...(hasSubfolders ? { subfolder: activeSubfolder } : {}),
+        });
+      } catch (err: any) {
+        toast({
+          title: `Error al subir ${file.name}`,
+          description: err?.message ?? "Error desconocido",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingFiles((prev) => prev.filter((u) => u.id !== slot.id));
       }
-      newDocs.push({
-        id: docId,
-        name: file.name,  // keep original display name with accents/special chars
-        size: file.size,
-        type: file.type || "application/octet-stream",
-        uploadedAt: new Date().toISOString(),
-        stepNumber: activeStep,
-        storagePath,
-        uploadedBy: currentAppUserId ?? undefined,
-        ...(hasSubfolders ? { subfolder: activeSubfolder } : {}),
-      });
     }
 
     if (newDocs.length > 0) {
@@ -240,13 +320,12 @@ const ProjectDetail = () => {
       await supabase.from("project_documents").insert(inserts);
       setDocuments((prev) => {
         const updated = [...prev, ...newDocs];
-        const newCurrentStep = computeCurrentStep(updated);
-        updateProjectStep(newCurrentStep);
+        updateProjectStep(computeCurrentStep(updated));
         return updated;
       });
       toast({ title: `${newDocs.length} archivo${newDocs.length > 1 ? "s" : ""} subido${newDocs.length > 1 ? "s" : ""}` });
     }
-  }, [activeStep, activeSubfolder, id, setDocuments, toast]);
+  }, [activeStep, activeSubfolder, id, currentAppUserId, toast]);
 
   if (loading) {
     return (
@@ -272,6 +351,8 @@ const ProjectDetail = () => {
     : stepDocsAll;
   const currentStepInfo = PROJECT_STEPS[activeStep - 1];
   const stepsWithDocs = new Set(documents.map((d) => d.stepNumber));
+
+  const activeUploads = uploadingFiles.filter((u) => u.stepNumber === activeStep);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
@@ -352,6 +433,7 @@ const ProjectDetail = () => {
             {PROJECT_STEPS.map((step) => {
               const isComplete = stepsWithDocs.has(step.number);
               const isActive = step.number === activeStep;
+              const isUploading = uploadingFiles.some((u) => u.stepNumber === step.number);
 
               return (
                 <button
@@ -366,7 +448,9 @@ const ProjectDetail = () => {
                   <div className={`step-badge flex-shrink-0 ${
                     isComplete ? "step-complete" : isActive ? "step-active" : "step-pending"
                   }`}>
-                    {isComplete ? (
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : isComplete ? (
                       <CheckCircle2 className="h-4 w-4" />
                     ) : (
                       step.number
@@ -435,7 +519,7 @@ const ProjectDetail = () => {
             <div className="flex items-center justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : stepDocs.length > 0 ? (
+          ) : (
             <div className="space-y-2">
               {stepDocs.map((doc) => {
                 const Icon = getFileIcon(doc.type);
@@ -472,8 +556,30 @@ const ProjectDetail = () => {
                   </div>
                 );
               })}
+
+              {/* Upload progress cards */}
+              {activeUploads.map((uf) => (
+                <div key={uf.id} className="flex items-center gap-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
+                  <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+                    <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{uf.name}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex-1 h-1.5 bg-primary/20 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                          style={{ width: `${uf.progress}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-primary font-medium tabular-nums w-9 text-right">{uf.progress}%</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{formatFileSize(uf.size)} · Subiendo...</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : null}
+          )}
 
           <div
             onDragOver={handleDragOver}
@@ -486,7 +592,9 @@ const ProjectDetail = () => {
           >
             <FileText className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
             <p className="text-sm text-muted-foreground">
-              {stepDocs.length === 0 ? "No hay documentos en este paso todavía" : "Arrastra más archivos aquí"}
+              {stepDocs.length === 0 && activeUploads.length === 0
+                ? "No hay documentos en este paso todavía"
+                : "Arrastra más archivos aquí"}
             </p>
             <p className="text-xs text-muted-foreground/60 mt-1">
               Sube archivos arrastrándolos aquí o haciendo clic
