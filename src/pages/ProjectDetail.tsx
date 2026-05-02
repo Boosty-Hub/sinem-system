@@ -1,9 +1,12 @@
 import { useParams, Link } from "react-router-dom";
 import { PROJECT_STEPS, CURRENCIES, type Project, type Quotation } from "@/lib/types";
-import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet, ExternalLink, Receipt, MessageSquareText, Loader2, Download, FolderOpen } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet, ExternalLink, Receipt, MessageSquareText, Loader2, Download, FolderOpen, FolderPlus, X } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import UserAvatar from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/AuthContext";
@@ -35,16 +38,32 @@ interface UploadingFile {
   stepNumber: number;
 }
 
-const STEP_SUBFOLDERS: Record<number, { key: string; label: string }[]> = {
+interface Subfolder {
+  key: string;
+  label: string;
+  builtIn?: boolean;
+  id?: string;
+}
+
+const STEP_SUBFOLDERS: Record<number, Subfolder[]> = {
   2: [
-    { key: "cliente", label: "Oferta de Cliente" },
-    { key: "proveedor", label: "Oferta de Suplidor (Proveedor)" },
+    { key: "cliente", label: "Oferta de Cliente", builtIn: true },
+    { key: "proveedor", label: "Oferta de Suplidor (Proveedor)", builtIn: true },
   ],
   10: [
-    { key: "cliente", label: "Gantt para Cliente" },
-    { key: "interno", label: "Gantt para uso interno (CEN)" },
-    { key: "atrasos", label: "Información de atrasos" },
+    { key: "cliente", label: "Gantt para Cliente", builtIn: true },
+    { key: "interno", label: "Gantt para uso interno (CEN)", builtIn: true },
+    { key: "atrasos", label: "Información de atrasos", builtIn: true },
   ],
+};
+
+const slugifySubfolder = (label: string): string => {
+  const stripDiacritics = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return stripDiacritics(label.trim().toLowerCase())
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "subcarpeta";
 };
 
 /**
@@ -131,14 +150,30 @@ const ProjectDetail = () => {
   const [deleteTarget, setDeleteTarget] = useState<ProjectDocument | null>(null);
   const [activeSubfolder, setActiveSubfolder] = useState("");
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
+  const [customSubfolders, setCustomSubfolders] = useState<Record<number, Subfolder[]>>({});
+  const [newSubfolderOpen, setNewSubfolderOpen] = useState(false);
+  const [newSubfolderLabel, setNewSubfolderLabel] = useState("");
+  const [savingSubfolder, setSavingSubfolder] = useState(false);
+  const [subfolderToDelete, setSubfolderToDelete] = useState<Subfolder | null>(null);
+
+  const getSubfolders = useCallback(
+    (step: number): Subfolder[] => [
+      ...(STEP_SUBFOLDERS[step] ?? []),
+      ...(customSubfolders[step] ?? []),
+    ],
+    [customSubfolders],
+  );
 
   // Auto-select first subfolder when switching to a step with subfolders
   useEffect(() => {
-    const subs = STEP_SUBFOLDERS[activeStep];
-    if (subs && subs.length > 0) {
-      setActiveSubfolder(subs[0].key);
+    const subs = getSubfolders(activeStep);
+    if (subs.length > 0) {
+      const exists = subs.some((s) => s.key === activeSubfolder);
+      if (!exists) setActiveSubfolder(subs[0].key);
+    } else {
+      setActiveSubfolder("");
     }
-  }, [activeStep]);
+  }, [activeStep, getSubfolders, activeSubfolder]);
 
   useEffect(() => {
     if (!user) return;
@@ -224,6 +259,90 @@ const ProjectDetail = () => {
     loadDocs();
   }, [id]);
 
+  useEffect(() => {
+    if (!id) return;
+    const loadSubfolders = async () => {
+      const { data } = await supabase
+        .from("project_subfolders")
+        .select("*")
+        .eq("project_id", id)
+        .order("created_at", { ascending: true });
+      const grouped: Record<number, Subfolder[]> = {};
+      for (const r of data ?? []) {
+        if (!grouped[r.step_number]) grouped[r.step_number] = [];
+        grouped[r.step_number].push({ id: r.id, key: r.key, label: r.label });
+      }
+      setCustomSubfolders(grouped);
+    };
+    loadSubfolders();
+  }, [id]);
+
+  const createSubfolder = async () => {
+    const label = newSubfolderLabel.trim();
+    if (!label || !id) return;
+    const baseKey = slugifySubfolder(label);
+    const existing = new Set(getSubfolders(activeStep).map((s) => s.key));
+    let key = baseKey;
+    let n = 1;
+    while (existing.has(key)) {
+      n += 1;
+      key = `${baseKey}-${n}`;
+    }
+    setSavingSubfolder(true);
+    const { data, error } = await supabase
+      .from("project_subfolders")
+      .insert({
+        project_id: id,
+        step_number: activeStep,
+        key,
+        label,
+        created_by: currentAppUserId,
+      })
+      .select()
+      .single();
+    setSavingSubfolder(false);
+    if (error || !data) {
+      toast({ title: "Error al crear subcarpeta", description: error?.message, variant: "destructive" });
+      return;
+    }
+    setCustomSubfolders((prev) => {
+      const list = prev[activeStep] ?? [];
+      return { ...prev, [activeStep]: [...list, { id: data.id, key: data.key, label: data.label }] };
+    });
+    setActiveSubfolder(data.key);
+    setNewSubfolderLabel("");
+    setNewSubfolderOpen(false);
+    toast({ title: "Subcarpeta creada" });
+  };
+
+  const confirmDeleteSubfolder = async () => {
+    if (!subfolderToDelete?.id || !id) return;
+    const docsInside = documents.filter(
+      (d) => d.stepNumber === activeStep && d.subfolder === subfolderToDelete.key,
+    );
+    if (docsInside.length > 0) {
+      const paths = docsInside.map((d) => d.storagePath).filter(Boolean) as string[];
+      if (paths.length > 0) {
+        await supabase.storage.from("project-files").remove(paths);
+      }
+      await supabase.from("project_documents").delete().in("id", docsInside.map((d) => d.id));
+    }
+    await supabase.from("project_subfolders").delete().eq("id", subfolderToDelete.id);
+    setCustomSubfolders((prev) => {
+      const list = (prev[activeStep] ?? []).filter((s) => s.id !== subfolderToDelete.id);
+      return { ...prev, [activeStep]: list };
+    });
+    setDocuments((prev) => {
+      const updated = prev.filter(
+        (d) => !(d.stepNumber === activeStep && d.subfolder === subfolderToDelete.key),
+      );
+      updateProjectStep(computeCurrentStep(updated));
+      return updated;
+    });
+    toast({ title: "Subcarpeta eliminada" });
+    setSubfolderToDelete(null);
+  };
+
   const updateProjectStep = async (newStep: number) => {
     if (!id) return;
     await supabase.from("projects").update({ current_step: newStep }).eq("id", id);
@@ -262,8 +381,9 @@ const ProjectDetail = () => {
     for (let i = 0; i < fileArray.length; i++) {
       const file = fileArray[i];
       const slot = slots[i];
-      const hasSubfolders = !!STEP_SUBFOLDERS[activeStep];
-      const subPath = hasSubfolders ? `${activeSubfolder}/` : "";
+      const subs = getSubfolders(activeStep);
+      const hasSubfolders = subs.length > 0;
+      const subPath = hasSubfolders && activeSubfolder ? `${activeSubfolder}/` : "";
       const safeName = sanitizeStorageName(file.name);
       const storagePath = `${id}/step-${activeStep}/${subPath}${slot.id}-${safeName}`;
 
@@ -325,7 +445,7 @@ const ProjectDetail = () => {
       });
       toast({ title: `${newDocs.length} archivo${newDocs.length > 1 ? "s" : ""} subido${newDocs.length > 1 ? "s" : ""}` });
     }
-  }, [activeStep, activeSubfolder, id, currentAppUserId, toast]);
+  }, [activeStep, activeSubfolder, id, currentAppUserId, toast, getSubfolders]);
 
   if (loading) {
     return (
@@ -345,8 +465,9 @@ const ProjectDetail = () => {
   }
 
   const stepDocsAll = documents.filter((d) => d.stepNumber === activeStep);
-  const currentSubfolders = STEP_SUBFOLDERS[activeStep];
-  const stepDocs = currentSubfolders
+  const currentSubfolders = getSubfolders(activeStep);
+  const hasSubfolders = currentSubfolders.length > 0;
+  const stepDocs = hasSubfolders
     ? stepDocsAll.filter((d) => d.subfolder === activeSubfolder)
     : stepDocsAll;
   const currentStepInfo = PROJECT_STEPS[activeStep - 1];
@@ -490,19 +611,22 @@ const ProjectDetail = () => {
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInput} />
           </div>
 
-          {currentSubfolders && (
-            <div className="flex gap-1 mb-4 border-b">
-              {currentSubfolders.map((sf) => {
-                const count = stepDocsAll.filter((d) => d.subfolder === sf.key).length;
-                return (
+          <div className="flex flex-wrap items-center gap-1 mb-4 border-b">
+            {currentSubfolders.map((sf) => {
+              const count = stepDocsAll.filter((d) => d.subfolder === sf.key).length;
+              const isActive = activeSubfolder === sf.key;
+              return (
+                <div
+                  key={sf.key}
+                  className={`group flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                    isActive
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
                   <button
-                    key={sf.key}
                     onClick={() => setActiveSubfolder(sf.key)}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
-                      activeSubfolder === sf.key
-                        ? "border-primary text-primary"
-                        : "border-transparent text-muted-foreground hover:text-foreground"
-                    }`}
+                    className="flex items-center gap-1.5"
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
                     {sf.label}
@@ -510,10 +634,27 @@ const ProjectDetail = () => {
                       count > 0 ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                     }`}>{count}</span>
                   </button>
-                );
-              })}
-            </div>
-          )}
+                  {!sf.builtIn && (
+                    <button
+                      onClick={() => setSubfolderToDelete(sf)}
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                      title="Eliminar subcarpeta"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            <button
+              onClick={() => setNewSubfolderOpen(true)}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-primary transition-colors -mb-px border-b-2 border-transparent"
+              title="Nueva subcarpeta"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              Nueva subcarpeta
+            </button>
+          </div>
 
           {docsLoading ? (
             <div className="flex items-center justify-center py-10">
@@ -636,6 +777,56 @@ const ProjectDetail = () => {
         description={`¿Estás seguro de eliminar "${deleteTarget?.name}"? Esta acción no se puede deshacer.`}
         onConfirm={confirmDelete}
       />
+
+      <ConfirmDialog
+        open={!!subfolderToDelete}
+        onOpenChange={(open) => { if (!open) setSubfolderToDelete(null); }}
+        title="Eliminar Subcarpeta"
+        description={(() => {
+          if (!subfolderToDelete) return "";
+          const count = documents.filter(
+            (d) => d.stepNumber === activeStep && d.subfolder === subfolderToDelete.key,
+          ).length;
+          return count > 0
+            ? `La subcarpeta "${subfolderToDelete.label}" contiene ${count} archivo${count > 1 ? "s" : ""}. Se eliminarán también. ¿Continuar?`
+            : `¿Eliminar la subcarpeta "${subfolderToDelete.label}"?`;
+        })()}
+        onConfirm={confirmDeleteSubfolder}
+      />
+
+      <Dialog open={newSubfolderOpen} onOpenChange={setNewSubfolderOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nueva Subcarpeta</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            <Label className="text-xs">Nombre</Label>
+            <Input
+              value={newSubfolderLabel}
+              onChange={(e) => setNewSubfolderLabel(e.target.value)}
+              placeholder="Ej: Planos finales"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newSubfolderLabel.trim()) {
+                  e.preventDefault();
+                  createSubfolder();
+                }
+              }}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Se creará en el paso {activeStep}: {PROJECT_STEPS[activeStep - 1]?.name}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setNewSubfolderOpen(false); setNewSubfolderLabel(""); }}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={createSubfolder} disabled={!newSubfolderLabel.trim() || savingSubfolder}>
+              {savingSubfolder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Crear"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

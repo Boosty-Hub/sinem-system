@@ -58,17 +58,6 @@ const emptyForm = {
 
 const TOTAL_STEPS = 11;
 
-const getStepsWithFiles = (projectId: string): number => {
-  try {
-    const raw = localStorage.getItem(`sinem:project-docs:${projectId}`);
-    if (!raw) return 0;
-    const docs: { stepNumber: number }[] = JSON.parse(raw);
-    return new Set(docs.map((d) => d.stepNumber)).size;
-  } catch {
-    return 0;
-  }
-};
-
 const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -80,6 +69,7 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [allProjects, setAllProjects] = useState<ProjectRow[]>([]);
+  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -95,18 +85,10 @@ const Projects = () => {
   const [sortKey, setSortKey] = useState<"code" | "name" | "client" | "value" | "current_step" | "progress" | "status" | "start_date">("code");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  const progressMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const p of allProjects) {
-      map[p.id] = getStepsWithFiles(p.id);
-    }
-    return map;
-  }, [allProjects]);
-
   const fetchProjects = async () => {
     setLoading(true);
     const { data: projectsData } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date, origin_prospect_id, assigned_to").order("created_at", { ascending: false });
-    
+
     // Fetch prospect codes for projects with origin_prospect_id
     const prospectIds = (projectsData ?? []).map(p => p.origin_prospect_id).filter(Boolean);
     let prospectCodes: Record<string, string> = {};
@@ -114,11 +96,33 @@ const Projects = () => {
       const { data: prospects } = await supabase.from("prospects").select("id, code").in("id", prospectIds);
       prospectCodes = (prospects ?? []).reduce((acc, p) => ({ ...acc, [p.id]: p.code }), {});
     }
-    
+
     setAllProjects((projectsData ?? []).map(p => ({
       ...p,
       code: p.origin_prospect_id ? prospectCodes[p.origin_prospect_id] : undefined,
     })) as ProjectRow[]);
+
+    // Build progress map from project_documents (shared across all users)
+    const projectIds = (projectsData ?? []).map(p => p.id);
+    if (projectIds.length > 0) {
+      const { data: docs } = await supabase
+        .from("project_documents")
+        .select("project_id, step_number")
+        .in("project_id", projectIds);
+      const stepsByProject: Record<string, Set<number>> = {};
+      for (const d of docs ?? []) {
+        if (!stepsByProject[d.project_id]) stepsByProject[d.project_id] = new Set();
+        stepsByProject[d.project_id].add(d.step_number);
+      }
+      const map: Record<string, number> = {};
+      for (const pid of projectIds) {
+        map[pid] = stepsByProject[pid]?.size ?? 0;
+      }
+      setProgressMap(map);
+    } else {
+      setProgressMap({});
+    }
+
     setLoading(false);
   };
 

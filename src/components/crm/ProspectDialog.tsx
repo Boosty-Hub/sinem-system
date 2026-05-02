@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Crown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PIPELINE_STAGES, QUOTATION_STATUSES, type Prospect, type Product, type PipelineStage, type Client, type Contact, type Quotation } from "@/lib/types";
@@ -15,7 +17,8 @@ import { usePartners } from "@/hooks/usePartners";
 import { useBusinessUnits } from "@/hooks/useBusinessUnits";
 import { useRequiredFields } from "@/hooks/useRequiredFields";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp, X, Search } from "lucide-react";
+import { FileText, ExternalLink, Plus, Trash2, Lock, History, ChevronDown, ChevronUp, X, Search, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import UserAvatar from "@/components/UserAvatar";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -47,7 +50,9 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
   const [clients, setClients] = useState<Client[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [appUsers, setAppUsers] = useState<{ id: string; name: string; avatarUrl: string }[]>([]);
-  const { partners } = usePartners();
+  const { partners, setPartners } = usePartners();
+  const [partnerPopoverOpen, setPartnerPopoverOpen] = useState(false);
+  const [partnerSearch, setPartnerSearch] = useState("");
   const { businessUnits } = useBusinessUnits();
   const [linkedQuotations, setLinkedQuotations] = useState<any[]>([]);
 
@@ -521,17 +526,82 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
           </div>
           <div>
             <Label>Proveedor</Label>
-            <Select value={proveedor} onValueChange={setProveedor}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-              <SelectContent>
-                {partners.map((p) => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                ))}
-                {proveedor && !partners.includes(proveedor) && (
-                  <SelectItem value={proveedor}>{proveedor}</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <Popover open={partnerPopoverOpen} onOpenChange={(o) => { setPartnerPopoverOpen(o); if (!o) setPartnerSearch(""); }}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-10 mt-1">
+                  {proveedor || "Seleccionar"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput
+                    placeholder="Buscar proveedor..."
+                    value={partnerSearch}
+                    onValueChange={setPartnerSearch}
+                  />
+                  <CommandList>
+                    {(() => {
+                      const trimmed = partnerSearch.trim();
+                      const exists = partners.some((p) => p.toLowerCase() === trimmed.toLowerCase());
+                      const handleCreate = async () => {
+                        if (!trimmed || exists) return;
+                        const next = [...partners, trimmed];
+                        await setPartners(next);
+                        setProveedor(trimmed);
+                        setPartnerSearch("");
+                        setPartnerPopoverOpen(false);
+                        toast({ title: "Proveedor agregado", description: trimmed });
+                      };
+                      return (
+                        <>
+                          <CommandEmpty>
+                            {trimmed ? (
+                              <button
+                                type="button"
+                                onClick={handleCreate}
+                                className="flex items-center gap-1.5 w-full px-2 py-2 text-xs text-primary hover:bg-primary/5 rounded transition-colors"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Agregar "{trimmed}"
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground px-2 py-2 block">Sin resultados</span>
+                            )}
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {partners.map((p) => (
+                              <CommandItem
+                                key={p}
+                                value={p}
+                                onSelect={() => {
+                                  setProveedor(p);
+                                  setPartnerSearch("");
+                                  setPartnerPopoverOpen(false);
+                                }}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", proveedor === p ? "opacity-100" : "opacity-0")} />
+                                {p}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                          {trimmed && !exists && (
+                            <div className="border-t border-border/60 mt-1 pt-1 px-1 pb-1">
+                              <button
+                                type="button"
+                                onClick={handleCreate}
+                                className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-primary hover:bg-primary/5 rounded transition-colors"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Agregar "{trimmed}" como nuevo proveedor
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <div>
             <Label>Unidad de Negocio</Label>
