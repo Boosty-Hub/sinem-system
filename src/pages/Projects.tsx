@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -38,6 +39,73 @@ interface WonProspect {
   price_usd: number;
   client_id: string | null;
 }
+
+interface ProjectProgress {
+  pct: number;
+  oeDate: string | null;
+  revenueDate: string | null;
+  totalDays: number;
+  elapsedDays: number;
+  remainingDays: number;
+  reason: "ok" | "missing-dates" | "invalid-range" | "future" | "completed";
+}
+
+const parseFlexibleDate = (s: string | null | undefined): Date | null => {
+  if (!s) return null;
+  const trimmed = s.trim();
+  if (!trimmed) return null;
+  const padded = /^\d{4}-\d{2}$/.test(trimmed) ? `${trimmed}-01` : trimmed;
+  const d = new Date(padded);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const computeTimeProgress = (oeStr: string | null | undefined, revenueStr: string | null | undefined): ProjectProgress => {
+  const oe = parseFlexibleDate(oeStr);
+  const rev = parseFlexibleDate(revenueStr);
+  if (!oe || !rev) {
+    return { pct: 0, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays: 0, elapsedDays: 0, remainingDays: 0, reason: "missing-dates" };
+  }
+  const total = rev.getTime() - oe.getTime();
+  if (total <= 0) {
+    return { pct: 0, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays: 0, elapsedDays: 0, remainingDays: 0, reason: "invalid-range" };
+  }
+  const now = Date.now();
+  const elapsed = now - oe.getTime();
+  const totalDays = Math.round(total / (1000 * 60 * 60 * 24));
+  if (elapsed < 0) {
+    return { pct: 0, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays, elapsedDays: 0, remainingDays: totalDays, reason: "future" };
+  }
+  if (elapsed >= total) {
+    return { pct: 100, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays, elapsedDays: totalDays, remainingDays: 0, reason: "completed" };
+  }
+  const elapsedDays = Math.round(elapsed / (1000 * 60 * 60 * 24));
+  return {
+    pct: Math.round((elapsed / total) * 100),
+    oeDate: oeStr ?? null,
+    revenueDate: revenueStr ?? null,
+    totalDays,
+    elapsedDays,
+    remainingDays: Math.max(0, totalDays - elapsedDays),
+    reason: "ok",
+  };
+};
+
+const formatDuration = (days: number): string => {
+  if (days <= 0) return "0 días";
+  if (days < 14) return `${days} día${days === 1 ? "" : "s"}`;
+  if (days < 60) {
+    const w = Math.round(days / 7);
+    return `${w} semana${w === 1 ? "" : "s"}`;
+  }
+  const m = Math.round(days / 30);
+  return `${m} mes${m === 1 ? "" : "es"}`;
+};
+
+const formatDateLabel = (s: string | null | undefined): string => {
+  const d = parseFlexibleDate(s);
+  if (!d) return s ?? "—";
+  return d.toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" });
+};
 
 const statusConfig: Record<string, { label: string; icon: any; className: string }> = {
   activo: { label: "Activo", icon: FolderOpen, className: "text-sinem-teal bg-accent" },
@@ -69,7 +137,7 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [allProjects, setAllProjects] = useState<ProjectRow[]>([]);
-  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
+  const [progressMap, setProgressMap] = useState<Record<string, ProjectProgress>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -89,39 +157,32 @@ const Projects = () => {
     setLoading(true);
     const { data: projectsData } = await supabase.from("projects").select("id, name, client, value, current_step, status, start_date, origin_prospect_id, assigned_to").order("created_at", { ascending: false });
 
-    // Fetch prospect codes for projects with origin_prospect_id
+    // Fetch prospect data (code + dates) for projects with origin_prospect_id
     const prospectIds = (projectsData ?? []).map(p => p.origin_prospect_id).filter(Boolean);
-    let prospectCodes: Record<string, string> = {};
+    let prospectMap: Record<string, { code: string; estimated_oe: string | null; revenue: string | null }> = {};
     if (prospectIds.length > 0) {
-      const { data: prospects } = await supabase.from("prospects").select("id, code").in("id", prospectIds);
-      prospectCodes = (prospects ?? []).reduce((acc, p) => ({ ...acc, [p.id]: p.code }), {});
+      const { data: prospects } = await supabase
+        .from("prospects")
+        .select("id, code, estimated_oe, revenue")
+        .in("id", prospectIds);
+      prospectMap = (prospects ?? []).reduce((acc, p: any) => ({
+        ...acc,
+        [p.id]: { code: p.code, estimated_oe: p.estimated_oe ?? null, revenue: p.revenue ?? null },
+      }), {});
     }
 
     setAllProjects((projectsData ?? []).map(p => ({
       ...p,
-      code: p.origin_prospect_id ? prospectCodes[p.origin_prospect_id] : undefined,
+      code: p.origin_prospect_id ? prospectMap[p.origin_prospect_id]?.code : undefined,
     })) as ProjectRow[]);
 
-    // Build progress map from project_documents (shared across all users)
-    const projectIds = (projectsData ?? []).map(p => p.id);
-    if (projectIds.length > 0) {
-      const { data: docs } = await supabase
-        .from("project_documents")
-        .select("project_id, step_number")
-        .in("project_id", projectIds);
-      const stepsByProject: Record<string, Set<number>> = {};
-      for (const d of docs ?? []) {
-        if (!stepsByProject[d.project_id]) stepsByProject[d.project_id] = new Set();
-        stepsByProject[d.project_id].add(d.step_number);
-      }
-      const map: Record<string, number> = {};
-      for (const pid of projectIds) {
-        map[pid] = stepsByProject[pid]?.size ?? 0;
-      }
-      setProgressMap(map);
-    } else {
-      setProgressMap({});
+    // Build progress map from prospect dates (Order Entry → Revenue)
+    const map: Record<string, ProjectProgress> = {};
+    for (const p of projectsData ?? []) {
+      const pr = p.origin_prospect_id ? prospectMap[p.origin_prospect_id] : null;
+      map[p.id] = computeTimeProgress(pr?.estimated_oe, pr?.revenue);
     }
+    setProgressMap(map);
 
     setLoading(false);
   };
@@ -183,7 +244,7 @@ const Projects = () => {
       case "client":  return dir * a.client.localeCompare(b.client);
       case "value":   return dir * (a.value - b.value);
       case "current_step": return dir * (a.current_step - b.current_step);
-      case "progress": return dir * ((progressMap[a.id] ?? 0) - (progressMap[b.id] ?? 0));
+      case "progress": return dir * ((progressMap[a.id]?.pct ?? 0) - (progressMap[b.id]?.pct ?? 0));
       case "status":  return dir * a.status.localeCompare(b.status);
       case "start_date": return dir * ((a.start_date ?? "").localeCompare(b.start_date ?? ""));
       default: return 0;
@@ -424,9 +485,14 @@ const Projects = () => {
             {projects.map((project) => {
               const cfg = statusConfig[project.status] ?? statusConfig.activo;
               const StatusIcon = cfg.icon;
-              const stepsCompleted = progressMap[project.id] ?? 0;
-              const progress = Math.round((stepsCompleted / TOTAL_STEPS) * 100);
+              const prog = progressMap[project.id] ?? { pct: 0, oeDate: null, revenueDate: null, totalDays: 0, elapsedDays: 0, remainingDays: 0, reason: "missing-dates" as const };
+              const progress = prog.pct;
               const currentStepName = PROJECT_STEPS[project.current_step - 1]?.name ?? "";
+              const barColor =
+                prog.reason === "completed" ? "bg-emerald-500" :
+                prog.reason === "missing-dates" || prog.reason === "invalid-range" ? "bg-muted-foreground/40" :
+                progress >= 90 ? "bg-amber-500" :
+                "bg-primary";
 
               return (
                 <tr key={project.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => navigate(`/projects/${project.id}`)}>
@@ -445,12 +511,62 @@ const Projects = () => {
                     <span className="text-xs font-medium">{currentStepName}</span>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-2 justify-center">
-                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
-                      </div>
-                      <span className="text-[11px] text-muted-foreground w-8">{progress}%</span>
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2 justify-center cursor-help">
+                          <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${progress}%` }} />
+                          </div>
+                          <span className="text-[11px] text-muted-foreground w-8">{progress}%</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[280px] p-3 text-xs leading-relaxed">
+                        <p className="font-semibold text-sm mb-1.5">Progreso por tiempo</p>
+                        {prog.reason === "missing-dates" ? (
+                          <p className="text-muted-foreground">
+                            Faltan fechas en la oportunidad vinculada.
+                            {!prog.oeDate && <span className="block">• Falta <strong>Order Entry</strong></span>}
+                            {!prog.revenueDate && <span className="block">• Falta <strong>Revenue</strong></span>}
+                          </p>
+                        ) : prog.reason === "invalid-range" ? (
+                          <p className="text-destructive">
+                            La fecha de Revenue ({formatDateLabel(prog.revenueDate)}) es anterior o igual a la de Order Entry ({formatDateLabel(prog.oeDate)}).
+                          </p>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex justify-between gap-4">
+                              <span className="text-muted-foreground">Order Entry:</span>
+                              <span className="font-medium">{formatDateLabel(prog.oeDate)}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <span className="text-muted-foreground">Revenue esperado:</span>
+                              <span className="font-medium">{formatDateLabel(prog.revenueDate)}</span>
+                            </div>
+                            <div className="flex justify-between gap-4 border-t pt-1 mt-1">
+                              <span className="text-muted-foreground">Duración total:</span>
+                              <span className="font-medium">{formatDuration(prog.totalDays)}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <span className="text-muted-foreground">Transcurrido:</span>
+                              <span className="font-medium">{formatDuration(prog.elapsedDays)}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <span className="text-muted-foreground">
+                                {prog.reason === "completed" ? "Estado:" : "Restante:"}
+                              </span>
+                              <span className="font-medium">
+                                {prog.reason === "completed" ? "Período cumplido" :
+                                 prog.reason === "future" ? "Aún no inicia" :
+                                 formatDuration(prog.remainingDays)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-muted-foreground mt-2 pt-1 border-t">
+                          Calculado como (hoy − Order Entry) / (Revenue − Order Entry).
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
                   </td>
                   <td className="py-3 px-4 text-center">
                     <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${cfg.className}`}>

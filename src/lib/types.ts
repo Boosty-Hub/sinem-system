@@ -206,6 +206,7 @@ export interface Quotation {
   exchangeRate: number;
   isOriginalCurrency?: boolean;
   partner: QuotationPartner;
+  showPartnerText?: boolean;
   costUSD: number;
   marginPercent: number;
   marginUSD: number;

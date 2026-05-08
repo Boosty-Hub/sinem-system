@@ -122,6 +122,7 @@ const OfertaPublica = () => {
           currency: qRow.currency as any,
           exchangeRate: Number(qRow.exchange_rate),
           partner: (qRow as any).partner ?? "Siemens",
+          showPartnerText: (qRow as any).show_partner_text ?? true,
           costUSD: Number(qRow.cost_usd),
           marginPercent: Number(qRow.margin_percent),
           marginUSD: Number(qRow.margin_usd),
@@ -451,7 +452,7 @@ const OfertaPublica = () => {
             />
           )}
           {!sigImageUrl && <div style={{ height: "32px" }} />}
-          <div style={{ borderTop: "1px solid #ccc", paddingTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <p style={{ fontWeight: 600, fontSize: "13px", margin: "0 0 2px 0" }}>{sigName}</p>
               <p style={{ fontSize: "12px", margin: "0 0 2px 0", color: "#444" }}>{sigTitle}</p>
@@ -516,9 +517,11 @@ const OfertaPublica = () => {
           <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
             {replacePartner(s.coverIntroText)}
           </p>
-          <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
-            {replacePartner(s.coverPartnerText)}
-          </p>
+          {(quotation.showPartnerText ?? true) && (
+            <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
+              {replacePartner(s.coverPartnerText)}
+            </p>
+          )}
           <p style={{ margin: "0 0 28px 0", fontSize: "13px", textAlign: "justify" }}>
             {s.coverClosingText}
           </p>

@@ -156,6 +156,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [exchangeRate, setExchangeRate] = useState(1);
   const [isOriginalCurrency, setIsOriginalCurrency] = useState(false);
   const [partner, setPartner] = useState<QuotationPartner>("Siemens");
+  const [showPartnerText, setShowPartnerText] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState("none");
   const [selectedContactId, setSelectedContactId] = useState("none");
   const [distributedCosts, setDistributedCosts] = useState<CostEntry[]>([]);
@@ -241,7 +242,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       clientData, lineItems, status, costUSD, distributedCosts, otherCosts,
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax,
       validityDays, deliveryLocation, notes, applyItbis, itbisPercent,
-      currency, exchangeRate, isOriginalCurrency, partner, codeManuallyEdited,
+      currency, exchangeRate, isOriginalCurrency, partner, showPartnerText, codeManuallyEdited,
       proposalTexts,
     };
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -285,6 +286,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setExchangeRate(quotation.exchangeRate);
         setIsOriginalCurrency(quotation.isOriginalCurrency ?? false);
         setPartner(quotation.partner ?? "Siemens");
+        setShowPartnerText(quotation.showPartnerText ?? true);
       } else {
         // New quotation — try restoring draft (only if no prefill)
         const raw = !prefill ? sessionStorage.getItem(DRAFT_KEY) : null;
@@ -319,6 +321,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         setExchangeRate(d?.exchangeRate ?? 1);
         setIsOriginalCurrency(d?.isOriginalCurrency ?? false);
         setPartner(d?.partner ?? "Siemens");
+        setShowPartnerText(d?.showPartnerText ?? true);
 
         // Auto-fill from prefill prospect (overrides draft)
         if (prefill?.prospectId) {
@@ -596,7 +599,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       contactId: selectedContactId === "none" ? undefined : selectedContactId,
       lineItems: currentLineItems,
       subtotalUSD: subtotal, applyItbis, itbisPercent, itbisUSD, totalUSD,
-      currency, exchangeRate, isOriginalCurrency, partner,
+      currency, exchangeRate, isOriginalCurrency, partner, showPartnerText,
       costUSD: effectiveCostUSD, marginPercent, marginUSD,
       distributedCosts, otherCosts,
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, deliveryTimeNote, validityDays, deliveryLocation, specialConsiderations, notes,
@@ -774,6 +777,16 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   ))}
                 </SelectContent>
               </Select>
+              <div className="flex items-center gap-2 mt-2">
+                <Checkbox
+                  id="showPartnerText"
+                  checked={showPartnerText}
+                  onCheckedChange={(v) => setShowPartnerText(!!v)}
+                />
+                <Label htmlFor="showPartnerText" className="text-xs text-muted-foreground cursor-pointer leading-tight">
+                  Mostrar párrafo de "Partner oficial" en la oferta
+                </Label>
+              </div>
             </div>
           </div>
 
@@ -1546,6 +1559,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       const doApprove = () => {
                         onSave({
                           ...quotation,
+                          status: "aprobada",
                           approvalStatus: "approved",
                           approvedBy: authUser?.id ?? undefined,
                           approvedAt: new Date().toISOString().split("T")[0],

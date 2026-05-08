@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { PROJECT_STEPS, CURRENCIES, type Project, type Quotation } from "@/lib/types";
-import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet, ExternalLink, Receipt, MessageSquareText, Loader2, Download, FolderOpen, FolderPlus, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Upload, Trash2, File, FileImage, FileSpreadsheet, ExternalLink, Receipt, MessageSquareText, Loader2, Download, FolderOpen, FolderPlus, X, AlertCircle, Database } from "lucide-react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import UserAvatar from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,24 @@ interface Subfolder {
   label: string;
   builtIn?: boolean;
   id?: string;
+}
+
+interface OrphanFile {
+  storagePath: string;
+  originalName: string;
+  size: number;
+  mimetype: string;
+  createdAt: string;
+  stepNumber: number;
+  subfolder: string | null;
+}
+
+type MigrationStatus = "pending" | "migrating" | "done" | "error";
+
+interface MigrationItem {
+  orphan: OrphanFile;
+  status: MigrationStatus;
+  error?: string;
 }
 
 const STEP_SUBFOLDERS: Record<number, Subfolder[]> = {
@@ -155,6 +173,10 @@ const ProjectDetail = () => {
   const [newSubfolderLabel, setNewSubfolderLabel] = useState("");
   const [savingSubfolder, setSavingSubfolder] = useState(false);
   const [subfolderToDelete, setSubfolderToDelete] = useState<Subfolder | null>(null);
+  const [orphans, setOrphans] = useState<OrphanFile[]>([]);
+  const [migrationOpen, setMigrationOpen] = useState(false);
+  const [migrationItems, setMigrationItems] = useState<MigrationItem[]>([]);
+  const [migrating, setMigrating] = useState(false);
 
   const getSubfolders = useCallback(
     (step: number): Subfolder[] => [
@@ -259,6 +281,30 @@ const ProjectDetail = () => {
     loadDocs();
   }, [id]);
 
+  const loadOrphans = useCallback(async () => {
+    if (!id) return;
+    const { data, error } = await supabase.rpc("get_project_orphan_files", { p_project_id: id });
+    if (error) {
+      // Function might not exist or RPC unavailable — fail silently
+      setOrphans([]);
+      return;
+    }
+    setOrphans((data ?? []).map((r: any) => ({
+      storagePath: r.storage_path,
+      originalName: r.original_name,
+      size: Number(r.size),
+      mimetype: r.mimetype,
+      createdAt: r.created_at,
+      stepNumber: r.step_number,
+      subfolder: r.subfolder,
+    })));
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    loadOrphans();
+  }, [id, loadOrphans]);
+
   useEffect(() => {
     if (!id) return;
     const loadSubfolders = async () => {
@@ -341,6 +387,81 @@ const ProjectDetail = () => {
     });
     toast({ title: "Subcarpeta eliminada" });
     setSubfolderToDelete(null);
+  };
+
+  const openMigration = () => {
+    setMigrationItems(orphans.map((o) => ({ orphan: o, status: "pending" as MigrationStatus })));
+    setMigrationOpen(true);
+  };
+
+  const migrateSingle = async (orphan: OrphanFile): Promise<{ ok: boolean; error?: string; doc?: ProjectDocument }> => {
+    const { data: existing } = await supabase
+      .from("project_documents")
+      .select("id")
+      .eq("storage_path", orphan.storagePath)
+      .maybeSingle();
+    if (existing?.id) return { ok: true };
+
+    const newId = crypto.randomUUID();
+    const { error } = await supabase.from("project_documents").insert({
+      id: newId,
+      project_id: id,
+      name: orphan.originalName,
+      size: orphan.size,
+      type: orphan.mimetype,
+      uploaded_at: orphan.createdAt,
+      step_number: orphan.stepNumber,
+      storage_path: orphan.storagePath,
+      uploaded_by: null,
+      subfolder: orphan.subfolder,
+    });
+    if (error) return { ok: false, error: error.message };
+
+    const doc: ProjectDocument = {
+      id: newId,
+      name: orphan.originalName,
+      size: orphan.size,
+      type: orphan.mimetype,
+      uploadedAt: orphan.createdAt,
+      stepNumber: orphan.stepNumber,
+      storagePath: orphan.storagePath,
+      subfolder: orphan.subfolder ?? undefined,
+    };
+    return { ok: true, doc };
+  };
+
+  const runMigration = async () => {
+    if (migrating) return;
+    setMigrating(true);
+    const newDocs: ProjectDocument[] = [];
+    const successPaths = new Set<string>();
+
+    for (let i = 0; i < migrationItems.length; i++) {
+      setMigrationItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: "migrating" } : it));
+      const result = await migrateSingle(migrationItems[i].orphan);
+      if (result.ok) {
+        if (result.doc) newDocs.push(result.doc);
+        successPaths.add(migrationItems[i].orphan.storagePath);
+        setMigrationItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: "done" } : it));
+      } else {
+        setMigrationItems((prev) => prev.map((it, idx) => idx === i ? { ...it, status: "error", error: result.error } : it));
+      }
+      await new Promise((r) => setTimeout(r, 80));
+    }
+
+    if (newDocs.length > 0) {
+      setDocuments((prev) => {
+        const merged = [...prev, ...newDocs];
+        updateProjectStep(computeCurrentStep(merged));
+        return merged;
+      });
+    }
+    setOrphans((prev) => prev.filter((o) => !successPaths.has(o.storagePath)));
+    setMigrating(false);
+    toast({
+      title: "Migración finalizada",
+      description: `${successPaths.size} de ${migrationItems.length} archivos registrados.`,
+    });
   };
 
   const updateProjectStep = async (newStep: number) => {
@@ -465,13 +586,20 @@ const ProjectDetail = () => {
   }
 
   const stepDocsAll = documents.filter((d) => d.stepNumber === activeStep);
+  const stepOrphansAll = orphans.filter((o) => o.stepNumber === activeStep);
   const currentSubfolders = getSubfolders(activeStep);
   const hasSubfolders = currentSubfolders.length > 0;
   const stepDocs = hasSubfolders
     ? stepDocsAll.filter((d) => d.subfolder === activeSubfolder)
     : stepDocsAll;
+  const stepOrphans = hasSubfolders
+    ? stepOrphansAll.filter((o) => o.subfolder === activeSubfolder)
+    : stepOrphansAll.filter((o) => !o.subfolder);
   const currentStepInfo = PROJECT_STEPS[activeStep - 1];
-  const stepsWithDocs = new Set(documents.map((d) => d.stepNumber));
+  const stepsWithDocs = new Set([
+    ...documents.map((d) => d.stepNumber),
+    ...orphans.map((o) => o.stepNumber),
+  ]);
 
   const activeUploads = uploadingFiles.filter((u) => u.stepNumber === activeStep);
 
@@ -538,6 +666,18 @@ const ProjectDetail = () => {
             {project.client} · ${project.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
+        {orphans.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openMigration}
+            className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+            title="Hay archivos en storage que aún no están registrados en la base de datos"
+          >
+            <AlertCircle className="h-4 w-4 mr-1" />
+            {orphans.length} huérfano{orphans.length === 1 ? "" : "s"} · Migrar
+          </Button>
+        )}
         {project.prospectId && (
           <Button variant="outline" size="sm" onClick={() => setActivityOpen(true)}>
             <MessageSquareText className="h-4 w-4 mr-1" /> Actividad
@@ -580,13 +720,28 @@ const ProjectDetail = () => {
                   <span className={isComplete && !isActive ? "text-muted-foreground" : ""}>
                     {step.name}
                   </span>
-                  <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
-                    documents.filter((d) => d.stepNumber === step.number).length > 0
-                      ? "bg-primary/15 text-primary font-medium"
-                      : "bg-muted text-muted-foreground"
-                  }`}>
-                    {documents.filter((d) => d.stepNumber === step.number).length}
-                  </span>
+                  {(() => {
+                    const realCount = documents.filter((d) => d.stepNumber === step.number).length;
+                    const orphanCount = orphans.filter((o) => o.stepNumber === step.number).length;
+                    const total = realCount + orphanCount;
+                    return (
+                      <span className="ml-auto flex items-center gap-1">
+                        {orphanCount > 0 && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-amber-500"
+                            title={`${orphanCount} huérfano${orphanCount === 1 ? "" : "s"}`}
+                          />
+                        )}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
+                          total > 0
+                            ? "bg-primary/15 text-primary font-medium"
+                            : "bg-muted text-muted-foreground"
+                        }`}>
+                          {total}
+                        </span>
+                      </span>
+                    );
+                  })()}
                 </button>
               );
             })}
@@ -613,7 +768,9 @@ const ProjectDetail = () => {
 
           <div className="flex flex-wrap items-center gap-1 mb-4 border-b">
             {currentSubfolders.map((sf) => {
-              const count = stepDocsAll.filter((d) => d.subfolder === sf.key).length;
+              const realCount = stepDocsAll.filter((d) => d.subfolder === sf.key).length;
+              const orphanCount = stepOrphansAll.filter((o) => o.subfolder === sf.key).length;
+              const count = realCount + orphanCount;
               const isActive = activeSubfolder === sf.key;
               return (
                 <div
@@ -630,6 +787,12 @@ const ProjectDetail = () => {
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
                     {sf.label}
+                    {orphanCount > 0 && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-amber-500"
+                        title={`${orphanCount} huérfano${orphanCount === 1 ? "" : "s"}`}
+                      />
+                    )}
                     <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${
                       count > 0 ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                     }`}>{count}</span>
@@ -670,7 +833,13 @@ const ProjectDetail = () => {
                       <Icon className="h-4 w-4 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{doc.name}</p>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"
+                          title="Registrado en la base de datos"
+                        />
+                        <p className="text-sm font-medium truncate">{doc.name}</p>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {formatFileSize(doc.size)} · {new Date(doc.uploadedAt).toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" })}
                       </p>
@@ -693,6 +862,58 @@ const ProjectDetail = () => {
                       title="Eliminar"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+
+              {stepOrphans.map((orphan) => {
+                const Icon = getFileIcon(orphan.mimetype);
+                const downloadOrphan = async () => {
+                  const { data, error } = await supabase.storage.from("project-files").download(orphan.storagePath);
+                  if (error || !data) {
+                    toast({ title: "Error al descargar", description: error?.message, variant: "destructive" });
+                    return;
+                  }
+                  const url = URL.createObjectURL(data);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = orphan.originalName;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                };
+                return (
+                  <div
+                    key={orphan.storagePath}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition-colors group cursor-pointer"
+                    onClick={downloadOrphan}
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+                      <Icon className="h-4 w-4 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"
+                          title="Archivo huérfano: existe en storage pero no en la base de datos"
+                        />
+                        <p className="text-sm font-medium truncate">{orphan.originalName}</p>
+                        <span className="text-[10px] uppercase tracking-wide font-semibold text-amber-700 bg-amber-500/20 px-1.5 py-0.5 rounded">
+                          Huérfano
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(orphan.size)} · {new Date(orphan.createdAt).toLocaleDateString("es-DO", { day: "2-digit", month: "short", year: "numeric" })}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); downloadOrphan(); }}
+                      title="Descargar"
+                    >
+                      <Download className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 );
@@ -733,7 +954,7 @@ const ProjectDetail = () => {
           >
             <FileText className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
             <p className="text-sm text-muted-foreground">
-              {stepDocs.length === 0 && activeUploads.length === 0
+              {stepDocs.length === 0 && stepOrphans.length === 0 && activeUploads.length === 0
                 ? "No hay documentos en este paso todavía"
                 : "Arrastra más archivos aquí"}
             </p>
@@ -793,6 +1014,102 @@ const ProjectDetail = () => {
         })()}
         onConfirm={confirmDeleteSubfolder}
       />
+
+      <Dialog open={migrationOpen} onOpenChange={(open) => { if (!migrating) setMigrationOpen(open); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-amber-600" />
+              Migrar archivos huérfanos
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2 overflow-hidden flex flex-col">
+            <div className="bg-muted/40 border rounded-lg p-3 text-xs space-y-1">
+              <p className="font-medium">Cómo funciona:</p>
+              <p className="text-muted-foreground leading-relaxed">
+                Estos archivos existen físicamente en storage pero no están registrados en <code className="text-[10px] bg-background px-1 py-0.5 rounded">project_documents</code>.
+                Se procesarán <strong>uno por uno</strong>: el archivo no se mueve ni se copia, solo se crea la fila faltante en la base de datos. Si alguno falla, los anteriores ya quedaron migrados.
+              </p>
+            </div>
+            {(() => {
+              const total = migrationItems.length;
+              const done = migrationItems.filter((it) => it.status === "done").length;
+              const errors = migrationItems.filter((it) => it.status === "error").length;
+              const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      {done} de {total} migrados
+                      {errors > 0 && <span className="text-destructive ml-2">· {errors} con error</span>}
+                    </span>
+                    <span className="font-medium tabular-nums">{pct}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="flex-1 overflow-y-auto border rounded-lg divide-y">
+              {migrationItems.length === 0 ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  No hay archivos huérfanos para migrar.
+                </div>
+              ) : (
+                migrationItems.map((it, idx) => {
+                  const StatusIcon =
+                    it.status === "done"
+                      ? CheckCircle2
+                      : it.status === "error"
+                        ? AlertCircle
+                        : it.status === "migrating"
+                          ? Loader2
+                          : File;
+                  const statusColor =
+                    it.status === "done"
+                      ? "text-emerald-600"
+                      : it.status === "error"
+                        ? "text-destructive"
+                        : it.status === "migrating"
+                          ? "text-primary"
+                          : "text-muted-foreground";
+                  return (
+                    <div key={it.orphan.storagePath + idx} className="flex items-center gap-3 p-2.5 text-xs">
+                      <StatusIcon className={`h-4 w-4 flex-shrink-0 ${statusColor} ${it.status === "migrating" ? "animate-spin" : ""}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{it.orphan.originalName}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Paso {it.orphan.stepNumber}
+                          {it.orphan.subfolder && ` · ${it.orphan.subfolder}`}
+                          {" · "}{formatFileSize(it.orphan.size)}
+                        </p>
+                        {it.error && <p className="text-[10px] text-destructive mt-0.5">{it.error}</p>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <DialogFooter className="mt-3">
+            <Button variant="outline" size="sm" onClick={() => setMigrationOpen(false)} disabled={migrating}>
+              {migrating ? "Procesando..." : "Cerrar"}
+            </Button>
+            <Button
+              size="sm"
+              onClick={runMigration}
+              disabled={migrating || migrationItems.length === 0 || migrationItems.every((it) => it.status === "done")}
+            >
+              {migrating ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Migrando...</>
+              ) : (
+                <><Database className="h-3.5 w-3.5 mr-1" /> Iniciar migración</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={newSubfolderOpen} onOpenChange={setNewSubfolderOpen}>
         <DialogContent className="max-w-sm">

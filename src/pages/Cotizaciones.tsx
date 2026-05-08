@@ -140,6 +140,7 @@ const Cotizaciones = () => {
       exchangeRate: Number(q.exchange_rate),
       isOriginalCurrency: (q as any).is_original_currency ?? false,
       partner: (q as any).partner ?? "Siemens",
+      showPartnerText: (q as any).show_partner_text ?? true,
       distributedCosts: (q as any).distributed_costs ?? [],
       otherCosts: (q as any).other_costs ?? [],
       specialConsiderations: (q as any).special_considerations ?? "",
@@ -240,6 +241,7 @@ const Cotizaciones = () => {
       exchange_rate: updated.exchangeRate ?? 1,
       is_original_currency: updated.isOriginalCurrency ?? false,
       partner: updated.partner ?? "Siemens",
+      show_partner_text: updated.showPartnerText ?? true,
       distributed_costs: updated.distributedCosts ?? [],
       other_costs: updated.otherCosts ?? [],
       special_considerations: updated.specialConsiderations ?? null,
@@ -315,6 +317,32 @@ const Cotizaciones = () => {
           status: snap.status,
         }))
       );
+    }
+
+    // Sync linked prospect (CRM): pull cost, price and projected revenue date from the quotation
+    if (updated.prospectId) {
+      const { data: prospectRow } = await supabase
+        .from("prospects")
+        .select("status")
+        .eq("id", updated.prospectId)
+        .maybeSingle();
+
+      const prospectUpdate: Record<string, any> = {
+        price_usd: updated.subtotalUSD,
+        cost_usd: updated.costUSD,
+        margin_usd: updated.marginUSD,
+        margin_percent: updated.marginPercent,
+      };
+
+      const weeks = updated.deliveryWeeksMax || updated.deliveryWeeksMin || 0;
+      const alreadyInvoiced = prospectRow && ["facturada", "cerrados"].includes((prospectRow as any).status);
+      if (weeks > 0 && !alreadyInvoiced) {
+        const d = new Date();
+        d.setDate(d.getDate() + weeks * 7);
+        prospectUpdate.revenue = d.toISOString().split("T")[0];
+      }
+
+      await supabase.from("prospects").update(prospectUpdate).eq("id", updated.prospectId);
     }
 
     // Update local state

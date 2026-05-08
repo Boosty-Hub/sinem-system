@@ -104,7 +104,11 @@ const CRM = () => {
       p.bu.toLowerCase().includes(s) ||
       p.scope.toLowerCase().includes(s) ||
       p.proveedor.toLowerCase().includes(s);
-    const matchStage = filterStage === "all" || p.status === filterStage;
+    // "ganado" filter includes "facturada" too (matches Kanban grouping where the Ganado column shows both)
+    const matchStage =
+      filterStage === "all" ||
+      p.status === filterStage ||
+      (filterStage === "ganado" && p.status === "facturada");
     const matchProduct = filterProduct === "all" || p.product === filterProduct;
     const matchCustomer = filterCustomer === "all" || p.directCustomer === filterCustomer;
     const matchBU = filterBU === "all" || p.bu === filterBU;
@@ -188,15 +192,17 @@ const CRM = () => {
 
   const handleInvoiceConfirm = async (dateStr: string) => {
     if (!invoiceProspectId) return;
-    // Update status + invoiced_at
     const oldProspect = prospects.find((p) => p.id === invoiceProspectId);
     setProspects((prev) =>
-      prev.map((p) => (p.id === invoiceProspectId ? { ...p, status: "facturada", invoicedAt: dateStr } : p))
+      prev.map((p) => (p.id === invoiceProspectId ? { ...p, status: "facturada", invoicedAt: dateStr, revenue: dateStr } : p))
     );
-    const { error } = await supabase.from("prospects").update({ status: "facturada", invoiced_at: dateStr } as any).eq("id", invoiceProspectId);
+    const { error } = await supabase
+      .from("prospects")
+      .update({ status: "facturada", invoiced_at: dateStr, revenue: dateStr } as any)
+      .eq("id", invoiceProspectId);
     if (error) {
       setProspects((prev) =>
-        prev.map((p) => (p.id === invoiceProspectId ? { ...p, status: oldProspect?.status ?? p.status } : p))
+        prev.map((p) => (p.id === invoiceProspectId ? { ...p, status: oldProspect?.status ?? p.status, revenue: oldProspect?.revenue ?? p.revenue } : p))
       );
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }

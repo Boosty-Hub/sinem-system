@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DollarSign, TrendingUp, Users, Target, BarChart3, PieChart as PieChartIcon,
   Info, Pencil, Loader2,
@@ -104,6 +105,10 @@ const Analitica = () => {
   });
   const [forecastYearId, setForecastYearId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [revFilterMode, setRevFilterMode] = useState<"year" | "range">("year");
+  const [revYear, setRevYear] = useState<number>(new Date().getFullYear());
+  const [revFrom, setRevFrom] = useState<string>(`${new Date().getFullYear()}-01-01`);
+  const [revTo, setRevTo] = useState<string>(`${new Date().getFullYear()}-12-31`);
   const [editAnnual, setEditAnnual] = useState(0);
   const [editPrevYear, setEditPrevYear] = useState(0);
   const [editRevenueBudget, setEditRevenueBudget] = useState(0);
@@ -187,25 +192,45 @@ const Analitica = () => {
     return match ? parseInt(match[1], 10) : null;
   };
 
-  const invoicedDeals = prospects.filter((p) => p.status === "facturada" || p.status === "cerrados");
+  // Period predicate for the Revenue card (Year mode or Range mode)
+  const isInRevenuePeriod = (revenue: string | undefined): boolean => {
+    if (!revenue) return false;
+    if (revFilterMode === "year") {
+      return revenue.startsWith(`${revYear}-`) || revenue === `${revYear}`;
+    }
+    if (!revFrom || !revTo) return false;
+    return revenue >= revFrom && revenue <= revTo;
+  };
+
+  const periodLabel = revFilterMode === "year" ? `${revYear}` : `${revFrom} → ${revTo}`;
+  const periodPrevLabel = revFilterMode === "year" ? `${revYear - 1}` : "Año anterior";
+
+  const invoicedDeals = prospects.filter((p) =>
+    (p.status === "facturada" || p.status === "cerrados") && isInRevenuePeriod(p.revenue)
+  );
   const invoicedTotal = invoicedDeals.reduce((s, p) => s + p.priceUSD, 0);
-  
-  // Forecast: includes prospecto, propuesta, seguimiento, ganado (not perdido, not facturada)
-  // Filter by revenue year = current year
+
+  // Forecast: open opportunities (prospecto, propuesta, seguimiento, ganado) within the same period
   const revenueForecastDeals = prospects.filter((p) => {
     if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
-    const revYear = getRevenueYear(p.revenue);
-    return revYear === currentYear;
+    return isInRevenuePeriod(p.revenue);
   });
   const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.weighted, 0);
 
   const revenueData = [
-    { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearRevenue, fill: "#67e8f9", description: "Revenue facturado del año anterior.", details: [] },
-    { name: `${currentYear}`, label: `${currentYear}`, value: invoicedTotal, fill: "#06b6d4", description: "Total de oportunidades marcadas como facturadas en el año en curso.", details: invoicedDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
-    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: revenueForecastTotal, fill: "#0891b2", description: `Suma ponderada (priceUSD × probabilidad) de oportunidades con fecha de revenue en ${currentYear}.`, details: revenueForecastDeals.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
+    { name: periodPrevLabel, label: periodPrevLabel, value: budget.previousYearRevenue, fill: "#67e8f9", description: "Revenue facturado del año anterior (configurado en Budget).", details: [] },
+    { name: periodLabel, label: periodLabel, value: invoicedTotal, fill: "#06b6d4", description: `Total de oportunidades marcadas como facturadas con fecha de revenue en ${periodLabel}.`, details: invoicedDeals.map((p) => ({ name: `${p.projectName} (${p.revenue ?? "s/f"})`, amount: p.priceUSD })) },
+    { name: `Forecast ${periodLabel}`, label: `Forecast ${periodLabel}`, value: revenueForecastTotal, fill: "#0891b2", description: `Suma ponderada (priceUSD × probabilidad) de oportunidades abiertas con fecha de revenue en ${periodLabel}.`, details: revenueForecastDeals.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.revenueBudget, fill: "#6d28d9", description: "Meta de revenue estipulada para el año.", details: [] },
   ];
   const maxRevenueValue = Math.max(...revenueData.map((d) => d.value), 1);
+
+  const availableRevYears = Array.from(new Set(
+    prospects
+      .map((p) => getRevenueYear(p.revenue))
+      .filter((y): y is number => y !== null)
+  )).sort((a, b) => b - a);
+  if (!availableRevYears.includes(new Date().getFullYear())) availableRevYears.unshift(new Date().getFullYear());
 
   // ── Operative Margin data ──
   // Current: ganadas/facturadas con estimatedOE del año en curso
@@ -410,24 +435,72 @@ const Analitica = () => {
 
       {/* REVENUE CHART */}
       <div className="stat-card p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <h2 className="text-lg font-bold">Revenue</h2>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-                <Info className="h-4 w-4" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold">Revenue</h2>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                  <Info className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-[340px] p-3 space-y-2 text-xs leading-relaxed">
+                <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
+                <div><strong>{periodPrevLabel}:</strong> Revenue facturado del año anterior (configurado en Budget).</div>
+                <div><strong>{periodLabel}:</strong> Oportunidades facturadas con fecha de revenue en el período seleccionado.</div>
+                <div><strong>Forecast {periodLabel}:</strong> Oportunidades abiertas (no facturadas aún) con fecha de revenue dentro del período.</div>
+                <div><strong>Budget {currentYear}:</strong> Meta de revenue estipulada para el año en curso.</div>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+              <button
+                type="button"
+                onClick={() => setRevFilterMode("year")}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${revFilterMode === "year" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Año
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="max-w-[340px] p-3 space-y-2 text-xs leading-relaxed">
-              <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
-              <div><strong>{previousYear}:</strong> Revenue facturado del año anterior.</div>
-              <div><strong>Current:</strong> Oportunidades marcadas como facturadas en el año en curso.</div>
-              <div><strong>Forecast:</strong> Oportunidades con fecha de revenue que aún no han sido facturadas.</div>
-              <div><strong>Budget {currentYear}:</strong> Meta de revenue estipulada para el año.</div>
-            </TooltipContent>
-          </Tooltip>
+              <button
+                type="button"
+                onClick={() => setRevFilterMode("range")}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${revFilterMode === "range" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Rango
+              </button>
+            </div>
+            {revFilterMode === "year" ? (
+              <Select value={String(revYear)} onValueChange={(v) => setRevYear(Number(v))}>
+                <SelectTrigger className="h-8 w-[110px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRevYears.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex items-center gap-1">
+                <Input
+                  type="date"
+                  value={revFrom}
+                  onChange={(e) => setRevFrom(e.target.value)}
+                  className="h-8 w-[140px] text-xs"
+                />
+                <span className="text-xs text-muted-foreground">→</span>
+                <Input
+                  type="date"
+                  value={revTo}
+                  onChange={(e) => setRevTo(e.target.value)}
+                  className="h-8 w-[140px] text-xs"
+                />
+              </div>
+            )}
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mb-5">Datos en USD$</p>
+        <p className="text-xs text-muted-foreground mb-5">Datos en USD$ · Filtra por fecha de Revenue</p>
         <ResponsiveContainer width="100%" height={360}>
           <BarChart data={revenueData} barCategoryGap="25%">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
