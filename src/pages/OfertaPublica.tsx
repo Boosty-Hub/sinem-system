@@ -155,7 +155,7 @@ const OfertaPublica = () => {
         const { data: approverRow } = await supabase
           .from("app_users")
           .select("name, cargo, phone, email, signature_image_url")
-          .eq("id", qRow.approved_by)
+          .eq("auth_user_id", qRow.approved_by)
           .maybeSingle();
         if (approverRow) {
           setApprover({

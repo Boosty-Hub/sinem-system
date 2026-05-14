@@ -179,7 +179,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     if (!approvedBy) { setApproverDisplayName(null); return; }
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(approvedBy);
     if (!isUUID) { setApproverDisplayName(approvedBy); return; }
-    supabase.from("app_users").select("name").eq("id", approvedBy).maybeSingle()
+    supabase.from("app_users").select("name").eq("auth_user_id", approvedBy).maybeSingle()
       .then(({ data }) => setApproverDisplayName((data as any)?.name ?? null));
   }, [quotation?.approvedBy]);
 
@@ -1581,7 +1581,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                           ...quotation,
                           status: "aprobada",
                           approvalStatus: "approved",
-                          approvedBy: currentAppUserId ?? undefined,
+                          approvedBy: authUser?.id ?? undefined,
                           approvedAt: new Date().toISOString().split("T")[0],
                         });
                         onOpenChange(false);
@@ -1607,7 +1607,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       onSave({
                         ...quotation,
                         approvalStatus: "rejected",
-                        approvedBy: currentAppUserId ?? undefined,
+                        approvedBy: authUser?.id ?? undefined,
                         approvedAt: new Date().toISOString().split("T")[0],
                         approvalNote: note || undefined,
                       });
