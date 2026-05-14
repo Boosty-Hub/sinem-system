@@ -133,6 +133,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [showSignatureWarning, setShowSignatureWarning] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<(() => void) | null>(null);
   const [showUndoApproval, setShowUndoApproval] = useState(false);
+  const [approverDisplayName, setApproverDisplayName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Controlled fields for save logic ──
@@ -171,6 +172,16 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     supabase.from("app_users").select("id").eq("auth_user_id", authUser.id).maybeSingle()
       .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
   }, [authUser]);
+
+  // Resolve approver name for display when quotation has an approved_by UUID
+  useEffect(() => {
+    const approvedBy = quotation?.approvedBy;
+    if (!approvedBy) { setApproverDisplayName(null); return; }
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(approvedBy);
+    if (!isUUID) { setApproverDisplayName(approvedBy); return; }
+    supabase.from("app_users").select("name").eq("id", approvedBy).maybeSingle()
+      .then(({ data }) => setApproverDisplayName((data as any)?.name ?? null));
+  }, [quotation?.approvedBy]);
 
   // Fetch prospects, clients, contacts, and proposal settings from Supabase
   useEffect(() => {
@@ -1498,7 +1509,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 <div className="flex-1">
                   <p className="text-sm font-medium text-green-800 dark:text-green-300">Aprobada</p>
                   <p className="text-xs text-green-600 dark:text-green-400">
-                    Aprobada por <strong>{quotation.approvedBy ?? "—"}</strong>
+                    Aprobada por <strong>{approverDisplayName ?? quotation.approvedBy ?? "—"}</strong>
                     {quotation.approvedAt && ` el ${quotation.approvedAt}`}
                   </p>
                 </div>
@@ -1519,7 +1530,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 <div className="flex-1">
                   <p className="text-sm font-medium text-red-800 dark:text-red-300">Rechazada</p>
                   <p className="text-xs text-red-600 dark:text-red-400">
-                    Rechazada por <strong>{quotation.approvedBy ?? "—"}</strong>
+                    Rechazada por <strong>{approverDisplayName ?? quotation.approvedBy ?? "—"}</strong>
                     {quotation.approvedAt && ` el ${quotation.approvedAt}`}
                   </p>
                   {quotation.approvalNote && <p className="text-xs text-red-600 dark:text-red-400 mt-1">Motivo: {quotation.approvalNote}</p>}
@@ -1556,15 +1567,13 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     className="bg-sinem-success hover:bg-sinem-success/90"
                     onClick={async () => {
                       if (!onSave) return;
-                      let approverName: string | undefined = authUser?.id ?? undefined;
                       let hasSignature = false;
                       if (authUser?.id) {
                         const { data: appUserRow } = await supabase
                           .from("app_users")
-                          .select("signature_image_url, name")
+                          .select("signature_image_url")
                           .eq("auth_user_id", authUser.id)
                           .maybeSingle();
-                        if ((appUserRow as any)?.name) approverName = (appUserRow as any).name;
                         hasSignature = !!((appUserRow as any)?.signature_image_url);
                       }
                       const doApprove = () => {
@@ -1572,7 +1581,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                           ...quotation,
                           status: "aprobada",
                           approvalStatus: "approved",
-                          approvedBy: approverName,
+                          approvedBy: currentAppUserId ?? undefined,
                           approvedAt: new Date().toISOString().split("T")[0],
                         });
                         onOpenChange(false);
@@ -1598,7 +1607,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       onSave({
                         ...quotation,
                         approvalStatus: "rejected",
-                        approvedBy: authUser?.id ?? undefined,
+                        approvedBy: currentAppUserId ?? undefined,
                         approvedAt: new Date().toISOString().split("T")[0],
                         approvalNote: note || undefined,
                       });
