@@ -1556,28 +1556,31 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     className="bg-sinem-success hover:bg-sinem-success/90"
                     onClick={async () => {
                       if (!onSave) return;
+                      let approverName: string | undefined = authUser?.id ?? undefined;
+                      let hasSignature = false;
+                      if (authUser?.id) {
+                        const { data: appUserRow } = await supabase
+                          .from("app_users")
+                          .select("signature_image_url, name")
+                          .eq("auth_user_id", authUser.id)
+                          .maybeSingle();
+                        if ((appUserRow as any)?.name) approverName = (appUserRow as any).name;
+                        hasSignature = !!((appUserRow as any)?.signature_image_url);
+                      }
                       const doApprove = () => {
                         onSave({
                           ...quotation,
                           status: "aprobada",
                           approvalStatus: "approved",
-                          approvedBy: authUser?.id ?? undefined,
+                          approvedBy: approverName,
                           approvedAt: new Date().toISOString().split("T")[0],
                         });
                         onOpenChange(false);
                       };
-                      // Check if current user has a signature configured
-                      if (authUser?.id) {
-                        const { data: appUserRow } = await supabase
-                          .from("app_users")
-                          .select("signature_image_url")
-                          .eq("auth_user_id", authUser.id)
-                          .maybeSingle();
-                        if (!(appUserRow as any)?.signature_image_url) {
-                          setPendingApproval(() => doApprove);
-                          setShowSignatureWarning(true);
-                          return;
-                        }
+                      if (!hasSignature && authUser?.id) {
+                        setPendingApproval(() => doApprove);
+                        setShowSignatureWarning(true);
+                        return;
                       }
                       doApprove();
                     }}

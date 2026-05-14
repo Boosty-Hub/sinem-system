@@ -337,9 +337,11 @@ const Cotizaciones = () => {
       const weeks = updated.deliveryWeeksMax || updated.deliveryWeeksMin || 0;
       const alreadyInvoiced = prospectRow && ["facturada", "cerrados"].includes((prospectRow as any).status);
       if (weeks > 0 && !alreadyInvoiced) {
-        const d = new Date();
-        d.setDate(d.getDate() + weeks * 7);
-        prospectUpdate.revenue = d.toISOString().split("T")[0];
+        const baseDate = (updated.approvalStatus === "approved" && updated.approvedAt)
+          ? new Date(updated.approvedAt)
+          : new Date();
+        baseDate.setDate(baseDate.getDate() + weeks * 7);
+        prospectUpdate.revenue = baseDate.toISOString().split("T")[0];
       }
 
       await supabase.from("prospects").update(prospectUpdate).eq("id", updated.prospectId);
