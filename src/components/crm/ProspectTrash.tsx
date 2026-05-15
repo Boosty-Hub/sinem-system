@@ -212,6 +212,7 @@ export default function ProspectTrash({ open, onOpenChange, authUserId, onRecove
         onOpenChange={(v) => { if (!v) setConfirmRecover(null); }}
         title="Recuperar oportunidad"
         description={`¿Deseas recuperar "${confirmRecover?.project_name}" y devolverla al pipeline?`}
+        confirmLabel="Recuperar"
         onConfirm={() => confirmRecover && handleRecover(confirmRecover)}
       />
 
