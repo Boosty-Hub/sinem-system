@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { DEFAULT_PIPELINE_STAGES, type Prospect, type Product, type PipelineStage, type Project } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Search, LayoutGrid, Table as TableIcon, Plus, Package, Settings2, Filter, X, Loader2, Upload, Trash2, ArrowRightLeft, XCircle, Download, AlertTriangle, ArrowUpDown } from "lucide-react";
+import ProspectTrash from "@/components/crm/ProspectTrash";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,7 @@ const CRM = () => {
   const [activityProspect, setActivityProspect] = useState<Prospect | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterStage, setFilterStage] = useLocalStorage("sinem:crm:filterStage", "all");
   const [filterProduct, setFilterProduct] = useLocalStorage("sinem:crm:filterProduct", "all");
@@ -66,7 +68,7 @@ const CRM = () => {
   // ── Fetch data ──
   const fetchData = useCallback(async () => {
     const [{ data: dbProspects }, { data: dbProducts }, { data: dbStages }, { data: dbUsers }] = await Promise.all([
-      supabase.from("prospects").select("*").order("cotorta", { ascending: true }),
+      supabase.from("prospects").select("*").is("deleted_at", null).order("cotorta", { ascending: true }),
       supabase.from("products").select("*").order("name"),
       supabase.from("pipeline_stages").select("*").order("sort_order"),
       supabase.from("app_users").select("id, name").eq("status", "activo").order("name"),
@@ -252,7 +254,10 @@ const CRM = () => {
 
   const handleDelete = async (id: string) => {
     setProspects((prev) => prev.filter((p) => p.id !== id));
-    await supabase.from("prospects").delete().eq("id", id);
+    await supabase.from("prospects").update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: authUser?.id ?? null,
+    }).eq("id", id);
   };
 
   // ── Bulk actions ──
@@ -263,10 +268,14 @@ const CRM = () => {
     const ids = selectedIds;
     setProspects(prev => prev.filter(p => !ids.includes(p.id)));
     setSelectedIds([]);
+    const now = new Date().toISOString();
     for (const id of ids) {
-      await supabase.from("prospects").delete().eq("id", id);
+      await supabase.from("prospects").update({
+        deleted_at: now,
+        deleted_by: authUser?.id ?? null,
+      }).eq("id", id);
     }
-    toast({ title: "Eliminados", description: `${ids.length} oportunidad(es) eliminada(s).` });
+    toast({ title: "Enviadas a papelera", description: `${ids.length} oportunidad(es) movida(s) a la papelera.` });
   };
 
   const handleBulkStageChange = async (newStage: string) => {
@@ -495,6 +504,11 @@ const CRM = () => {
               <TableIcon className="h-4 w-4" />
             </button>
           </div>
+          {canDeleteCRM && (
+            <Button variant="outline" size="sm" onClick={() => setTrashOpen(true)} className="text-muted-foreground hover:text-destructive hover:border-destructive/50">
+              <Trash2 className="h-4 w-4 mr-1" /> Papelera
+            </Button>
+          )}
           {canEditCRM && (
             <Button variant="outline" size="sm" onClick={() => setStagesDialogOpen(true)}>
               <Settings2 className="h-4 w-4 mr-1" /> Etapas
@@ -708,11 +722,18 @@ const CRM = () => {
         </div>
       )}
 
+      <ProspectTrash
+        open={trashOpen}
+        onOpenChange={setTrashOpen}
+        authUserId={authUser?.id}
+        onRecovered={fetchData}
+      />
+
       <ConfirmDialog
         open={bulkConfirmOpen}
         onOpenChange={setBulkConfirmOpen}
-        title="Eliminar oportunidades"
-        description={`¿Estás seguro que deseas eliminar ${selectedIds.length} oportunidad(es)? Esta acción no se puede deshacer.`}
+        title="Mover a papelera"
+        description={`¿Mover ${selectedIds.length} oportunidad(es) a la papelera? Podrás recuperarlas en los próximos 30 días.`}
         onConfirm={handleBulkDelete}
       />
 
