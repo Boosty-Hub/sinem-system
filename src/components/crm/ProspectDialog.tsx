@@ -544,14 +544,11 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                     {(() => {
                       const trimmed = partnerSearch.trim();
                       const exists = partners.some((p) => p.toLowerCase() === trimmed.toLowerCase());
-                      const handleCreate = async () => {
-                        if (!trimmed || exists) return;
-                        const next = [...partners, trimmed];
-                        await setPartners(next);
+                      const handleUseOnce = () => {
+                        if (!trimmed) return;
                         setProveedor(trimmed);
                         setPartnerSearch("");
                         setPartnerPopoverOpen(false);
-                        toast({ title: "Proveedor agregado", description: trimmed });
                       };
                       return (
                         <>
@@ -559,10 +556,10 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                             {trimmed ? (
                               <button
                                 type="button"
-                                onClick={handleCreate}
+                                onClick={handleUseOnce}
                                 className="flex items-center gap-1.5 w-full px-2 py-2 text-xs text-primary hover:bg-primary/5 rounded transition-colors"
                               >
-                                <Plus className="h-3.5 w-3.5" /> Agregar "{trimmed}"
+                                <Plus className="h-3.5 w-3.5" /> Usar "{trimmed}" para esta oportunidad
                               </button>
                             ) : (
                               <span className="text-xs text-muted-foreground px-2 py-2 block">Sin resultados</span>
@@ -588,10 +585,10 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                             <div className="border-t border-border/60 mt-1 pt-1 px-1 pb-1">
                               <button
                                 type="button"
-                                onClick={handleCreate}
+                                onClick={handleUseOnce}
                                 className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-primary hover:bg-primary/5 rounded transition-colors"
                               >
-                                <Plus className="h-3.5 w-3.5" /> Agregar "{trimmed}" como nuevo proveedor
+                                <Plus className="h-3.5 w-3.5" /> Usar "{trimmed}" para esta oportunidad
                               </button>
                             </div>
                           )}
@@ -602,6 +599,16 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
                 </Command>
               </PopoverContent>
             </Popover>
+            {proveedor && !partners.some((p) => p.toLowerCase() === proveedor.toLowerCase()) && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                Proveedor de uso interno para esta oportunidad.{" "}
+                <Link to="/clientes" className="underline hover:text-amber-700 dark:hover:text-amber-300">
+                  Ir a Clientes
+                </Link>{" "}
+                para crearlo de forma permanente.
+              </p>
+            )}
           </div>
           <div>
             <Label>Unidad de Negocio</Label>
