@@ -163,6 +163,7 @@ export interface CostEntry {
   id: string;
   label: string;
   amountUSD: number;
+  itemIds?: string[]; // if non-empty, cost distributes only to these items
 }
 
 export interface QuotationClient {

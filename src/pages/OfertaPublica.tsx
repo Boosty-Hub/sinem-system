@@ -553,15 +553,51 @@ const OfertaPublica = () => {
               </tr>
             </thead>
             <tbody>
-              {(quotation?.lineItems ?? []).map((item, i) => (
-                <tr key={item.id} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
-                  <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
-                  <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
-                  <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                  <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
-                  <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
-                </tr>
-              ))}
+              {(quotation?.lineItems ?? []).flatMap((item, i) => {
+                const multiItem = (quotation?.lineItems?.length ?? 0) > 1;
+                const itemItbis = quotation.applyItbis
+                  ? Math.round(item.totalUSD * (quotation.itbisPercent / 100) * 100) / 100
+                  : 0;
+                const itemWithTax = item.totalUSD + itemItbis;
+                const rows = [
+                  <tr key={`r-${item.id}`} style={{ borderBottom: multiItem ? "1px solid #f0f0f0" : "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
+                    <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
+                    <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                    <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                  </tr>,
+                ];
+                if (multiItem) {
+                  rows.push(
+                    <tr key={`sub-${item.id}`} style={{ backgroundColor: "#f0f7fa", borderTop: "1px solid #dde8ec" }}>
+                      <td colSpan={3} />
+                      <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>Subtotal Ítem {i + 1}:</td>
+                      <td style={{ padding: "4px 10px", fontSize: "11px", textAlign: "right", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                    </tr>
+                  );
+                  if (quotation.applyItbis) {
+                    rows.push(
+                      <tr key={`itb-${item.id}`} style={{ backgroundColor: "#f0f7fa" }}>
+                        <td colSpan={3} />
+                        <td style={{ padding: "3px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>ITBIS ({quotation.itbisPercent}%):</td>
+                        <td style={{ padding: "3px 10px", fontSize: "11px", textAlign: "right" }}>{fmt(itemItbis)}</td>
+                      </tr>
+                    );
+                  }
+                  rows.push(
+                    <tr key={`tot-${item.id}`} style={{ backgroundColor: "#e4f0f5", borderBottom: "2px solid #aaccd8" }}>
+                      <td colSpan={3} />
+                      <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>Total Ítem {i + 1}:</td>
+                      <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{fmt(itemWithTax)}</td>
+                    </tr>
+                  );
+                  if (i < (quotation?.lineItems?.length ?? 0) - 1) {
+                    rows.push(<tr key={`gap-${item.id}`}><td colSpan={5} style={{ padding: "3px 0" }} /></tr>);
+                  }
+                }
+                return rows;
+              })}
             </tbody>
           </table>
 

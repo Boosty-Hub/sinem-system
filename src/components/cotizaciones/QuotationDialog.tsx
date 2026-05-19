@@ -112,6 +112,20 @@ const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[
 
 const DRAFT_KEY = "sinem:quotation-draft-v2";
 
+/** Per-unit distributed cost for a single item given a list of cost entries that may target specific items. */
+const computeItemUnitDist = (item: LineItem, items: LineItem[], costs: CostEntry[]): number => {
+  if (item.unitCostUSD <= 0) return 0;
+  return costs.reduce((sum, cost) => {
+    const applicable = cost.itemIds && cost.itemIds.length > 0
+      ? items.filter(li => cost.itemIds!.includes(li.id))
+      : items;
+    if (!applicable.some(li => li.id === item.id)) return sum;
+    const w = applicable.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+    if (w <= 0) return sum;
+    return sum + cost.amountUSD * (item.unitCostUSD / w);
+  }, 0);
+};
+
 const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Props) => {
   const isEdit = !!quotation;
   const { user: authUser } = useAuth();
@@ -504,11 +518,10 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setLineItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const recalcPrices = (items: LineItem[], distTotal: number) => {
-    const weighted = items.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+  const recalcPrices = (items: LineItem[], costs: CostEntry[]) => {
     return items.map((item) => {
       if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
-      const unitDist = distTotal > 0 && weighted > 0 ? distTotal * (item.unitCostUSD / weighted) : 0;
+      const unitDist = computeItemUnitDist(item, items, costs);
       const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
       return { ...item, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
     });
@@ -528,8 +541,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           updated.totalUSD = Math.round(updated.quantity * updated.unitPriceUSD * 100) / 100;
           if (updated.unitCostUSD > 0 && updated.unitPriceUSD > 0) {
             // Back-derive margin from effective price: price = (cost + unitDist) / (1 - margin)
-            const w = prev.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
-            const uDist = distributedTotal > 0 && w > 0 ? distributedTotal * (updated.unitCostUSD / w) : 0;
+            const uDist = computeItemUnitDist(updated, prev, distributedCosts);
             const effCost = updated.unitCostUSD + uDist;
             if (updated.unitPriceUSD > effCost) {
               updated.itemMarginPercent = Math.round((1 - effCost / updated.unitPriceUSD) * 10000) / 100;
@@ -549,11 +561,10 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
       // Pass 2: recalculate effective prices for all margin-based items
       // Skip the item whose price was manually set by the user
-      const weighted = step1.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
       return step1.map((item) => {
         if (field === "unitPriceUSD" && item.id === id) return item; // user set price manually
         if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
-        const unitDist = distributedTotal > 0 && weighted > 0 ? distributedTotal * (item.unitCostUSD / weighted) : 0;
+        const unitDist = computeItemUnitDist(item, step1, distributedCosts);
         const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
         return { ...item, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
       });
@@ -562,22 +573,21 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
   // Recalculate effective prices when distributed costs change
   useEffect(() => {
-    setLineItems((prev) => recalcPrices(prev, distributedTotal));
+    setLineItems((prev) => recalcPrices(prev, distributedCosts));
   }, [distributedCosts]);
 
   const applyGeneralMargin = () => {
     if (generalMarginInput <= 0 || generalMarginInput >= 100) return;
-    const weighted = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
-    if (weighted <= 0) return;
     const m = generalMarginInput / 100;
-    setLineItems((prev) =>
-      prev.map((item) => {
+    setLineItems((prev) => {
+      if (!prev.some(li => li.unitCostUSD > 0)) return prev;
+      return prev.map((item) => {
         if (!item.unitCostUSD) return item;
-        const unitDist = distributedTotal > 0 && weighted > 0 ? distributedTotal * (item.unitCostUSD / weighted) : 0;
+        const unitDist = computeItemUnitDist(item, prev, distributedCosts);
         const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - m)) * 100) / 100;
         return { ...item, itemMarginPercent: generalMarginInput, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
-      })
-    );
+      });
+    });
   };
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.totalUSD, 0);
@@ -963,7 +973,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     <th className="text-center py-2 px-3 font-medium text-muted-foreground text-xs w-20">Cant.</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Dist.</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Unit. Total</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Total</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-24">Margen %</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">P. Unit. {isOriginalCurrency ? currency : "USD"}</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Total {isOriginalCurrency ? currency : "USD"}</th>
@@ -972,9 +982,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 </thead>
                 <tbody>
                   {lineItems.map((item) => {
-                    const unitDistCost = distributedTotal > 0 && totalWeightedCost > 0 && item.unitCostUSD > 0
-                      ? distributedTotal * (item.unitCostUSD / totalWeightedCost)
-                      : 0;
+                    const unitDistCost = computeItemUnitDist(item, lineItems, distributedCosts);
                     const costUnitTotal = (item.unitCostUSD + unitDistCost) * item.quantity;
                     const sym = isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$";
                     return (
@@ -1172,30 +1180,61 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 ) : (
                   <div className="space-y-2">
                     {distributedCosts.map((entry) => (
-                      <div key={entry.id} className="flex items-center gap-2">
-                        <Input
-                          value={entry.label}
-                          onChange={(e) => setDistributedCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, label: e.target.value } : c))}
-                          className="h-8 text-xs flex-1"
-                          placeholder="Ej: Transporte marítimo"
-                        />
-                        <Input
-                          type="number"
-                          value={entry.amountUSD || ""}
-                          onChange={(e) => setDistributedCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, amountUSD: Number(e.target.value) || 0 } : c))}
-                          className="h-8 text-xs w-28 text-right"
-                          min={0}
-                          placeholder="0.00"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => setDistributedCosts((prev) => prev.filter((c) => c.id !== entry.id))}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                      <div key={entry.id} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={entry.label}
+                            onChange={(e) => setDistributedCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, label: e.target.value } : c))}
+                            className="h-8 text-xs flex-1"
+                            placeholder="Ej: Transporte marítimo"
+                          />
+                          <Input
+                            type="number"
+                            value={entry.amountUSD || ""}
+                            onChange={(e) => setDistributedCosts((prev) => prev.map((c) => c.id === entry.id ? { ...c, amountUSD: Number(e.target.value) || 0 } : c))}
+                            className="h-8 text-xs w-28 text-right"
+                            min={0}
+                            placeholder="0.00"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDistributedCosts((prev) => prev.filter((c) => c.id !== entry.id))}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        {lineItems.length > 1 && (
+                          <div className="flex items-center gap-x-3 gap-y-1 flex-wrap pl-1">
+                            <span className="text-[10px] text-muted-foreground shrink-0">Aplicar a:</span>
+                            {lineItems.map((li, idx) => {
+                              const included = !entry.itemIds || entry.itemIds.length === 0 || entry.itemIds.includes(li.id);
+                              return (
+                                <label key={li.id} className="flex items-center gap-1 text-[10px] cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={included}
+                                    className="h-3 w-3"
+                                    onChange={(e) => {
+                                      setDistributedCosts((prev) => prev.map((c) => {
+                                        if (c.id !== entry.id) return c;
+                                        const current = c.itemIds && c.itemIds.length > 0 ? [...c.itemIds] : lineItems.map(l => l.id);
+                                        const next = e.target.checked
+                                          ? current.includes(li.id) ? current : [...current, li.id]
+                                          : current.filter(id => id !== li.id);
+                                        const allSelected = lineItems.every(l => next.includes(l.id));
+                                        return { ...c, itemIds: allSelected ? [] : next };
+                                      }));
+                                    }}
+                                  />
+                                  <span className="text-muted-foreground">Ítem {idx + 1}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
