@@ -569,10 +569,19 @@ const OfertaPublica = () => {
                   </tr>,
                 ];
                 if (multiItem) {
+                  const plainDesc = item.description.replace(/<[^>]*>/g, "").trim();
+                  const shortDesc = plainDesc.length > 55 ? plainDesc.substring(0, 55) + "…" : plainDesc;
                   rows.push(
-                    <tr key={`sub-${item.id}`} style={{ backgroundColor: "#f0f7fa", borderTop: "1px solid #dde8ec" }}>
+                    <tr key={`lbl-${item.id}`} style={{ backgroundColor: "#e4f0f5", borderTop: "2px solid #b2d6e0" }}>
+                      <td colSpan={5} style={{ padding: "5px 10px", fontSize: "10px", fontWeight: 700, color: "#005f70", letterSpacing: "0.02em" }}>
+                        #{i + 1} — {shortDesc}
+                      </td>
+                    </tr>
+                  );
+                  rows.push(
+                    <tr key={`sub-${item.id}`} style={{ backgroundColor: "#f0f7fa" }}>
                       <td colSpan={3} />
-                      <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>Subtotal Ítem {i + 1}:</td>
+                      <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>Subtotal:</td>
                       <td style={{ padding: "4px 10px", fontSize: "11px", textAlign: "right", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
                     </tr>
                   );
@@ -586,14 +595,14 @@ const OfertaPublica = () => {
                     );
                   }
                   rows.push(
-                    <tr key={`tot-${item.id}`} style={{ backgroundColor: "#e4f0f5", borderBottom: "2px solid #aaccd8" }}>
+                    <tr key={`tot-${item.id}`} style={{ backgroundColor: "#dcedf3", borderBottom: "2px solid #aaccd8" }}>
                       <td colSpan={3} />
-                      <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>Total Ítem {i + 1}:</td>
+                      <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>Total:</td>
                       <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{fmt(itemWithTax)}</td>
                     </tr>
                   );
                   if (i < (quotation?.lineItems?.length ?? 0) - 1) {
-                    rows.push(<tr key={`gap-${item.id}`}><td colSpan={5} style={{ padding: "3px 0" }} /></tr>);
+                    rows.push(<tr key={`gap-${item.id}`}><td colSpan={5} style={{ padding: "4px 0" }} /></tr>);
                   }
                 }
                 return rows;
