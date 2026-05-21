@@ -1,3 +1,4 @@
+import React from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 import { CURRENCIES, type ProposalSettings, type Quotation } from "@/lib/types";
@@ -94,6 +95,7 @@ const OfertaPublica = () => {
           quantity: li.quantity,
           unitPriceUSD: Number(li.unit_price_usd),
           totalUSD: Number(li.total_usd),
+          subtotalGroup: li.subtotal_group ?? undefined,
         }));
 
         setQuotation({
@@ -145,6 +147,7 @@ const OfertaPublica = () => {
           approvalNote: qRow.approval_note ?? undefined,
           proposalTexts: (qRow as any).proposal_texts ?? undefined,
           distributedCosts: ((qRow as any).distributed_costs ?? []) as any,
+          showItemSubtotals: (qRow as any).show_item_subtotals ?? false,
         });
       }
 
@@ -553,60 +556,110 @@ const OfertaPublica = () => {
               </tr>
             </thead>
             <tbody>
-              {(quotation?.lineItems ?? []).flatMap((item, i) => {
-                const multiItem = (quotation?.lineItems?.length ?? 0) > 1;
-                const itemItbis = quotation.applyItbis
-                  ? Math.round(item.totalUSD * (quotation.itbisPercent / 100) * 100) / 100
-                  : 0;
-                const itemWithTax = item.totalUSD + itemItbis;
-                const rows = [
-                  <tr key={`r-${item.id}`} style={{ borderBottom: multiItem ? "1px solid #f0f0f0" : "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
-                    <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
-                    <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
-                    <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
-                  </tr>,
-                ];
-                if (multiItem) {
-                  const plainDesc = item.description.replace(/<[^>]*>/g, "").trim();
-                  const shortDesc = plainDesc.length > 55 ? plainDesc.substring(0, 55) + "…" : plainDesc;
-                  rows.push(
-                    <tr key={`lbl-${item.id}`} style={{ backgroundColor: "#e4f0f5", borderTop: "2px solid #b2d6e0" }}>
-                      <td colSpan={5} style={{ padding: "5px 10px", fontSize: "10px", fontWeight: 700, color: "#005f70", letterSpacing: "0.02em" }}>
-                        #{i + 1} — {shortDesc}
-                      </td>
+              {(() => {
+                const items = quotation?.lineItems ?? [];
+                if (!quotation?.showItemSubtotals) {
+                  return items.map((item, i) => (
+                    <tr key={`r-${item.id}`} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
+                      <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
+                      <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                      <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
                     </tr>
-                  );
-                  rows.push(
-                    <tr key={`sub-${item.id}`} style={{ backgroundColor: "#f0f7fa" }}>
-                      <td colSpan={3} />
-                      <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>Subtotal:</td>
-                      <td style={{ padding: "4px 10px", fontSize: "11px", textAlign: "right", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
-                    </tr>
-                  );
-                  if (quotation.applyItbis) {
-                    rows.push(
-                      <tr key={`itb-${item.id}`} style={{ backgroundColor: "#f0f7fa" }}>
-                        <td colSpan={3} />
-                        <td style={{ padding: "3px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>ITBIS ({quotation.itbisPercent}%):</td>
-                        <td style={{ padding: "3px 10px", fontSize: "11px", textAlign: "right" }}>{fmt(itemItbis)}</td>
-                      </tr>
-                    );
-                  }
-                  rows.push(
-                    <tr key={`tot-${item.id}`} style={{ backgroundColor: "#dcedf3", borderBottom: "2px solid #aaccd8" }}>
-                      <td colSpan={3} />
-                      <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>Total:</td>
-                      <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{fmt(itemWithTax)}</td>
-                    </tr>
-                  );
-                  if (i < (quotation?.lineItems?.length ?? 0) - 1) {
-                    rows.push(<tr key={`gap-${item.id}`}><td colSpan={5} style={{ padding: "4px 0" }} /></tr>);
+                  ));
+                }
+
+                // Group consecutive items with the same subtotalGroup label
+                type Run = { grp: string; items: typeof items; startGlobalIdx: number };
+                type Solo = { grp: undefined; item: typeof items[0]; globalIdx: number };
+                const runs: (Run | Solo)[] = [];
+                let gi = 0;
+                let idx = 0;
+                while (idx < items.length) {
+                  const item = items[idx];
+                  const g = (item as any).subtotalGroup as string | undefined;
+                  if (g) {
+                    const run: Run = { grp: g, items: [item], startGlobalIdx: gi };
+                    gi++;
+                    idx++;
+                    while (idx < items.length && ((items[idx] as any).subtotalGroup as string | undefined) === g) {
+                      run.items.push(items[idx]);
+                      gi++;
+                      idx++;
+                    }
+                    runs.push(run);
+                  } else {
+                    runs.push({ grp: undefined, item, globalIdx: gi });
+                    gi++;
+                    idx++;
                   }
                 }
-                return rows;
-              })}
+
+                const allRows: React.ReactElement[] = [];
+                runs.forEach((run, runIdx) => {
+                  if (run.grp === undefined) {
+                    const solo = run as Solo;
+                    allRows.push(
+                      <tr key={`r-${solo.item.id}`} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: solo.globalIdx % 2 === 0 ? "#fafafa" : "white" }}>
+                        <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{solo.globalIdx + 1}</td>
+                        <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
+                        <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{solo.item.quantity}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(solo.item.unitPriceUSD)}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(solo.item.totalUSD)}</td>
+                      </tr>
+                    );
+                  } else {
+                    const r = run as Run;
+                    r.items.forEach((item, j) => {
+                      const rowIdx = r.startGlobalIdx + j;
+                      allRows.push(
+                        <tr key={`r-${item.id}`} style={{ borderBottom: "1px solid #f0f0f0", backgroundColor: rowIdx % 2 === 0 ? "#fafafa" : "white" }}>
+                          <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{rowIdx + 1}</td>
+                          <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                          <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                        </tr>
+                      );
+                    });
+                    if (r.items.length >= 2) {
+                      const groupSubtotal = r.items.reduce((s, it) => s + it.totalUSD, 0);
+                      const groupItbis = quotation.applyItbis
+                        ? Math.round(groupSubtotal * (quotation.itbisPercent / 100) * 100) / 100
+                        : 0;
+                      const groupTotal = groupSubtotal + groupItbis;
+                      allRows.push(
+                        <tr key={`sub-${r.grp}-${runIdx}`} style={{ backgroundColor: "#f0f7fa" }}>
+                          <td colSpan={3} />
+                          <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>Subtotal:</td>
+                          <td style={{ padding: "4px 10px", fontSize: "11px", textAlign: "right", fontWeight: 600 }}>{fmt(groupSubtotal)}</td>
+                        </tr>
+                      );
+                      if (quotation.applyItbis) {
+                        allRows.push(
+                          <tr key={`itb-${r.grp}-${runIdx}`} style={{ backgroundColor: "#f0f7fa" }}>
+                            <td colSpan={3} />
+                            <td style={{ padding: "3px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>ITBIS ({quotation.itbisPercent}%):</td>
+                            <td style={{ padding: "3px 10px", fontSize: "11px", textAlign: "right" }}>{fmt(groupItbis)}</td>
+                          </tr>
+                        );
+                      }
+                      allRows.push(
+                        <tr key={`tot-${r.grp}-${runIdx}`} style={{ backgroundColor: "#dcedf3", borderBottom: "2px solid #aaccd8" }}>
+                          <td colSpan={3} />
+                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>Total:</td>
+                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{fmt(groupTotal)}</td>
+                        </tr>
+                      );
+                      if (runIdx < runs.length - 1) {
+                        allRows.push(<tr key={`gap-${runIdx}`}><td colSpan={5} style={{ padding: "4px 0" }} /></tr>);
+                      }
+                    }
+                  }
+                });
+                return allRows;
+              })()}
             </tbody>
           </table>
 

@@ -157,6 +157,7 @@ export interface QuotationLineItem {
   totalUSD: number;
   unitCostUSD?: number;
   itemMarginPercent?: number | null;
+  subtotalGroup?: string;
 }
 
 export interface CostEntry {
@@ -231,6 +232,7 @@ export interface Quotation {
   otherCosts?: CostEntry[];
   specialConsiderations?: string;
   proposalTexts?: QuotationProposalTexts;
+  showItemSubtotals?: boolean;
 }
 
 export interface GeneralSettings {

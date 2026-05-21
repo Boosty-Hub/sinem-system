@@ -55,6 +55,7 @@ const Cotizaciones = () => {
         totalUSD: Number(li.total_usd),
         unitCostUSD: li.unit_cost_usd != null ? Number(li.unit_cost_usd) : undefined,
         itemMarginPercent: li.item_margin_percent != null ? Number(li.item_margin_percent) : undefined,
+        subtotalGroup: (li as any).subtotal_group ?? undefined,
       });
       itemsByQuotation.set(li.quotation_id, list);
     });
@@ -145,6 +146,7 @@ const Cotizaciones = () => {
       otherCosts: (q as any).other_costs ?? [],
       specialConsiderations: (q as any).special_considerations ?? "",
       proposalTexts: (q as any).proposal_texts ?? undefined,
+      showItemSubtotals: (q as any).show_item_subtotals ?? false,
     })));
     setLoading(false);
   };
@@ -246,6 +248,7 @@ const Cotizaciones = () => {
       other_costs: updated.otherCosts ?? [],
       special_considerations: updated.specialConsiderations ?? null,
       proposal_texts: updated.proposalTexts ?? null,
+      show_item_subtotals: updated.showItemSubtotals ?? false,
       created_by: appUserId,
     };
 
@@ -260,7 +263,13 @@ const Cotizaciones = () => {
       // For new quotations, generate a proper UUID
       quotationRow.id = crypto.randomUUID();
       updated = { ...updated, id: quotationRow.id };
-      const { error } = await supabase.from("quotations").insert(quotationRow);
+      let { error } = await supabase.from("quotations").insert(quotationRow);
+      if (error?.code === "23505") {
+        // Unique constraint on code — append timestamp and retry once
+        quotationRow.code = quotationRow.code.replace(/-V(\d+)$/, `-${Date.now()}-V$1`);
+        const { error: retryError } = await supabase.from("quotations").insert(quotationRow);
+        error = retryError ?? null;
+      }
       if (error) {
         toast({ title: "Error al crear cotización", description: error.message, variant: "destructive" });
         return;
@@ -280,6 +289,7 @@ const Cotizaciones = () => {
           total_usd: li.totalUSD,
           unit_cost_usd: li.unitCostUSD ?? null,
           item_margin_percent: li.itemMarginPercent ?? null,
+          subtotal_group: li.subtotalGroup ?? null,
           sort_order: idx,
         }))
       );

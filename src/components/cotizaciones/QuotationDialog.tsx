@@ -31,6 +31,7 @@ interface LineItem {
   totalUSD: number;
   unitCostUSD: number;
   itemMarginPercent: number | null;
+  subtotalGroup?: string;
 }
 
 interface QuotationPrefill {
@@ -176,6 +177,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [selectedContactId, setSelectedContactId] = useState("none");
   const [distributedCosts, setDistributedCosts] = useState<CostEntry[]>([]);
   const [otherCosts, setOtherCosts] = useState<CostEntry[]>([]);
+  const [showItemSubtotals, setShowItemSubtotals] = useState(false);
   const [generalMarginInput, setGeneralMarginInput] = useState(0);
   const [proposalTexts, setProposalTexts] = useState<QuotationProposalTexts>({});
   const [textsExpanded, setTextsExpanded] = useState(false);
@@ -242,21 +244,36 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       : "SinCliente";
     const prefix = `SINEM-${buPart}-${clientPart}-`;
 
-    // Get consecutive from existing quotations in DB
+    // Fetch all codes with this prefix to find the current max consecutive
     const { data: existing } = await supabase
       .from("quotations")
       .select("code")
       .ilike("code", `${prefix}%`);
 
+    const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const nums = (existing ?? [])
       .map((q) => {
-        const match = q.code.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`));
+        const match = q.code.match(new RegExp(`^${escaped}(\\d+)`));
         return match ? parseInt(match[1], 10) : NaN;
       })
       .filter((n) => !isNaN(n));
 
-    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-    return `${prefix}${next}-V${version}`;
+    let next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+
+    // Confirm the generated code doesn't already exist (guards against race conditions)
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = `${prefix}${next}-V${version}`;
+      const { data: conflict } = await supabase
+        .from("quotations")
+        .select("id")
+        .eq("code", candidate)
+        .maybeSingle();
+      if (!conflict) return candidate;
+      next++;
+    }
+
+    // Absolute fallback: timestamp suffix guarantees uniqueness
+    return `${prefix}${next}-${Date.now()}-V${version}`;
   };
 
   // Save draft to sessionStorage when closing a new quotation (not edit)
@@ -268,7 +285,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax,
       validityDays, deliveryLocation, notes, applyItbis, itbisPercent,
       currency, exchangeRate, isOriginalCurrency, partner, showPartnerText, codeManuallyEdited,
-      proposalTexts,
+      proposalTexts, showItemSubtotals,
     };
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
   };
@@ -282,7 +299,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
       if (quotation) {
         // Editing existing quotation
-        setLineItems(quotation.lineItems.map((li) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null })));
+        setLineItems(quotation.lineItems.map((li) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
+        setShowItemSubtotals((quotation as any).showItemSubtotals ?? false);
         setSelectedProspectId(quotation.prospectId ?? "none");
         setSelectedClientId(quotation.clientId ?? "none");
         setSelectedContactId(quotation.contactId ?? "none");
@@ -316,7 +334,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         // New quotation — try restoring draft (only if no prefill)
         const raw = !prefill ? sessionStorage.getItem(DRAFT_KEY) : null;
         const d = raw ? JSON.parse(raw) : null;
-        setLineItems((d?.lineItems ?? []).map((li: any) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null })));
+        setLineItems((d?.lineItems ?? []).map((li: any) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
+        setShowItemSubtotals(d?.showItemSubtotals ?? false);
         setSelectedProspectId(d?.selectedProspectId ?? prefill?.prospectId ?? "none");
         setSelectedClientId(d?.selectedClientId ?? prefill?.clientId ?? "none");
         setSelectedContactId(d?.selectedContactId ?? prefill?.contactId ?? "none");
@@ -611,6 +630,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       unitPriceUSD: li.unitPriceUSD, totalUSD: li.totalUSD,
       unitCostUSD: li.unitCostUSD || undefined,
       itemMarginPercent: li.itemMarginPercent ?? undefined,
+      subtotalGroup: li.subtotalGroup || undefined,
     }));
     return {
       code, status, createdAt, subject,
@@ -624,7 +644,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       costUSD: effectiveCostUSD, marginPercent, marginUSD,
       distributedCosts, otherCosts,
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, deliveryTimeNote, validityDays, deliveryLocation, specialConsiderations, notes,
-      proposalTexts,
+      proposalTexts, showItemSubtotals,
     };
   };
 
@@ -657,6 +677,10 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
     // New quotation — save directly
     const data = buildCurrentData();
+    if (!data.code.trim()) {
+      toast({ title: "Código requerido", description: "Selecciona un prospecto o cliente para generar el código de la cotización.", variant: "destructive" });
+      return;
+    }
     const newQuotation: Quotation = {
       id: `q-${Date.now()}`,
       ...data,
@@ -964,11 +988,22 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 />
                 <Button variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" /> Agregar Ítem</Button>
               </div>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none mt-1">
+                <input
+                  type="checkbox"
+                  checked={showItemSubtotals}
+                  onChange={(e) => setShowItemSubtotals(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                <span className="text-xs text-muted-foreground">Subtotales por grupo</span>
+              </label>
             </div>
             <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/50 border-b">
+                    <th className="text-center py-2 px-2 font-medium text-muted-foreground text-xs w-8">N°</th>
+                    {showItemSubtotals && <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs w-14">Grp.</th>}
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Descripción</th>
                     <th className="text-center py-2 px-3 font-medium text-muted-foreground text-xs w-20">Cant.</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo</th>
@@ -981,12 +1016,24 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   </tr>
                 </thead>
                 <tbody>
-                  {lineItems.map((item) => {
+                  {lineItems.map((item, itemIdx) => {
                     const unitDistCost = computeItemUnitDist(item, lineItems, distributedCosts);
                     const costUnitTotal = (item.unitCostUSD + unitDistCost) * item.quantity;
                     const sym = isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$";
                     return (
                       <tr key={item.id} className="border-b last:border-0">
+                        <td className="py-2 px-2 text-center text-xs text-muted-foreground font-medium">{itemIdx + 1}</td>
+                        {showItemSubtotals && (
+                          <td className="py-2 px-1">
+                            <Input
+                              value={item.subtotalGroup ?? ""}
+                              onChange={(e) => updateItem(item.id, "subtotalGroup", e.target.value.slice(0, 3).toUpperCase())}
+                              className="h-8 text-xs text-center px-1 w-12 uppercase"
+                              placeholder="—"
+                              maxLength={3}
+                            />
+                          </td>
+                        )}
                         <td className="py-2 px-3">
                           <RichTextEditor
                             value={item.description}
@@ -1051,7 +1098,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   })}
                   {lineItems.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-6 text-center text-muted-foreground text-xs">
+                      <td colSpan={showItemSubtotals ? 11 : 10} className="py-6 text-center text-muted-foreground text-xs">
                         Sin ítems. Haz clic en "Agregar Ítem" para comenzar.
                       </td>
                     </tr>
