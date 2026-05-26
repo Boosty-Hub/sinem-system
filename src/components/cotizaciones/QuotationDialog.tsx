@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
 import { useRequiredFields } from "@/hooks/useRequiredFields";
@@ -925,7 +926,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               {partner && !partners.some((p) => p.toLowerCase() === partner.toLowerCase()) && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
-                  Proveedor de uso interno (no permanente)
+                  Proveedor de uso interno para esta cotización.{" "}
+                  <Link to="/configuracion/proveedores" className="underline hover:text-amber-700 dark:hover:text-amber-300">
+                    Ir a Proveedores
+                  </Link>{" "}
+                  para crearlo de forma permanente.
                 </p>
               )}
               <div className="flex items-center gap-2 mt-2">
