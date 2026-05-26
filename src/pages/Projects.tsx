@@ -59,29 +59,49 @@ const parseFlexibleDate = (s: string | null | undefined): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const computeTimeProgress = (oeStr: string | null | undefined, revenueStr: string | null | undefined): ProjectProgress => {
-  const oe = parseFlexibleDate(oeStr);
+const computeTimeProgress = (
+  oeStr: string | null | undefined,
+  revenueStr: string | null | undefined,
+  startDateStr: string | null | undefined,
+  currentStep: number,
+): ProjectProgress => {
+  // Step 11 = project fully delivered
+  if (currentStep >= 11) {
+    const oe = parseFlexibleDate(oeStr) ?? parseFlexibleDate(startDateStr);
+    const rev = parseFlexibleDate(revenueStr);
+    const totalDays = oe && rev ? Math.max(0, Math.round((rev.getTime() - oe.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+    return { pct: 100, oeDate: oeStr ?? startDateStr ?? null, revenueDate: revenueStr ?? null, totalDays, elapsedDays: totalDays, remainingDays: 0, reason: "completed" };
+  }
+
+  const now = Date.now();
+  // Use estimated_oe if it's in the past, otherwise fall back to start_date
+  let oe = parseFlexibleDate(oeStr);
+  if (!oe || oe.getTime() > now) {
+    const sd = parseFlexibleDate(startDateStr);
+    if (sd && sd.getTime() <= now) oe = sd;
+  }
+  const effectiveOeStr = oe ? (oeStr && parseFlexibleDate(oeStr)?.getTime() === oe.getTime() ? oeStr : startDateStr) : null;
+
   const rev = parseFlexibleDate(revenueStr);
   if (!oe || !rev) {
-    return { pct: 0, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays: 0, elapsedDays: 0, remainingDays: 0, reason: "missing-dates" };
+    return { pct: 0, oeDate: effectiveOeStr ?? null, revenueDate: revenueStr ?? null, totalDays: 0, elapsedDays: 0, remainingDays: 0, reason: "missing-dates" };
   }
   const total = rev.getTime() - oe.getTime();
   if (total <= 0) {
-    return { pct: 0, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays: 0, elapsedDays: 0, remainingDays: 0, reason: "invalid-range" };
+    return { pct: 0, oeDate: effectiveOeStr ?? null, revenueDate: revenueStr ?? null, totalDays: 0, elapsedDays: 0, remainingDays: 0, reason: "invalid-range" };
   }
-  const now = Date.now();
   const elapsed = now - oe.getTime();
   const totalDays = Math.round(total / (1000 * 60 * 60 * 24));
   if (elapsed < 0) {
-    return { pct: 0, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays, elapsedDays: 0, remainingDays: totalDays, reason: "future" };
+    return { pct: 0, oeDate: effectiveOeStr ?? null, revenueDate: revenueStr ?? null, totalDays, elapsedDays: 0, remainingDays: totalDays, reason: "future" };
   }
   if (elapsed >= total) {
-    return { pct: 100, oeDate: oeStr ?? null, revenueDate: revenueStr ?? null, totalDays, elapsedDays: totalDays, remainingDays: 0, reason: "completed" };
+    return { pct: 100, oeDate: effectiveOeStr ?? null, revenueDate: revenueStr ?? null, totalDays, elapsedDays: totalDays, remainingDays: 0, reason: "completed" };
   }
   const elapsedDays = Math.round(elapsed / (1000 * 60 * 60 * 24));
   return {
     pct: Math.round((elapsed / total) * 100),
-    oeDate: oeStr ?? null,
+    oeDate: effectiveOeStr ?? null,
     revenueDate: revenueStr ?? null,
     totalDays,
     elapsedDays,
@@ -180,7 +200,7 @@ const Projects = () => {
     const map: Record<string, ProjectProgress> = {};
     for (const p of projectsData ?? []) {
       const pr = p.origin_prospect_id ? prospectMap[p.origin_prospect_id] : null;
-      map[p.id] = computeTimeProgress(pr?.estimated_oe, pr?.revenue);
+      map[p.id] = computeTimeProgress(pr?.estimated_oe, pr?.revenue, p.start_date, p.current_step);
     }
     setProgressMap(map);
 

@@ -19,12 +19,12 @@ import {
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, module: "Dashboard" },
   { title: "Contactos", url: "/contactos", icon: UserCircle, module: "Contactos" },
-  { title: "Tareas", url: "/tareas", icon: ListTodo, module: null },
+  { title: "Tareas", url: "/tareas", icon: ListTodo, module: "Tareas" },
   { title: "CRM", url: "/crm", icon: Users, module: "CRM" },
   { title: "Cotizaciones", url: "/cotizaciones", icon: FileText, module: "Cotizaciones" },
   { title: "Clientes", url: "/clientes", icon: Building2, module: "Clientes" },
   { title: "Proyectos", url: "/projects", icon: FolderKanban, module: "Proyectos" },
-  { title: "Analítica", url: "/analitica", icon: BarChart3, module: null },
+  { title: "Analítica", url: "/analitica", icon: BarChart3, module: "Analítica" },
 ];
 
 const AppSidebar = () => {
@@ -89,7 +89,7 @@ const AppSidebar = () => {
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {canView("Configuración") && (
+          {["Config: General", "Config: Propuestas", "Config: Campos Obligatorios", "Config: Usuarios", "Config: Roles", "Config: Permisos"].some(m => canView(m)) && (
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild

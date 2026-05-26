@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 
-const MODULES = ["Dashboard", "CRM", "Cotizaciones", "Clientes", "Contactos", "Proyectos", "Configuración"];
+const MODULES = ["Dashboard", "CRM", "Cotizaciones", "Clientes", "Contactos", "Proyectos", "Tareas", "Analítica", "Config: General", "Config: Propuestas", "Config: Campos Obligatorios", "Config: Usuarios", "Config: Roles", "Config: Permisos"];
 const ACTION_KEYS = ["can_view", "can_create", "can_edit", "can_delete"] as const;
 const ACTION_LABELS = ["Ver", "Crear", "Editar", "Eliminar"];
 
@@ -14,7 +14,7 @@ interface PermRow { id: string; role_id: string; module: string; can_view: boole
 const ConfigPermisos = () => {
   const { toast } = useToast();
   const { canEdit } = usePermissions();
-  const canEditConfig = canEdit("Configuración");
+  const canEditConfig = canEdit("Config: Permisos");
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [perms, setPerms] = useState<PermRow[]>([]);

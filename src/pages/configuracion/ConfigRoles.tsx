@@ -21,9 +21,9 @@ interface RoleRow {
 const ConfigRoles = () => {
   const { toast } = useToast();
   const { canCreate, canEdit, canDelete } = usePermissions();
-  const canCreateConfig = canCreate("Configuración");
-  const canEditConfig = canEdit("Configuración");
-  const canDeleteConfig = canDelete("Configuración");
+  const canCreateConfig = canCreate("Config: Roles");
+  const canEditConfig = canEdit("Config: Roles");
+  const canDeleteConfig = canDelete("Config: Roles");
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);

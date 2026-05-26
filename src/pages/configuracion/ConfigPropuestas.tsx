@@ -85,7 +85,7 @@ const settingsToDb = (s: ProposalSettings) => ({
 const ConfigPropuestas = () => {
   const { toast } = useToast();
   const { canEdit } = usePermissions();
-  const canEditConfig = canEdit("Configuración");
+  const canEditConfig = canEdit("Config: Propuestas");
   const [settings, setSettings] = useState<ProposalSettings>(emptySettings);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(true);

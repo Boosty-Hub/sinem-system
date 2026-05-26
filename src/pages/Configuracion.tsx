@@ -1,17 +1,19 @@
 import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
 import { FileText, Users, Shield, KeyRound, Settings, ArrowLeft, SlidersHorizontal, CheckSquare } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const configNav = [
-  { title: "General", url: "/configuracion/general", icon: SlidersHorizontal },
-  { title: "Propuestas / Ofertas", url: "/configuracion/propuestas", icon: FileText },
-  { title: "Campos Obligatorios", url: "/configuracion/campos", icon: CheckSquare },
-  { title: "Usuarios", url: "/configuracion/usuarios", icon: Users },
-  { title: "Roles", url: "/configuracion/roles", icon: Shield },
-  { title: "Permisos", url: "/configuracion/permisos", icon: KeyRound },
+  { title: "General", url: "/configuracion/general", icon: SlidersHorizontal, module: "Config: General" },
+  { title: "Propuestas / Ofertas", url: "/configuracion/propuestas", icon: FileText, module: "Config: Propuestas" },
+  { title: "Campos Obligatorios", url: "/configuracion/campos", icon: CheckSquare, module: "Config: Campos Obligatorios" },
+  { title: "Usuarios", url: "/configuracion/usuarios", icon: Users, module: "Config: Usuarios" },
+  { title: "Roles", url: "/configuracion/roles", icon: Shield, module: "Config: Roles" },
+  { title: "Permisos", url: "/configuracion/permisos", icon: KeyRound, module: "Config: Permisos" },
 ];
 
 const Configuracion = () => {
   const location = useLocation();
+  const { canView } = usePermissions();
 
   return (
     <div className="flex min-h-screen">
@@ -29,7 +31,7 @@ const Configuracion = () => {
           <p className="text-[11px] text-sidebar-foreground/50 mt-1">Ajustes del sistema</p>
         </div>
         <nav className="p-2 space-y-0.5 flex-1">
-          {configNav.map((item) => {
+          {configNav.filter((item) => canView(item.module)).map((item) => {
             const isActive = location.pathname === item.url ||
               (item.url === "/configuracion/propuestas" && location.pathname === "/configuracion");
             return (

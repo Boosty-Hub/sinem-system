@@ -11,9 +11,9 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 const ConfigGeneral = () => {
   const { canEdit, canCreate, canDelete } = usePermissions();
-  const canEditConfig = canEdit("Configuración");
-  const canCreateConfig = canCreate("Configuración");
-  const canDeleteConfig = canDelete("Configuración");
+  const canEditConfig = canEdit("Config: General");
+  const canCreateConfig = canCreate("Config: General");
+  const canDeleteConfig = canDelete("Config: General");
   const { toast } = useToast();
   const { partners, setPartners } = usePartners();
   const { businessUnits, setBusinessUnits } = useBusinessUnits();

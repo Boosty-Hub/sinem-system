@@ -28,7 +28,7 @@ const MODULE_ORDER = ["oportunidad", "cotizacion", "cliente", "contacto", "proye
 const ConfigCamposObligatorios = () => {
   const { toast } = useToast();
   const { canEdit } = usePermissions();
-  const canEditConfig = canEdit("Configuración");
+  const canEditConfig = canEdit("Config: Campos Obligatorios");
   const [fields, setFields] = useState<FieldRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

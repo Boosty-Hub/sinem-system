@@ -46,8 +46,8 @@ const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none"
 
 const ConfigUsuarios = () => {
   const { canCreate, canEdit } = usePermissions();
-  const canCreateConfig = canCreate("Configuración");
-  const canEditConfig = canEdit("Configuración");
+  const canCreateConfig = canCreate("Config: Usuarios");
+  const canEditConfig = canEdit("Config: Usuarios");
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<AppUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);

@@ -58,18 +58,18 @@ const App = () => (
                 <Route path="/contactos" element={<ProtectedModule module="Contactos"><Contactos /></ProtectedModule>} />
                 <Route path="/projects" element={<ProtectedModule module="Proyectos"><Projects /></ProtectedModule>} />
                 <Route path="/projects/:id" element={<ProtectedModule module="Proyectos"><ProjectDetail /></ProtectedModule>} />
-                <Route path="/tareas" element={<Tareas />} />
+                <Route path="/tareas" element={<ProtectedModule module="Tareas"><Tareas /></ProtectedModule>} />
                 <Route path="/forecast" element={<Navigate to="/analitica" replace />} />
-                <Route path="/analitica" element={<Analitica />} />
+                <Route path="/analitica" element={<ProtectedModule module="Analítica"><Analitica /></ProtectedModule>} />
                 <Route path="/perfil" element={<Perfil />} />
-                <Route path="/configuracion" element={<ProtectedModule module="Configuración"><Configuracion /></ProtectedModule>}>
+                <Route path="/configuracion" element={<ProtectedModule module={["Config: General","Config: Propuestas","Config: Campos Obligatorios","Config: Usuarios","Config: Roles","Config: Permisos"]}><Configuracion /></ProtectedModule>}>
                   <Route index element={<Navigate to="propuestas" replace />} />
-                  <Route path="propuestas" element={<ConfigPropuestas />} />
-                  <Route path="usuarios" element={<ConfigUsuarios />} />
-                  <Route path="roles" element={<ConfigRoles />} />
-                  <Route path="permisos" element={<ConfigPermisos />} />
-                  <Route path="general" element={<ConfigGeneral />} />
-                  <Route path="campos" element={<ConfigCamposObligatorios />} />
+                  <Route path="propuestas" element={<ProtectedModule module="Config: Propuestas"><ConfigPropuestas /></ProtectedModule>} />
+                  <Route path="usuarios" element={<ProtectedModule module="Config: Usuarios"><ConfigUsuarios /></ProtectedModule>} />
+                  <Route path="roles" element={<ProtectedModule module="Config: Roles"><ConfigRoles /></ProtectedModule>} />
+                  <Route path="permisos" element={<ProtectedModule module="Config: Permisos"><ConfigPermisos /></ProtectedModule>} />
+                  <Route path="general" element={<ProtectedModule module="Config: General"><ConfigGeneral /></ProtectedModule>} />
+                  <Route path="campos" element={<ProtectedModule module="Config: Campos Obligatorios"><ConfigCamposObligatorios /></ProtectedModule>} />
                 </Route>
               </Route>
             </Route>

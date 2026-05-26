@@ -53,8 +53,8 @@ const Cotizaciones = () => {
         quantity: li.quantity,
         unitPriceUSD: Number(li.unit_price_usd),
         totalUSD: Number(li.total_usd),
-        unitCostUSD: li.unit_cost_usd != null ? Number(li.unit_cost_usd) : undefined,
-        itemMarginPercent: li.item_margin_percent != null ? Number(li.item_margin_percent) : undefined,
+        unitCostUSD: li.unit_cost_usd != null ? Number(li.unit_cost_usd) : 0,
+        itemMarginPercent: li.item_margin_percent != null ? Number(li.item_margin_percent) : null,
         subtotalGroup: (li as any).subtotal_group ?? undefined,
       });
       itemsByQuotation.set(li.quotation_id, list);
@@ -277,11 +277,20 @@ const Cotizaciones = () => {
     }
 
     // Sync line items: delete old, insert new
+    // Build a stable old→new ID map so distributedCosts.itemIds remain valid after save
+    const itemIdMap = new Map<string, string>(updated.lineItems.map((li) => [li.id, crypto.randomUUID()]));
+    const remappedDistributedCosts = (updated.distributedCosts ?? []).map((cost) => ({
+      ...cost,
+      itemIds: cost.itemIds?.map((id) => itemIdMap.get(id) ?? id) ?? [],
+    }));
+    if (remappedDistributedCosts.some((c, i) => JSON.stringify(c) !== JSON.stringify((updated.distributedCosts ?? [])[i]))) {
+      await supabase.from("quotations").update({ distributed_costs: remappedDistributedCosts }).eq("id", quotationRow.id);
+    }
     await supabase.from("quotation_line_items").delete().eq("quotation_id", quotationRow.id);
     if (updated.lineItems.length > 0) {
       const { error: liError } = await supabase.from("quotation_line_items").insert(
         updated.lineItems.map((li, idx) => ({
-          id: crypto.randomUUID(),
+          id: itemIdMap.get(li.id)!,
           quotation_id: quotationRow.id,
           description: li.description,
           quantity: li.quantity,

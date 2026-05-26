@@ -722,11 +722,11 @@ const ProspectDialog = ({ open, onOpenChange, prospect, onSave, onDelete, produc
           </div>
           <div>
             <Label>Go %</Label>
-            <Input type="number" value={go || ""} onChange={(e) => setGo(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="0" min={0} max={100} />
+            <Input type="text" inputMode="numeric" value={go || ""} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setGo(Math.min(100, Number(v) || 0)); }} placeholder="0" />
           </div>
           <div>
             <Label>Get %</Label>
-            <Input type="number" value={get_ || ""} onChange={(e) => setGet(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="0" min={0} max={100} />
+            <Input type="text" inputMode="numeric" value={get_ || ""} onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setGet(Math.min(100, Number(v) || 0)); }} placeholder="0" />
           </div>
 
           <div>
