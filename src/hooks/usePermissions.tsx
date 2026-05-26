@@ -71,7 +71,7 @@ export const PermissionsProvider = ({ children }: { children: ReactNode }) => {
 
       setRoleName((appUser.roles as any)?.name ?? null);
 
-      // 2. Fetch permissions for this role
+      // 2. Fetch role-level permissions
       const { data: permRows } = await supabase
         .from("permissions")
         .select("module, can_view, can_create, can_edit, can_delete")
@@ -79,6 +79,21 @@ export const PermissionsProvider = ({ children }: { children: ReactNode }) => {
 
       const map: Record<string, ModulePerms> = {};
       (permRows ?? []).forEach((p: any) => {
+        map[p.module] = {
+          can_view: p.can_view,
+          can_create: p.can_create,
+          can_edit: p.can_edit,
+          can_delete: p.can_delete,
+        };
+      });
+
+      // 3. Fetch user-level overrides and merge (user overrides take precedence)
+      const { data: userPermRows } = await supabase
+        .from("user_permissions")
+        .select("module, can_view, can_create, can_edit, can_delete")
+        .eq("app_user_id", appUser.id);
+
+      (userPermRows ?? []).forEach((p: any) => {
         map[p.module] = {
           can_view: p.can_view,
           can_create: p.can_create,
