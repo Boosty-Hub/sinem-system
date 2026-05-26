@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 
-const MODULES = ["Dashboard", "CRM", "Cotizaciones", "Clientes", "Contactos", "Proyectos", "Tareas", "Analítica", "Config: General", "Config: Propuestas", "Config: Campos Obligatorios", "Config: Usuarios", "Config: Roles", "Config: Permisos"];
+const MODULES = ["Dashboard", "CRM", "Cotizaciones", "Clientes", "Contactos", "Proyectos", "Tareas", "Analítica", "Proveedores", "Config: General", "Config: Propuestas", "Config: Campos Obligatorios", "Config: Usuarios", "Config: Roles", "Config: Permisos"];
 const ACTION_KEYS = ["can_view", "can_create", "can_edit", "can_delete"] as const;
 const ACTION_LABELS = ["Ver", "Crear", "Editar", "Eliminar"];
 

@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Handshake, Briefcase, Loader2 } from "lucide-react";
+import { Settings, Save, Upload, Trash2, Image, Plus, Pencil, X, Briefcase, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { usePartners } from "@/hooks/usePartners";
 import { useBusinessUnits, type BusinessUnit } from "@/hooks/useBusinessUnits";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -15,11 +14,7 @@ const ConfigGeneral = () => {
   const canCreateConfig = canCreate("Config: General");
   const canDeleteConfig = canDelete("Config: General");
   const { toast } = useToast();
-  const { partners, setPartners } = usePartners();
   const { businessUnits, setBusinessUnits } = useBusinessUnits();
-  const [newPartner, setNewPartner] = useState("");
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [editingValue, setEditingValue] = useState("");
   const [newBUKey, setNewBUKey] = useState("");
   const [newBULabel, setNewBULabel] = useState("");
   const [editingBUIdx, setEditingBUIdx] = useState<number | null>(null);
@@ -118,36 +113,6 @@ const ConfigGeneral = () => {
     toast({ title: "Configuración guardada" });
   };
 
-  // ── Partners CRUD ──
-  const addPartner = () => {
-    const trimmed = newPartner.trim();
-    if (!trimmed) return;
-    if (partners.includes(trimmed)) {
-      toast({ title: "Error", description: "Este partner ya existe.", variant: "destructive" });
-      return;
-    }
-    setPartners([...partners, trimmed]);
-    setNewPartner("");
-    toast({ title: "Partner agregado" });
-  };
-
-  const saveEdit = (idx: number) => {
-    const trimmed = editingValue.trim();
-    if (!trimmed) return;
-    if (partners.some((p, i) => i !== idx && p === trimmed)) {
-      toast({ title: "Error", description: "Este partner ya existe.", variant: "destructive" });
-      return;
-    }
-    setPartners(partners.map((p, i) => (i === idx ? trimmed : p)));
-    setEditingIdx(null);
-    toast({ title: "Partner actualizado" });
-  };
-
-  const deletePartner = (idx: number) => {
-    setPartners(partners.filter((_, i) => i !== idx));
-    toast({ title: "Partner eliminado" });
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -201,79 +166,6 @@ const ConfigGeneral = () => {
             </div>
           )}
           <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-        </div>
-      </div>
-
-      {/* Partners */}
-      <div className="stat-card max-w-xl">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Handshake className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm">Partners / Proveedores</h3>
-            <p className="text-xs text-muted-foreground">Listado de partners disponibles en cotizaciones y CRM</p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          {partners.map((p, i) => (
-            <div key={i} className="flex items-center gap-2 group">
-              {editingIdx === i ? (
-                <>
-                  <Input
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                    className="h-8 text-sm flex-1"
-                    onKeyDown={(e) => e.key === "Enter" && saveEdit(i)}
-                    autoFocus
-                  />
-                  <Button size="sm" variant="default" className="h-8 px-2" onClick={() => saveEdit(i)}>
-                    <Save className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setEditingIdx(null)}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <span className="text-sm flex-1 py-1.5 px-2 rounded bg-muted/50">{p}</span>
-                  {canEditConfig && (
-                    <Button
-                      size="sm" variant="ghost"
-                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => { setEditingIdx(i); setEditingValue(p); }}
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Button>
-                  )}
-                  {canDeleteConfig && (
-                    <Button
-                      size="sm" variant="ghost"
-                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                      onClick={() => deletePartner(i)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
-          {canCreateConfig && (
-            <div className="flex items-center gap-2 pt-2 border-t">
-              <Input
-                value={newPartner}
-                onChange={(e) => setNewPartner(e.target.value)}
-                placeholder="Nuevo partner..."
-                className="h-8 text-sm flex-1"
-                onKeyDown={(e) => e.key === "Enter" && addPartner()}
-              />
-              <Button size="sm" variant="outline" className="h-8" onClick={addPartner} disabled={!newPartner.trim()}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 

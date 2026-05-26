@@ -172,6 +172,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [exchangeRate, setExchangeRate] = useState(1);
   const [isOriginalCurrency, setIsOriginalCurrency] = useState(false);
   const [partner, setPartner] = useState<QuotationPartner>("Siemens");
+  const [partnerPopoverOpen, setPartnerPopoverOpen] = useState(false);
+  const [partnerSearch, setPartnerSearch] = useState("");
   const [showPartnerText, setShowPartnerText] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState("none");
   const [selectedContactId, setSelectedContactId] = useState("none");
@@ -204,7 +206,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     if (!open) return;
     const fetchData = async () => {
       const [{ data: dbP }, { data: dbCl }, { data: dbCt }, { data: psRow }] = await Promise.all([
-        supabase.from("prospects").select("*").order("project_name"),
+        supabase.from("prospects").select("*").is("deleted_at", null).order("project_name"),
         supabase.from("clients").select("*").order("name"),
         supabase.from("contacts").select("*").order("first_name"),
         supabase.from("proposal_settings").select("*").limit(1).single(),
@@ -453,6 +455,11 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setSelectedContactId(resolvedContactId);
 
     setClientData(data);
+
+    // Copy partner from prospect (supports one-time/internal providers)
+    if (prospect.proveedor && prospect.proveedor.trim()) {
+      setPartner(prospect.proveedor.trim());
+    }
   };
 
   const handleProspectChange = async (value: string) => {
@@ -618,9 +625,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const hasDetailedCosts = itemsCostTotal > 0 || distributedTotal > 0;
   const effectiveCostUSD = hasDetailedCosts ? (itemsCostTotal + distributedTotal) : costUSD;
 
-  const priceBase = subtotal;
-  const itbisUSD = applyItbis ? priceBase * itbisPercent / 100 : 0;
-  const totalUSD = priceBase + itbisUSD;
+  const priceBase = Math.round(subtotal * 100) / 100;
+  const itbisUSD = applyItbis ? Math.round(priceBase * itbisPercent) / 100 : 0;
+  const totalUSD = Math.round((priceBase + itbisUSD) * 100) / 100;
   const marginUSD = Math.round((totalUSD - effectiveCostUSD) * 100) / 100;
   const marginPercent = totalUSD > 0 ? Math.round((totalUSD - effectiveCostUSD) / totalUSD * 10000) / 100 : 0;
 
@@ -698,16 +705,30 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const saveOverwrite = () => {
     if (!onSave || !quotation) return;
     const data = buildCurrentData();
+    const wasApproved = quotation.approvalStatus === "approved";
     const updated: Quotation = {
       ...quotation,
       ...data,
       version: quotation.version,
       history: quotation.history,
+      ...(wasApproved && {
+        status: "borrador",
+        approvalStatus: "pending",
+        approvedBy: undefined,
+        approvedAt: undefined,
+        approvalNote: undefined,
+      }),
     };
     clearDraft();
     onSave(updated);
     setShowVersionPrompt(false);
     onOpenChange(false);
+    if (wasApproved) {
+      toast({
+        title: "Cotización movida a Borrador",
+        description: "La cotización fue editada después de estar aprobada. Debe ser re-aprobada por dirección.",
+      });
+    }
   };
 
   /** Save as a new version (snapshot current, bump version) */
@@ -747,17 +768,31 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       }
     }
 
+    const wasApproved = quotation.approvalStatus === "approved";
     const updated: Quotation = {
       ...quotation,
       ...data,
       code: updatedCode,
       version: newVersion,
       history: [...quotation.history, snapshot],
+      ...(wasApproved && {
+        status: "borrador",
+        approvalStatus: "pending",
+        approvedBy: undefined,
+        approvedAt: undefined,
+        approvalNote: undefined,
+      }),
     };
     clearDraft();
     onSave(updated);
     setShowVersionPrompt(false);
     onOpenChange(false);
+    if (wasApproved) {
+      toast({
+        title: "Cotización movida a Borrador",
+        description: "La nueva versión requiere re-aprobación de dirección.",
+      });
+    }
   };
 
   /** Restore data from a previous version snapshot */
@@ -814,14 +849,85 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
             </div>
             <div>
               <Label>Partner</Label>
-              <Select value={partner} onValueChange={(v) => setPartner(v as QuotationPartner)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {partners.map((p) => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={partnerPopoverOpen} onOpenChange={(o) => { setPartnerPopoverOpen(o); if (!o) setPartnerSearch(""); }}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-10">
+                    {partner || "Seleccionar"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Buscar partner..."
+                      value={partnerSearch}
+                      onValueChange={setPartnerSearch}
+                    />
+                    <CommandList>
+                      {(() => {
+                        const trimmed = partnerSearch.trim();
+                        const exists = partners.some((p) => p.toLowerCase() === trimmed.toLowerCase());
+                        const handleUseOnce = () => {
+                          if (!trimmed) return;
+                          setPartner(trimmed);
+                          setPartnerSearch("");
+                          setPartnerPopoverOpen(false);
+                        };
+                        return (
+                          <>
+                            <CommandEmpty>
+                              {trimmed ? (
+                                <button
+                                  type="button"
+                                  onClick={handleUseOnce}
+                                  className="flex items-center gap-1.5 w-full px-2 py-2 text-xs text-primary hover:bg-primary/5 rounded transition-colors"
+                                >
+                                  <Plus className="h-3.5 w-3.5" /> Usar "{trimmed}" solo para esta cotización
+                                </button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground px-2 py-2 block">Sin resultados</span>
+                              )}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {partners.map((p) => (
+                                <CommandItem
+                                  key={p}
+                                  value={p}
+                                  onSelect={() => {
+                                    setPartner(p);
+                                    setPartnerSearch("");
+                                    setPartnerPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", partner === p ? "opacity-100" : "opacity-0")} />
+                                  {p}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                            {trimmed && !exists && (
+                              <div className="border-t border-border/60 mt-1 pt-1 px-1 pb-1">
+                                <button
+                                  type="button"
+                                  onClick={handleUseOnce}
+                                  className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-primary hover:bg-primary/5 rounded transition-colors"
+                                >
+                                  <Plus className="h-3.5 w-3.5" /> Usar "{trimmed}" solo para esta cotización
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {partner && !partners.some((p) => p.toLowerCase() === partner.toLowerCase()) && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  Proveedor de uso interno (no permanente)
+                </p>
+              )}
               <div className="flex items-center gap-2 mt-2">
                 <Checkbox
                   id="showPartnerText"

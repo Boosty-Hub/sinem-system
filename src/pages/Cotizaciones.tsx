@@ -342,7 +342,7 @@ const Cotizaciones = () => {
     if (updated.prospectId) {
       const { data: prospectRow } = await supabase
         .from("prospects")
-        .select("status")
+        .select("status, estimated_oe")
         .eq("id", updated.prospectId)
         .maybeSingle();
 
@@ -356,10 +356,17 @@ const Cotizaciones = () => {
       const weeks = updated.deliveryWeeksMax || updated.deliveryWeeksMin || 0;
       const alreadyInvoiced = prospectRow && ["facturada", "cerrados"].includes((prospectRow as any).status);
       if (weeks > 0 && !alreadyInvoiced) {
-        const baseDate = (updated.approvalStatus === "approved" && updated.approvedAt)
-          ? new Date(updated.approvedAt)
-          : new Date();
-        baseDate.setDate(baseDate.getDate() + weeks * 7);
+        // Base date precedence: estimated_oe (Order Entry) > approvedAt > today
+        const estOE = (prospectRow as any)?.estimated_oe as string | null | undefined;
+        let baseDate: Date;
+        if (estOE) {
+          baseDate = new Date(`${estOE}T00:00:00Z`);
+        } else if (updated.approvalStatus === "approved" && updated.approvedAt) {
+          baseDate = new Date(updated.approvedAt);
+        } else {
+          baseDate = new Date();
+        }
+        baseDate.setUTCDate(baseDate.getUTCDate() + weeks * 7);
         prospectUpdate.revenue = baseDate.toISOString().split("T")[0];
       }
 

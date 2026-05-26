@@ -227,9 +227,42 @@ const CRM = () => {
       return;
     }
 
-    // Auto-create project when opportunity is won
+    // Auto-update Revenue date when opportunity is won — use approved quotation's delivery time
     if (newStage === "ganado") {
-      // Check if project already exists
+      const { data: prospectRow } = await supabase
+        .from("prospects")
+        .select("estimated_oe, revenue")
+        .eq("id", prospectId)
+        .maybeSingle();
+
+      const { data: linkedQuot } = await supabase
+        .from("quotations")
+        .select("delivery_weeks_max, delivery_weeks_min, approval_status, approved_at, updated_at")
+        .eq("prospect_id", prospectId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (linkedQuot) {
+        const weeks = (linkedQuot as any).delivery_weeks_max || (linkedQuot as any).delivery_weeks_min || 0;
+        if (weeks > 0) {
+          const estOE = (prospectRow as any)?.estimated_oe as string | null | undefined;
+          let baseDate: Date;
+          if (estOE) {
+            baseDate = new Date(`${estOE}T00:00:00Z`);
+          } else if ((linkedQuot as any).approved_at) {
+            baseDate = new Date((linkedQuot as any).approved_at);
+          } else {
+            baseDate = new Date();
+          }
+          baseDate.setUTCDate(baseDate.getUTCDate() + weeks * 7);
+          const projectedRevenue = baseDate.toISOString().split("T")[0];
+          await supabase.from("prospects").update({ revenue: projectedRevenue }).eq("id", prospectId);
+          setProspects((prev) => prev.map((p) => (p.id === prospectId ? { ...p, revenue: projectedRevenue } : p)));
+        }
+      }
+
+      // Auto-create project
       const { data: existingProj } = await supabase.from("projects").select("id").eq("origin_prospect_id", prospectId).maybeSingle();
       if (existingProj) return;
 

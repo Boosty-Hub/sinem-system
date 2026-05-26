@@ -1,19 +1,37 @@
-import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
-import { FileText, Users, Shield, KeyRound, Settings, ArrowLeft, SlidersHorizontal, CheckSquare } from "lucide-react";
+import { NavLink, Outlet, useLocation, Link, Navigate } from "react-router-dom";
+import { FileText, Users, Shield, KeyRound, Settings, ArrowLeft, SlidersHorizontal, CheckSquare, Handshake } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 
-const configNav = [
-  { title: "General", url: "/configuracion/general", icon: SlidersHorizontal, module: "Config: General" },
-  { title: "Propuestas / Ofertas", url: "/configuracion/propuestas", icon: FileText, module: "Config: Propuestas" },
-  { title: "Campos Obligatorios", url: "/configuracion/campos", icon: CheckSquare, module: "Config: Campos Obligatorios" },
-  { title: "Usuarios", url: "/configuracion/usuarios", icon: Users, module: "Config: Usuarios" },
-  { title: "Roles", url: "/configuracion/roles", icon: Shield, module: "Config: Roles" },
-  { title: "Permisos", url: "/configuracion/permisos", icon: KeyRound, module: "Config: Permisos" },
-];
+const CONFIG_MODULES = ["Config: General", "Config: Propuestas", "Config: Campos Obligatorios", "Config: Usuarios", "Config: Roles", "Config: Permisos"];
 
 const Configuracion = () => {
   const location = useLocation();
-  const { canView } = usePermissions();
+  const { canView, loading } = usePermissions();
+
+  if (loading) return null;
+
+  const canViewAnyConfig = CONFIG_MODULES.some(m => canView(m));
+  const canViewProv = canView("Proveedores");
+
+  if (!canViewAnyConfig && !canViewProv) {
+    return <Navigate to="/" replace />;
+  }
+
+  // Redirect /configuracion index → first accessible page
+  if (location.pathname === "/configuracion" || location.pathname === "/configuracion/") {
+    if (canViewAnyConfig) return <Navigate to="/configuracion/propuestas" replace />;
+    return <Navigate to="/configuracion/proveedores" replace />;
+  }
+
+  const configNav = [
+    { title: "General", url: "/configuracion/general", icon: SlidersHorizontal, module: "Config: General" },
+    { title: "Propuestas / Ofertas", url: "/configuracion/propuestas", icon: FileText, module: "Config: Propuestas" },
+    { title: "Proveedores", url: "/configuracion/proveedores", icon: Handshake, module: "Proveedores" },
+    { title: "Campos Obligatorios", url: "/configuracion/campos", icon: CheckSquare, module: "Config: Campos Obligatorios" },
+    { title: "Usuarios", url: "/configuracion/usuarios", icon: Users, module: "Config: Usuarios" },
+    { title: "Roles", url: "/configuracion/roles", icon: Shield, module: "Config: Roles" },
+    { title: "Permisos", url: "/configuracion/permisos", icon: KeyRound, module: "Config: Permisos" },
+  ].filter((item) => canView(item.module));
 
   return (
     <div className="flex min-h-screen">
@@ -31,7 +49,7 @@ const Configuracion = () => {
           <p className="text-[11px] text-sidebar-foreground/50 mt-1">Ajustes del sistema</p>
         </div>
         <nav className="p-2 space-y-0.5 flex-1">
-          {configNav.filter((item) => canView(item.module)).map((item) => {
+          {configNav.map((item) => {
             const isActive = location.pathname === item.url ||
               (item.url === "/configuracion/propuestas" && location.pathname === "/configuracion");
             return (

@@ -89,7 +89,7 @@ const AppSidebar = () => {
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {["Config: General", "Config: Propuestas", "Config: Campos Obligatorios", "Config: Usuarios", "Config: Roles", "Config: Permisos"].some(m => canView(m)) && (
+          {["Config: General", "Config: Propuestas", "Config: Campos Obligatorios", "Config: Usuarios", "Config: Roles", "Config: Permisos", "Proveedores"].some(m => canView(m)) && (
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild

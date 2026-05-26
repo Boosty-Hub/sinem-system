@@ -23,6 +23,7 @@ import ConfigUsuarios from "./pages/configuracion/ConfigUsuarios";
 import ConfigRoles from "./pages/configuracion/ConfigRoles";
 import ConfigPermisos from "./pages/configuracion/ConfigPermisos";
 import ConfigGeneral from "./pages/configuracion/ConfigGeneral";
+import ConfigProveedores from "./pages/configuracion/ConfigProveedores";
 import ConfigCamposObligatorios from "./pages/configuracion/ConfigCamposObligatorios";
 import OfertaPublica from "./pages/OfertaPublica";
 import Tareas from "./pages/Tareas";
@@ -62,13 +63,14 @@ const App = () => (
                 <Route path="/forecast" element={<Navigate to="/analitica" replace />} />
                 <Route path="/analitica" element={<ProtectedModule module="Analítica"><Analitica /></ProtectedModule>} />
                 <Route path="/perfil" element={<Perfil />} />
-                <Route path="/configuracion" element={<ProtectedModule module={["Config: General","Config: Propuestas","Config: Campos Obligatorios","Config: Usuarios","Config: Roles","Config: Permisos"]}><Configuracion /></ProtectedModule>}>
+                <Route path="/configuracion" element={<ProtectedModule module={["Config: General","Config: Propuestas","Config: Campos Obligatorios","Config: Usuarios","Config: Roles","Config: Permisos","Proveedores"]}><Configuracion /></ProtectedModule>}>
                   <Route index element={<Navigate to="propuestas" replace />} />
                   <Route path="propuestas" element={<ProtectedModule module="Config: Propuestas"><ConfigPropuestas /></ProtectedModule>} />
                   <Route path="usuarios" element={<ProtectedModule module="Config: Usuarios"><ConfigUsuarios /></ProtectedModule>} />
                   <Route path="roles" element={<ProtectedModule module="Config: Roles"><ConfigRoles /></ProtectedModule>} />
                   <Route path="permisos" element={<ProtectedModule module="Config: Permisos"><ConfigPermisos /></ProtectedModule>} />
                   <Route path="general" element={<ProtectedModule module="Config: General"><ConfigGeneral /></ProtectedModule>} />
+                  <Route path="proveedores" element={<ProtectedModule module="Proveedores"><ConfigProveedores /></ProtectedModule>} />
                   <Route path="campos" element={<ProtectedModule module="Config: Campos Obligatorios"><ConfigCamposObligatorios /></ProtectedModule>} />
                 </Route>
               </Route>

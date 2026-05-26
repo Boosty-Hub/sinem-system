@@ -187,7 +187,7 @@ const Tareas = () => {
       supabase.from("clients").select("id, name").order("name"),
       supabase.from("projects").select("id, name").order("name"),
       supabase.from("app_users").select("id, name, email, status").eq("status", "activo").order("name"),
-      supabase.from("prospects").select("id, code, project_name").order("code"),
+      supabase.from("prospects").select("id, code, project_name").is("deleted_at", null).order("code"),
       supabase.from("task_stages").select("*").order("position"),
     ]);
     let resolvedStages = (stagesData ?? []) as TaskStage[];

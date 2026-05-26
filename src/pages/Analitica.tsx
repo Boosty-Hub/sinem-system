@@ -121,7 +121,7 @@ const Analitica = () => {
       setLoading(true);
       const currentYear = new Date().getFullYear();
       const [{ data: prospectsData }, { data: stagesData }, { data: fyData }] = await Promise.all([
-        supabase.from("prospects").select("*"),
+        supabase.from("prospects").select("*").is("deleted_at", null),
         supabase.from("pipeline_stages").select("*").order("sort_order"),
         supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle() as any,
       ]);

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Users, FolderKanban, TrendingUp, ArrowUpRight, Building2, FileText, Loader2, DollarSign, Trophy } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { computeTimeProgress } from "@/lib/projectProgress";
 
 interface DashboardData {
   prospectsCount: number;
@@ -13,7 +14,7 @@ interface DashboardData {
   wonCount: number;
   wonValue: number;
   recentQuotations: { id: string; subject: string; client_company: string; total_usd: number; status: string }[];
-  activeProjects: { id: string; name: string; client: string; current_step: number; status: string }[];
+  activeProjects: { id: string; name: string; client: string; current_step: number; status: string; oeDate: string | null; revenueDate: string | null; progressPct: number }[];
   topClients: { id: string; name: string; industry: string; total_revenue: number; total_projects: number }[];
 }
 
@@ -63,15 +64,39 @@ const Dashboard = () => {
         { count: activeOpportunitiesCount },
         { data: prospectsForKpis },
       ] = await Promise.all([
-        supabase.from("prospects").select("*", { count: "exact", head: true }),
+        supabase.from("prospects").select("*", { count: "exact", head: true }).is("deleted_at", null),
         supabase.from("quotations").select("id, subject, client_company, total_usd, status, created_at").order("created_at", { ascending: false }).limit(5),
         supabase.from("clients").select("id, name, industry, total_revenue, total_projects").order("total_revenue", { ascending: false }).limit(5),
-        supabase.from("projects").select("id, name, client, current_step, status, value"),
-        supabase.from("prospects").select("*", { count: "exact", head: true }).in("status", ["prospecto", "propuesta", "seguimiento"]),
-        supabase.from("prospects").select("status, price_usd"),
+        supabase.from("projects").select("id, name, client, current_step, status, value, origin_prospect_id"),
+        supabase.from("prospects").select("*", { count: "exact", head: true }).is("deleted_at", null).in("status", ["prospecto", "propuesta", "seguimiento"]),
+        supabase.from("prospects").select("status, price_usd").is("deleted_at", null),
       ]);
 
-      const activeProjects = (projects ?? []).filter((p) => p.status === "activo");
+      const activeProjectsRaw = (projects ?? []).filter((p) => p.status === "activo");
+
+      // Resolve dates from linked prospects for progress calculation
+      const prospectIds = activeProjectsRaw.map((p: any) => p.origin_prospect_id).filter(Boolean) as string[];
+      let prospectDates: Record<string, { estimated_oe: string | null; revenue: string | null }> = {};
+      if (prospectIds.length > 0) {
+        const { data: prospectsData } = await supabase
+          .from("prospects")
+          .select("id, estimated_oe, revenue")
+          .in("id", prospectIds);
+        (prospectsData ?? []).forEach((p: any) => {
+          prospectDates[p.id] = { estimated_oe: p.estimated_oe, revenue: p.revenue };
+        });
+      }
+
+      const activeProjects = activeProjectsRaw.map((p: any) => {
+        const dates = p.origin_prospect_id ? prospectDates[p.origin_prospect_id] : null;
+        const prog = computeTimeProgress(dates?.estimated_oe, dates?.revenue);
+        return {
+          ...p,
+          oeDate: dates?.estimated_oe ?? null,
+          revenueDate: dates?.revenue ?? null,
+          progressPct: prog.pct,
+        };
+      });
       const openProspects = (prospectsForKpis ?? []).filter((p) => ["prospecto", "propuesta", "seguimiento"].includes(p.status));
       const wonProspects = (prospectsForKpis ?? []).filter((p) => ["ganado", "facturada", "cerrados"].includes(p.status));
       const pipelineValue = openProspects.reduce((sum, p) => sum + (Number(p.price_usd) || 0), 0);
@@ -198,12 +223,16 @@ const Dashboard = () => {
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: `${(proj.current_step / 11) * 100}%` }}
+                      className={`h-full rounded-full transition-all ${
+                        proj.progressPct >= 100 ? "bg-emerald-500" :
+                        proj.progressPct >= 90 ? "bg-amber-500" :
+                        (proj.oeDate && proj.revenueDate) ? "bg-primary" : "bg-muted-foreground/40"
+                      }`}
+                      style={{ width: `${proj.progressPct}%` }}
                     />
                   </div>
                   <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-                    Paso {proj.current_step}/11
+                    {(proj.oeDate && proj.revenueDate) ? `${proj.progressPct}%` : `Paso ${proj.current_step}/11`}
                   </span>
                 </div>
               </Link>

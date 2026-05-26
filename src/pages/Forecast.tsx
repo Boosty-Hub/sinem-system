@@ -44,7 +44,7 @@ const Forecast = () => {
       setYear(currentYear);
 
       const [{ data: prospectsData }, { data: fyData }] = await Promise.all([
-        supabase.from("prospects").select("*"),
+        supabase.from("prospects").select("*").is("deleted_at", null),
         supabase.from("forecast_years").select("*").eq("year", currentYear).maybeSingle(),
       ]);
 
