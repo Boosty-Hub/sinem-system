@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Save, User2, Mail, Phone, Loader2, Bell, BellOff, PenLine, Trash2, Upload } from "lucide-react";
+import { Camera, Save, User2, Mail, Phone, Loader2, Bell, BellOff, PenLine, Trash2, Upload, Lock, KeyRound, Eye, EyeOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 const getInitials = (name: string) =>
@@ -39,6 +39,16 @@ const Perfil = () => {
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [savingSignature, setSavingSignature] = useState(false);
   const signatureInputRef = useRef<HTMLInputElement>(null);
+
+  // Security state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [pin, setPin] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
 
   useEffect(() => {
     if (!authUser?.email) return;
@@ -183,6 +193,63 @@ const Perfil = () => {
       toast({ title: "Preferencias de notificaciones guardadas" });
     }
     setSavingNotif(false);
+  };
+
+  const handlePasswordChange = async () => {
+    if (!authUser?.email) return;
+    if (!currentPassword) {
+      toast({ title: "Ingresa tu contraseña actual", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: "La nueva contraseña debe tener al menos 6 caracteres", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Las contraseñas no coinciden", variant: "destructive" });
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: authUser.email,
+        password: currentPassword,
+      });
+      if (verifyError) {
+        toast({ title: "Contraseña actual incorrecta", variant: "destructive" });
+        return;
+      }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({ title: "Contraseña actualizada correctamente" });
+    } catch (err: any) {
+      toast({ title: "Error al actualizar contraseña", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleSavePin = async () => {
+    if (!appUserId) return;
+    if (pin && !/^\d{4}$/.test(pin)) {
+      toast({ title: "El PIN debe ser exactamente 4 dígitos numéricos", variant: "destructive" });
+      return;
+    }
+    setSavingPin(true);
+    const { error } = await supabase
+      .from("app_users")
+      .update({ pin_code: pin || null } as any)
+      .eq("id", appUserId);
+    if (error) {
+      toast({ title: "Error al guardar el PIN", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: pin ? "PIN guardado correctamente" : "PIN eliminado" });
+      if (!pin) setPin("");
+    }
+    setSavingPin(false);
   };
 
   if (loading) {
@@ -342,6 +409,114 @@ const Perfil = () => {
           />
         </div>
       )}
+
+      {/* Security — available to all roles */}
+      <div className="stat-card p-6 space-y-6">
+        <div>
+          <h3 className="font-semibold text-sm flex items-center gap-1.5">
+            <Lock className="h-3.5 w-3.5 text-muted-foreground" /> Seguridad
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">Actualiza tu contraseña y gestiona tu PIN de acceso rápido.</p>
+        </div>
+
+        {/* Password change */}
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-foreground/80">Cambiar Contraseña</p>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Contraseña actual</Label>
+            <div className="relative">
+              <Input
+                type={showCurrentPw ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPw((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Nueva contraseña</Label>
+            <div className="relative">
+              <Input
+                type={showNewPw ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPw((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Confirmar nueva contraseña</Label>
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Repite la nueva contraseña"
+            />
+            {confirmPassword && newPassword !== confirmPassword && (
+              <p className="text-[11px] text-destructive">Las contraseñas no coinciden</p>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <Button
+              onClick={handlePasswordChange}
+              disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
+              size="sm"
+            >
+              {savingPassword ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Lock className="h-4 w-4 mr-1" />}
+              Actualizar contraseña
+            </Button>
+          </div>
+        </div>
+
+        <div className="border-t border-border/40 pt-5 space-y-3">
+          <p className="text-xs font-medium text-foreground/80 flex items-center gap-1.5">
+            <KeyRound className="h-3.5 w-3.5 text-muted-foreground" /> PIN de acceso rápido
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            Permite iniciar sesión usando solo 4 dígitos en la pantalla de login. Deja el campo vacío para eliminar el PIN actual.
+          </p>
+          <div className="flex items-center gap-3">
+            <Input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="_ _ _ _"
+              className="w-28 text-center tracking-widest text-lg font-mono"
+            />
+            <Button
+              onClick={handleSavePin}
+              disabled={savingPin}
+              variant="outline"
+              size="sm"
+            >
+              {savingPin ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              {pin ? "Guardar PIN" : "Eliminar PIN"}
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Notification Preferences */}
       <div className="stat-card p-6 space-y-5">
