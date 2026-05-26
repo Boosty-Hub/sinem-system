@@ -68,6 +68,7 @@ const Perfil = () => {
         setNotifEmail(data.notif_email ?? false);
         setSignatureUrl((data as any).signature_image_url ?? "");
         setSignaturePreview((data as any).signature_image_url ?? "");
+        setPin((data as any).pin_code ?? "");
         // Fetch role name
         if (data.role_id) {
           const { data: roleRow } = await supabase
