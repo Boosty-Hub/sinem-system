@@ -146,8 +146,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [historyOpen, setHistoryOpen] = useState(false);
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
   const [showVersionPrompt, setShowVersionPrompt] = useState(false);
-  const [showSignatureWarning, setShowSignatureWarning] = useState(false);
-  const [pendingApproval, setPendingApproval] = useState<(() => void) | null>(null);
+  const [currentUserHasSignature, setCurrentUserHasSignature] = useState<boolean | null>(null);
   const [showUndoApproval, setShowUndoApproval] = useState(false);
   const [approverDisplayName, setApproverDisplayName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,11 +184,17 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [proposalTexts, setProposalTexts] = useState<QuotationProposalTexts>({});
   const [textsExpanded, setTextsExpanded] = useState(false);
 
-  // Resolve current auth user to app_users id
+  // Resolve current auth user to app_users id + check if they have a signature (required to approve)
   useEffect(() => {
     if (!authUser) return;
-    supabase.from("app_users").select("id").eq("auth_user_id", authUser.id).maybeSingle()
-      .then(({ data }) => setCurrentAppUserId(data?.id ?? null));
+    supabase.from("app_users")
+      .select("id, signature_image_url")
+      .eq("auth_user_id", authUser.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setCurrentAppUserId(data?.id ?? null);
+        setCurrentUserHasSignature(!!((data as any)?.signature_image_url));
+      });
   }, [authUser]);
 
   // Resolve approver name for display when quotation has an approved_by UUID
@@ -1710,15 +1715,17 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     {quotation.approvedAt && ` el ${quotation.approvedAt}`}
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 text-xs h-7 border-green-300 text-green-800 hover:bg-green-100 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900/30"
-                  onClick={() => setShowUndoApproval(true)}
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" /> Deshacer
-                </Button>
+                {currentUserHasSignature && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 text-xs h-7 border-green-300 text-green-800 hover:bg-green-100 dark:text-green-300 dark:border-green-700 dark:hover:bg-green-900/30"
+                    onClick={() => setShowUndoApproval(true)}
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" /> Deshacer
+                  </Button>
+                )}
               </div>
             )}
             {quotation.approvalStatus === "rejected" && (
@@ -1732,15 +1739,17 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   </p>
                   {quotation.approvalNote && <p className="text-xs text-red-600 dark:text-red-400 mt-1">Motivo: {quotation.approvalNote}</p>}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 text-xs h-7 border-red-300 text-red-800 hover:bg-red-100 dark:text-red-300 dark:border-red-700 dark:hover:bg-red-900/30"
-                  onClick={() => setShowUndoApproval(true)}
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" /> Deshacer
-                </Button>
+                {currentUserHasSignature && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 text-xs h-7 border-red-300 text-red-800 hover:bg-red-100 dark:text-red-300 dark:border-red-700 dark:hover:bg-red-900/30"
+                    onClick={() => setShowUndoApproval(true)}
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" /> Deshacer
+                  </Button>
+                )}
               </div>
             )}
             {quotation.approvalStatus === "pending" && (
@@ -1757,23 +1766,15 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="bg-sinem-success hover:bg-sinem-success/90"
-                    onClick={async () => {
-                      if (!onSave) return;
-                      let hasSignature = false;
-                      if (authUser?.id) {
-                        const { data: appUserRow } = await supabase
-                          .from("app_users")
-                          .select("signature_image_url")
-                          .eq("auth_user_id", authUser.id)
-                          .maybeSingle();
-                        hasSignature = !!((appUserRow as any)?.signature_image_url);
-                      }
-                      const doApprove = () => {
+                {/* Only users with a signature configured can approve/reject */}
+                {currentUserHasSignature ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-sinem-success hover:bg-sinem-success/90"
+                      onClick={() => {
+                        if (!onSave) return;
                         onSave({
                           ...quotation,
                           status: "aprobada",
@@ -1782,38 +1783,39 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                           approvedAt: new Date().toISOString().split("T")[0],
                         });
                         onOpenChange(false);
-                      };
-                      if (!hasSignature && authUser?.id) {
-                        setPendingApproval(() => doApprove);
-                        setShowSignatureWarning(true);
-                        return;
-                      }
-                      doApprove();
-                    }}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-1" /> Aprobar
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => {
-                      const note = prompt("Motivo del rechazo (opcional):");
-                      if (note === null) return;
-                      if (!onSave) return;
-                      onSave({
-                        ...quotation,
-                        approvalStatus: "rejected",
-                        approvedBy: authUser?.id ?? undefined,
-                        approvedAt: new Date().toISOString().split("T")[0],
-                        approvalNote: note || undefined,
-                      });
-                      onOpenChange(false);
-                    }}
-                  >
-                    <XCircle className="h-4 w-4 mr-1" /> Rechazar
-                  </Button>
-                </div>
+                      }}
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-1" /> Aprobar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        const note = prompt("Motivo del rechazo (opcional):");
+                        if (note === null) return;
+                        if (!onSave) return;
+                        onSave({
+                          ...quotation,
+                          approvalStatus: "rejected",
+                          approvedBy: authUser?.id ?? undefined,
+                          approvedAt: new Date().toISOString().split("T")[0],
+                          approvalNote: note || undefined,
+                        });
+                        onOpenChange(false);
+                      }}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" /> Rechazar
+                    </Button>
+                  </div>
+                ) : currentUserHasSignature === false ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    Solo usuarios con{" "}
+                    <Link to="/perfil" className="underline hover:text-foreground">firma digital configurada</Link>
+                    {" "}pueden aprobar o rechazar cotizaciones.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
@@ -1855,41 +1857,6 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Signature warning — shown when approver has no signature configured */}
-        <AlertDialog open={showSignatureWarning} onOpenChange={setShowSignatureWarning}>
-          <AlertDialogContent className="max-w-md">
-            <AlertDialogHeader>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <AlertDialogTitle>Firma digital no configurada</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Tu perfil no tiene una firma digital cargada. La firma del aprobador aparece en la URL pública de la cotización.
-                  </AlertDialogDescription>
-                </div>
-              </div>
-            </AlertDialogHeader>
-            <p className="text-sm text-muted-foreground px-1 pb-1">
-              Ve a <strong>Mi Perfil</strong> y sube tu firma en la sección <strong>"Firma Digital"</strong> para que aparezca en las cotizaciones que apruebes. Mientras tanto, se usará la firma por defecto del sistema.
-            </p>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setPendingApproval(null)}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-sinem-success hover:bg-sinem-success/90"
-                onClick={() => {
-                  pendingApproval?.();
-                  setPendingApproval(null);
-                  setShowSignatureWarning(false);
-                }}
-              >
-                Aprobar de todas formas
-              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
