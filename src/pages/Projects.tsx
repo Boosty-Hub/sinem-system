@@ -14,6 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@/lib/AuthContext";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import { useRequiredFields } from "@/hooks/useRequiredFields";
@@ -81,10 +82,12 @@ const Projects = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { fields: reqFields } = useRequiredFields("proyecto");
-  const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn } = usePermissions();
+  const { user } = useAuth();
+  const { canCreate: canCreateFn, canEdit: canEditFn, canDelete: canDeleteFn, roleName } = usePermissions();
   const canCreateProj = canCreateFn("Proyectos");
   const canEditProj = canEditFn("Proyectos");
   const canDeleteProj = canDeleteFn("Proyectos");
+  const canChangeProjectStatus = roleName === "Administrador" || user?.email === "isaias.infante@sinem.energy";
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [allProjects, setAllProjects] = useState<ProjectRow[]>([]);
@@ -623,7 +626,7 @@ const Projects = () => {
             </div>
             <div>
               <Label>Estado</Label>
-              <Select value={form.status} onValueChange={(v) => u("status", v)}>
+              <Select value={form.status} onValueChange={(v) => u("status", v)} disabled={!canChangeProjectStatus}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="activo">Activo</SelectItem>
@@ -631,6 +634,9 @@ const Projects = () => {
                   <SelectItem value="pausado">Pausado</SelectItem>
                 </SelectContent>
               </Select>
+              {!canChangeProjectStatus && (
+                <p className="text-xs text-muted-foreground mt-1">Solo administradores y el Gerente de Operaciones pueden cambiar el estado.</p>
+              )}
             </div>
             <div>
               <Label>Fecha de Inicio</Label>

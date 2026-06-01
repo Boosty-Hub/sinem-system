@@ -40,6 +40,96 @@ const FOOTER_STYLE: React.CSSProperties = {
   lineHeight: "1.4",
 };
 
+// ── Bilingual labels ────────────────────────────────────────────────────────
+const LABELS = {
+  es: {
+    page: "Pág.",
+    downloadPDF: "Descargar PDF",
+    sincerely: "Atentamente,",
+    pendingSignature: "Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.",
+    subject: "Asunto:",
+    from: "De:",
+    to: "Para:",
+    offerNo: "No. de oferta:",
+    dear: (gender: string) => gender === "Sr." ? "Estimado" : "Estimada",
+    tableDescription: "Descripción",
+    tableQty: "Cant.",
+    tableUnitPrice: "P. Unit.",
+    tableTotal: "Total",
+    subtotal: "Subtotal:",
+    itbis: (pct: number) => `ITBIS (${pct}%):`,
+    groupTotal: "Total:",
+    grandTotal: "Total General:",
+    exchangeRate: (rate: number, currency: string) => `Tasa de cambio aplicada: 1 USD = ${rate} ${currency}`,
+    notes: "Notas:",
+    commercialTerms: "Condiciones Comerciales",
+    currencyLabel: "Moneda:",
+    currencyName: { USD: "Dólares Americanos (USD)", DOP: "Pesos Dominicanos (DOP)", EUR: "Euros (EUR)" } as Record<string, string>,
+    paymentTerms: "Forma de Pago:",
+    deliveryTerms: "Condiciones de Entrega:",
+    deliveryTime: "Tiempo de Entrega:",
+    weeks: "semanas",
+    offerValidity: "Validez de la Oferta:",
+    days: "días",
+    deliveryLocation: "Lugar de Entrega:",
+    specialConsiderations: "Consideraciones Especiales:",
+    warranty: "Garantía",
+    responsibility: "Responsabilidad",
+    risks: "Riesgos",
+    installation: "Instalación",
+    proposalValidity: "Vigencia de la propuesta",
+    validityText: (days: number) => `La presente oferta tiene una vigencia de ${days} días a partir de la fecha de emisión.`,
+    returnsAndCancellations: "Devoluciones y/o cancelaciones",
+    termsAndConditions: "Términos y Condiciones",
+    purchaseOrderIntro: "En caso de ser favorecidos con su pedido, les agradeceremos emitir la orden de compra a nombre de:",
+    attention: (name: string) => `Con atención a ${name}`,
+    phone: "Teléfono:",
+  },
+  en: {
+    page: "Page",
+    downloadPDF: "Download PDF",
+    sincerely: "Sincerely,",
+    pendingSignature: "This quotation is pending internal approval. The authorized signature will be displayed once approved.",
+    subject: "Subject:",
+    from: "From:",
+    to: "To:",
+    offerNo: "Offer No.:",
+    dear: (_gender: string) => "Dear",
+    tableDescription: "Description",
+    tableQty: "Qty.",
+    tableUnitPrice: "Unit P.",
+    tableTotal: "Total",
+    subtotal: "Subtotal:",
+    itbis: (pct: number) => `Tax (${pct}%):`,
+    groupTotal: "Total:",
+    grandTotal: "Grand Total:",
+    exchangeRate: (rate: number, currency: string) => `Exchange rate applied: 1 USD = ${rate} ${currency}`,
+    notes: "Notes:",
+    commercialTerms: "Commercial Terms",
+    currencyLabel: "Currency:",
+    currencyName: { USD: "US Dollars (USD)", DOP: "Dominican Pesos (DOP)", EUR: "Euros (EUR)" } as Record<string, string>,
+    paymentTerms: "Payment Terms:",
+    deliveryTerms: "Delivery Terms:",
+    deliveryTime: "Delivery Time:",
+    weeks: "weeks",
+    offerValidity: "Offer Validity:",
+    days: "days",
+    deliveryLocation: "Delivery Location:",
+    specialConsiderations: "Special Considerations:",
+    warranty: "Warranty",
+    responsibility: "Responsibility",
+    risks: "Risks",
+    installation: "Installation",
+    proposalValidity: "Proposal Validity",
+    validityText: (days: number) => `This offer is valid for ${days} days from the date of issue.`,
+    returnsAndCancellations: "Returns and/or Cancellations",
+    termsAndConditions: "Terms and Conditions",
+    purchaseOrderIntro: "Should you favor us with your order, we would appreciate issuing the purchase order in the name of:",
+    attention: (name: string) => `Attention: ${name}`,
+    phone: "Phone:",
+  },
+} as const;
+
 const dbToSettings = (row: any): ProposalSettings => ({
   companyName: row.company_name ?? "",
   companyAddress: row.company_address ?? "",
@@ -62,12 +152,26 @@ const dbToSettings = (row: any): ProposalSettings => ({
   coverIntroText: row.cover_intro_text ?? "",
   coverPartnerText: row.cover_partner_text ?? "",
   coverClosingText: row.cover_closing_text ?? "",
+  footerText: row.footer_text ?? "",
+  greetingTextEn: row.greeting_text_en ?? "",
+  warrantyTextEn: row.warranty_text_en ?? "",
+  responsibilityTextEn: row.responsibility_text_en ?? "",
+  risksTextEn: row.risks_text_en ?? "",
+  installationTextEn: row.installation_text_en ?? "",
+  validityTextEn: row.validity_text_en ?? "",
+  returnsTextEn: row.returns_text_en ?? "",
+  legalClausesEn: row.legal_clauses_en ?? "",
+  purchaseOrderInfoEn: row.purchase_order_info_en ?? "",
+  closingTextEn: row.closing_text_en ?? "",
+  coverIntroTextEn: row.cover_intro_text_en ?? "",
+  coverPartnerTextEn: row.cover_partner_text_en ?? "",
+  coverClosingTextEn: row.cover_closing_text_en ?? "",
+  footerTextEn: row.footer_text_en ?? "",
   signatureName: row.signature_name ?? "",
   signatureTitle: row.signature_title ?? "",
   signaturePhone: row.signature_phone ?? "",
   signatureEmail: row.signature_email ?? "",
   signatureImageUrl: row.signature_image_url ?? "",
-  footerText: row.footer_text ?? "",
 });
 
 const OfertaPublica = () => {
@@ -148,6 +252,7 @@ const OfertaPublica = () => {
           proposalTexts: (qRow as any).proposal_texts ?? undefined,
           distributedCosts: ((qRow as any).distributed_costs ?? []) as any,
           showItemSubtotals: (qRow as any).show_item_subtotals ?? false,
+          language: ((qRow as any).language ?? 'es') as 'es' | 'en',
         });
       }
 
@@ -183,19 +288,31 @@ const OfertaPublica = () => {
   const sigEmail = (isApproved && approver?.email)  ? approver.email : s?.signatureEmail ?? "";
   const sigImageUrl = (isApproved && approver?.signatureImageUrl) ? approver.signatureImageUrl : s?.signatureImageUrl ?? "";
 
-  // Merge per-quotation text overrides with global proposal settings
+  const lang = (quotation?.language ?? 'es') as 'es' | 'en';
+
+  // Merge per-quotation text overrides with global proposal settings (EN or ES based on language)
   const pt = quotation?.proposalTexts;
+  // Helper: for a given text, use per-quotation override first, then EN default if language=en, then ES default
+  const txt = (override: string | undefined, enDefault: string, esDefault: string) =>
+    override || (lang === 'en' ? enDefault || esDefault : esDefault);
+
   const eff: ProposalSettings | null = s ? {
     ...s,
-    greetingText: pt?.greetingText || s.greetingText,
-    warrantyText: pt?.warrantyText || s.warrantyText,
-    responsibilityText: pt?.responsibilityText || s.responsibilityText,
-    risksText: pt?.risksText || s.risksText,
-    installationText: pt?.installationText || s.installationText,
-    validityText: pt?.validityText || s.validityText,
-    returnsText: pt?.returnsText || s.returnsText,
-    legalClauses: pt?.legalClauses || s.legalClauses,
-    closingText: pt?.closingText || s.closingText,
+    greetingText: txt(pt?.greetingText, s.greetingTextEn, s.greetingText),
+    warrantyText: txt(pt?.warrantyText, s.warrantyTextEn, s.warrantyText),
+    responsibilityText: txt(pt?.responsibilityText, s.responsibilityTextEn, s.responsibilityText),
+    risksText: txt(pt?.risksText, s.risksTextEn, s.risksText),
+    installationText: txt(pt?.installationText, s.installationTextEn, s.installationText),
+    validityText: txt(pt?.validityText, s.validityTextEn, s.validityText),
+    returnsText: txt(pt?.returnsText, s.returnsTextEn, s.returnsText),
+    legalClauses: txt(pt?.legalClauses, s.legalClausesEn, s.legalClauses),
+    closingText: txt(pt?.closingText, s.closingTextEn, s.closingText),
+    // Cover page texts (no per-quotation override)
+    coverIntroText: lang === 'en' ? (s.coverIntroTextEn || s.coverIntroText) : s.coverIntroText,
+    coverPartnerText: lang === 'en' ? (s.coverPartnerTextEn || s.coverPartnerText) : s.coverPartnerText,
+    coverClosingText: lang === 'en' ? (s.coverClosingTextEn || s.coverClosingText) : s.coverClosingText,
+    purchaseOrderInfo: lang === 'en' ? (s.purchaseOrderInfoEn || s.purchaseOrderInfo) : s.purchaseOrderInfo,
+    footerText: lang === 'en' ? (s.footerTextEn || s.footerText) : s.footerText,
   } : null;
   const clientSubtotal = quotation?.subtotalUSD ?? 0;
   const clientItbis = quotation?.applyItbis ? Math.round(clientSubtotal * (quotation?.itbisPercent ?? 18) / 100 * 100) / 100 : 0;
@@ -212,6 +329,7 @@ const OfertaPublica = () => {
   };
   const qPartner = quotation?.partner ?? "Siemens";
   const replacePartner = (text: string) => text.replace(/SIEMENS|Siemens|siemens/g, qPartner);
+  const L = LABELS[lang];
 
   const [searchParams] = useSearchParams();
   const autoDownload = searchParams.get("download") === "true";
@@ -389,6 +507,9 @@ const OfertaPublica = () => {
 
   const formatDateLong = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
+    if (lang === 'en') {
+      return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    }
     const day = d.getDate();
     const month = d.toLocaleDateString("es-DO", { month: "long" });
     const monthCap = month.charAt(0).toUpperCase() + month.slice(1);
@@ -416,7 +537,7 @@ const OfertaPublica = () => {
       <div style={{ textAlign: "right", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
         <p style={{ margin: 0, fontWeight: 600, fontSize: "12px", color: "#333" }}>{quotation.code}</p>
         <p style={{ margin: "2px 0 0 0" }}>{formatDateShort(quotation.createdAt)}</p>
-        <p style={{ margin: "2px 0 0 0", color: "#999" }}>Pág. {pageNum}</p>
+        <p style={{ margin: "2px 0 0 0", color: "#999" }}>{L.page} {pageNum}</p>
       </div>
     </div>
   );
@@ -424,7 +545,7 @@ const OfertaPublica = () => {
   const PageFooter = () => (
     <div className="pdf-footer" style={FOOTER_STYLE}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "20px" }}>
-        <div style={{ whiteSpace: "pre-line", flex: 1 }}>{s.footerText}</div>
+        <div style={{ whiteSpace: "pre-line", flex: 1 }}>{eff?.footerText ?? s.footerText}</div>
         <div style={{ fontSize: "10px", color: "#bbb", whiteSpace: "nowrap" }}>
           {s.companyWebsite}
         </div>
@@ -434,7 +555,7 @@ const OfertaPublica = () => {
 
   const SignatureBlock = () => (
     <div style={{ marginBottom: "16px" }}>
-      <p style={{ margin: "0 0 8px 0", fontSize: "13px" }}>Atentamente,</p>
+      <p style={{ margin: "0 0 8px 0", fontSize: "13px" }}>{L.sincerely}</p>
       {isApproved ? (
         <div>
           {sigImageUrl && (
@@ -470,7 +591,7 @@ const OfertaPublica = () => {
         </div>
       ) : (
         <div style={{ padding: "15px 0", color: "#999", fontSize: "12px", fontStyle: "italic" }}>
-          Esta cotización está pendiente de aprobación interna. La firma autorizada se mostrará una vez aprobada.
+          {L.pendingSignature}
         </div>
       )}
     </div>
@@ -486,7 +607,7 @@ const OfertaPublica = () => {
             {quotation.code} — {quotation.client.company}
           </span>
           <Button onClick={handleDownloadPDF} size="sm">
-            <Download className="h-4 w-4 mr-2" /> Descargar PDF
+            <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
           </Button>
         </div>
       </div>
@@ -507,26 +628,26 @@ const OfertaPublica = () => {
           {/* Info block */}
           <div style={{ textAlign: "right", marginTop: "30px", marginBottom: "30px", fontSize: "13px", lineHeight: "1.8" }}>
             <p style={{ margin: 0 }}>{formatDateLong(quotation.createdAt)}</p>
-            <p style={{ margin: 0 }}>Asunto: {quotation.subject}</p>
-            <p style={{ margin: 0 }}>De: {sigName}</p>
-            <p style={{ margin: 0 }}>Para: {quotation.client.attention}</p>
-            <p style={{ margin: 0 }}>No. de oferta: {quotation.code}</p>
+            <p style={{ margin: 0 }}>{L.subject} {quotation.subject}</p>
+            <p style={{ margin: 0 }}>{L.from} {sigName}</p>
+            <p style={{ margin: 0 }}>{L.to} {quotation.client.attention}</p>
+            <p style={{ margin: 0 }}>{L.offerNo} {quotation.code}</p>
           </div>
 
           <p style={{ margin: "0 0 28px 0", fontSize: "13px" }}>
-            {quotation.client.gender === "Sr." ? "Estimado" : "Estimada"} {quotation.client.attention}:
+            {L.dear(quotation.client.gender ?? "Sra.")} {quotation.client.attention}:
           </p>
 
           <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
-            {replacePartner(s.coverIntroText)}
+            {replacePartner(eff?.coverIntroText ?? s.coverIntroText)}
           </p>
           {(quotation.showPartnerText ?? true) && (
             <p style={{ margin: "0 0 22px 0", fontSize: "13px", textAlign: "justify" }}>
-              {replacePartner(s.coverPartnerText)}
+              {replacePartner(eff?.coverPartnerText ?? s.coverPartnerText)}
             </p>
           )}
           <p style={{ margin: "0 0 28px 0", fontSize: "13px", textAlign: "justify" }}>
-            {s.coverClosingText}
+            {eff?.coverClosingText ?? s.coverClosingText}
           </p>
 
           <div className="pdf-no-break">
@@ -549,10 +670,10 @@ const OfertaPublica = () => {
             <thead>
               <tr style={{ backgroundColor: "#0097A7", color: "white" }}>
                 <th style={{ padding: "9px 10px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "36px" }}>No.</th>
-                <th style={{ padding: "9px 10px", textAlign: "left", fontSize: "11px", fontWeight: 600 }}>Descripción</th>
-                <th style={{ padding: "9px 10px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "50px" }}>Cant.</th>
-                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>P. Unit. {qCurrency}</th>
-                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>Total {qCurrency}</th>
+                <th style={{ padding: "9px 10px", textAlign: "left", fontSize: "11px", fontWeight: 600 }}>{L.tableDescription}</th>
+                <th style={{ padding: "9px 10px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "50px" }}>{L.tableQty}</th>
+                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>{L.tableUnitPrice} {qCurrency}</th>
+                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>{L.tableTotal} {qCurrency}</th>
               </tr>
             </thead>
             <tbody>
@@ -560,7 +681,7 @@ const OfertaPublica = () => {
                 const items = quotation?.lineItems ?? [];
                 if (!quotation?.showItemSubtotals) {
                   return items.map((item, i) => (
-                    <tr key={`r-${item.id}`} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
+                    <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
                       <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
                       <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                       <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
@@ -601,7 +722,7 @@ const OfertaPublica = () => {
                   if (run.grp === undefined) {
                     const solo = run as Solo;
                     allRows.push(
-                      <tr key={`r-${solo.item.id}`} style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: solo.globalIdx % 2 === 0 ? "#fafafa" : "white" }}>
+                      <tr key={`r-${solo.item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: solo.globalIdx % 2 === 0 ? "#fafafa" : "white" }}>
                         <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{solo.globalIdx + 1}</td>
                         <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
                         <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{solo.item.quantity}</td>
@@ -614,7 +735,7 @@ const OfertaPublica = () => {
                     r.items.forEach((item, j) => {
                       const rowIdx = r.startGlobalIdx + j;
                       allRows.push(
-                        <tr key={`r-${item.id}`} style={{ borderBottom: "1px solid #f0f0f0", backgroundColor: rowIdx % 2 === 0 ? "#fafafa" : "white" }}>
+                        <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #f0f0f0", backgroundColor: rowIdx % 2 === 0 ? "#fafafa" : "white" }}>
                           <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{rowIdx + 1}</td>
                           <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                           <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
@@ -632,7 +753,7 @@ const OfertaPublica = () => {
                       allRows.push(
                         <tr key={`sub-${r.grp}-${runIdx}`} style={{ backgroundColor: "#f0f7fa" }}>
                           <td colSpan={3} />
-                          <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>Subtotal:</td>
+                          <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>{L.subtotal}</td>
                           <td style={{ padding: "4px 10px", fontSize: "11px", textAlign: "right", fontWeight: 600 }}>{fmt(groupSubtotal)}</td>
                         </tr>
                       );
@@ -640,7 +761,7 @@ const OfertaPublica = () => {
                         allRows.push(
                           <tr key={`itb-${r.grp}-${runIdx}`} style={{ backgroundColor: "#f0f7fa" }}>
                             <td colSpan={3} />
-                            <td style={{ padding: "3px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>ITBIS ({quotation.itbisPercent}%):</td>
+                            <td style={{ padding: "3px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>{L.itbis(quotation.itbisPercent)}</td>
                             <td style={{ padding: "3px 10px", fontSize: "11px", textAlign: "right" }}>{fmt(groupItbis)}</td>
                           </tr>
                         );
@@ -648,7 +769,7 @@ const OfertaPublica = () => {
                       allRows.push(
                         <tr key={`tot-${r.grp}-${runIdx}`} style={{ backgroundColor: "#dcedf3", borderBottom: "2px solid #aaccd8" }}>
                           <td colSpan={3} />
-                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>Total:</td>
+                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{L.groupTotal}</td>
                           <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{fmt(groupTotal)}</td>
                         </tr>
                       );
@@ -668,17 +789,17 @@ const OfertaPublica = () => {
             <table style={{ borderCollapse: "collapse", minWidth: "260px" }}>
               <tbody>
                 <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
-                  <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>Subtotal:</td>
+                  <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>{L.subtotal}</td>
                   <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(clientSubtotal)}</td>
                 </tr>
                 {quotation.applyItbis && (
                   <tr style={{ borderBottom: "1px solid #e5e5e5" }}>
-                    <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>ITBIS ({quotation.itbisPercent}%):</td>
+                    <td style={{ padding: "6px 12px", fontWeight: 600, fontSize: "12px" }}>{L.itbis(quotation.itbisPercent)}</td>
                     <td style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px" }}>{fmt(clientItbis)}</td>
                   </tr>
                 )}
                 <tr style={{ backgroundColor: "#0097A7" }}>
-                  <td style={{ padding: "8px 12px", fontWeight: 700, fontSize: "13px", color: "white" }}>Total General:</td>
+                  <td style={{ padding: "8px 12px", fontWeight: 700, fontSize: "13px", color: "white" }}>{L.grandTotal}</td>
                   <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, fontSize: "13px", color: "white" }}>{fmt(clientTotal)}</td>
                 </tr>
               </tbody>
@@ -686,13 +807,13 @@ const OfertaPublica = () => {
           </div>
           {qCurrency !== "USD" && !qIsOriginal && (
             <p style={{ fontSize: "10px", color: "#888", margin: "-8px 0 14px 0", textAlign: "right" }}>
-              Tasa de cambio aplicada: 1 USD = {qRate} {qCurrency}
+              {L.exchangeRate(qRate, qCurrency)}
             </p>
           )}
 
           {quotation.notes && (
             <div style={{ marginBottom: "18px", padding: "10px 14px", backgroundColor: "#f8f9fa", borderLeft: "3px solid #0097A7", borderRadius: "4px" }}>
-              <p style={{ fontWeight: 600, fontSize: "11px", color: "#555", margin: "0 0 3px 0" }}>Notas:</p>
+              <p style={{ fontWeight: 600, fontSize: "11px", color: "#555", margin: "0 0 3px 0" }}>{L.notes}</p>
               <p style={{ margin: 0, fontSize: "12px" }}>{quotation.notes}</p>
             </div>
           )}
@@ -700,17 +821,17 @@ const OfertaPublica = () => {
           {/* Condiciones Comerciales */}
           <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
             <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "8px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
-              Condiciones Comerciales
+              {L.commercialTerms}
             </h3>
             <table style={{ fontSize: "12px", borderCollapse: "collapse", width: "100%" }}>
               <tbody>
                 {[
-                  ["Moneda:", "Dólares Americanos (USD)"],
-                  ["Forma de Pago:", quotation.paymentTerms],
-                  ["Condiciones de Entrega:", quotation.deliveryTerms ?? "—"],
-                  ["Tiempo de Entrega:", [quotation.deliveryWeeksMin || quotation.deliveryWeeksMax ? `${quotation.deliveryWeeksMin}-${quotation.deliveryWeeksMax} semanas` : null, quotation.deliveryTimeNote].filter(Boolean).join(" — ") || "—"],
-                  ["Validez de la Oferta:", `${quotation.validityDays} días`],
-                  ["Lugar de Entrega:", quotation.deliveryLocation],
+                  [L.currencyLabel, L.currencyName[qCurrency] ?? qCurrency],
+                  [L.paymentTerms, quotation.paymentTerms],
+                  [L.deliveryTerms, quotation.deliveryTerms ?? "—"],
+                  [L.deliveryTime, (() => { const mn = quotation.deliveryWeeksMin; const mx = quotation.deliveryWeeksMax; const hasMin = mn != null && mn !== 0; const hasMax = mx != null && mx !== 0; const wStr = hasMin && hasMax ? `${mn}-${mx} ${L.weeks}` : hasMax ? `${mx} ${L.weeks}` : hasMin ? `${mn} ${L.weeks}` : null; return [wStr, quotation.deliveryTimeNote].filter(Boolean).join(" — ") || "—"; })()],
+                  [L.offerValidity, `${quotation.validityDays} ${L.days}`],
+                  [L.deliveryLocation, quotation.deliveryLocation],
                 ].map(([label, value]) => (
                   <tr key={label} style={{ borderBottom: "1px solid #eee" }}>
                     <td style={{ fontWeight: 600, padding: "5px 0", width: "175px", color: "#555" }}>{label}</td>
@@ -721,7 +842,7 @@ const OfertaPublica = () => {
             </table>
             {quotation.specialConsiderations && (
               <div style={{ marginTop: "10px" }}>
-                <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "4px" }}>Consideraciones Especiales:</p>
+                <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "4px" }}>{L.specialConsiderations}</p>
                 <p style={{ fontSize: "12px", whiteSpace: "pre-wrap", color: "#333" }}>{quotation.specialConsiderations}</p>
               </div>
             )}
@@ -738,10 +859,10 @@ const OfertaPublica = () => {
           <PageHeader pageNum={3} />
 
           {[
-            { title: "Garantía", text: eff?.warrantyText },
-            { title: "Responsabilidad", text: eff?.responsibilityText },
-            { title: "Riesgos", text: eff?.risksText },
-            { title: "Instalación", text: eff?.installationText },
+            { title: L.warranty, text: eff?.warrantyText },
+            { title: L.responsibility, text: eff?.responsibilityText },
+            { title: L.risks, text: eff?.risksText },
+            { title: L.installation, text: eff?.installationText },
           ].map(({ title, text }) => text ? (
             <div key={title} className="pdf-no-break" style={{ marginBottom: "14px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>{title}</h3>
@@ -750,16 +871,16 @@ const OfertaPublica = () => {
           ) : null)}
 
           <div className="pdf-no-break" style={{ marginBottom: "14px" }}>
-            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>Vigencia de la propuesta</h3>
+            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>{L.proposalValidity}</h3>
             <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>
-              La presente oferta tiene una vigencia de <strong>{quotation.validityDays} días</strong> a partir de la fecha de emisión.
+              {L.validityText(quotation.validityDays)}
               {eff?.validityText ? ` ${eff.validityText}` : ""}
             </div>
           </div>
 
           {eff?.returnsText ? (
             <div className="pdf-no-break" style={{ marginBottom: "14px" }}>
-              <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>Devoluciones y/o cancelaciones</h3>
+              <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px" }}>{L.returnsAndCancellations}</h3>
               <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{eff.returnsText}</div>
             </div>
           ) : null}
@@ -767,7 +888,7 @@ const OfertaPublica = () => {
           {eff?.legalClauses ? (
             <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "6px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
-                Términos y Condiciones
+                {L.termsAndConditions}
               </h3>
               <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.7" }}>{eff.legalClauses}</div>
             </div>
@@ -776,12 +897,12 @@ const OfertaPublica = () => {
           {/* Datos para Orden de Compra */}
           <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
             <p style={{ fontSize: "12px", margin: "0 0 8px 0", lineHeight: "1.7" }}>
-              En caso de ser favorecidos con su pedido, les agradeceremos emitir la orden de compra a nombre de:
+              {L.purchaseOrderIntro}
             </p>
-            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.8", fontWeight: 500 }}>{s.purchaseOrderInfo}</div>
+            <div style={{ fontSize: "12px", whiteSpace: "pre-line", lineHeight: "1.8", fontWeight: 500 }}>{eff?.purchaseOrderInfo ?? s.purchaseOrderInfo}</div>
             <div style={{ marginTop: "12px", fontSize: "12px", lineHeight: "1.7" }}>
-              <p style={{ margin: "0 0 2px 0" }}>Con atención a {sigName}</p>
-              <p style={{ margin: "0 0 2px 0" }}>Teléfono: {sigPhone}</p>
+              <p style={{ margin: "0 0 2px 0" }}>{L.attention(sigName)}</p>
+              <p style={{ margin: "0 0 2px 0" }}>{L.phone} {sigPhone}</p>
               <p style={{ margin: 0 }}>{sigEmail}</p>
             </div>
           </div>

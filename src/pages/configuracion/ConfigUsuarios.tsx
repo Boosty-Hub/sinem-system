@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Mail, Shield, Loader2, Eye, EyeOff, Pencil, KeyRound } from "lucide-react";
+import { Search, Plus, Mail, Shield, Loader2, Eye, EyeOff, Pencil, KeyRound, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@/lib/AuthContext";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const SUPABASE_URL = "https://fxsshhrxzjyjvfszaorq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4c3NoaHJ4emp5anZmc3phb3JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyOTEwODQsImV4cCI6MjA4Njg2NzA4NH0.qJl7Dle-5iqFnNXir4mDPKR2c3-s8Og4e_6h6ZgquIE";
@@ -45,15 +47,19 @@ interface UserForm {
 const emptyForm: UserForm = { name: "", email: "", password: "", role_id: "none", status: "activo", phone: "", cargo: "", pin_code: "" };
 
 const ConfigUsuarios = () => {
-  const { canCreate, canEdit } = usePermissions();
+  const { user: authUser } = useAuth();
+  const { canCreate, canEdit, roleName } = usePermissions();
   const canCreateConfig = canCreate("Config: Usuarios");
   const canEditConfig = canEdit("Config: Usuarios");
+  const isAdmin = roleName === "Administrador";
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<AppUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -104,6 +110,34 @@ const ConfigUsuarios = () => {
     setError("");
     setShowPassword(false);
     setDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ app_user_id: deleteTarget.id }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result.error || "Error al eliminar usuario");
+      } else {
+        toast.success(`Usuario "${deleteTarget.name}" eliminado`);
+        fetchUsers();
+      }
+    } catch {
+      toast.error("Error de conexión");
+    }
+    setDeleting(false);
+    setDeleteTarget(null);
   };
 
   const handleSubmit = async () => {
@@ -268,11 +302,18 @@ const ConfigUsuarios = () => {
                     {new Date(user.created_at).toLocaleDateString("es-DO")}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    {canEditConfig && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(user)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    <div className="flex items-center justify-center gap-1">
+                      {canEditConfig && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(user)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {isAdmin && user.email !== authUser?.email && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(user)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -287,6 +328,15 @@ const ConfigUsuarios = () => {
           </table>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar Usuario"
+        description={`¿Estás seguro de eliminar a "${deleteTarget?.name}"? Esta acción no se puede deshacer y el usuario perderá acceso inmediatamente.`}
+        onConfirm={handleDelete}
+        confirmLabel={deleting ? "Eliminando..." : "Eliminar"}
+      />
 
       {/* Create / Edit User Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

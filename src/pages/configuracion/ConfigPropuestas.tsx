@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Settings, Save, Eraser, Check, Loader2, Upload, PenLine } from "lucide-react";
+import { Settings, Save, Eraser, Check, Loader2, Upload, PenLine, Globe } from "lucide-react";
 import SignaturePad from "signature_pad";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -16,8 +16,13 @@ const emptySettings: ProposalSettings = {
   greetingText: "", warrantyText: "", responsibilityText: "", risksText: "",
   installationText: "", validityText: "", returnsText: "", legalClauses: "",
   purchaseOrderInfo: "", closingText: "", coverIntroText: "", coverPartnerText: "",
-  coverClosingText: "", signatureName: "", signatureTitle: "", signaturePhone: "",
-  signatureEmail: "", signatureImageUrl: "", footerText: "",
+  coverClosingText: "", footerText: "",
+  greetingTextEn: "", warrantyTextEn: "", responsibilityTextEn: "", risksTextEn: "",
+  installationTextEn: "", validityTextEn: "", returnsTextEn: "", legalClausesEn: "",
+  purchaseOrderInfoEn: "", closingTextEn: "", coverIntroTextEn: "", coverPartnerTextEn: "",
+  coverClosingTextEn: "", footerTextEn: "",
+  signatureName: "", signatureTitle: "", signaturePhone: "",
+  signatureEmail: "", signatureImageUrl: "",
 };
 
 // Map DB snake_case row to frontend camelCase
@@ -43,12 +48,26 @@ const dbToSettings = (row: any): ProposalSettings => ({
   coverIntroText: row.cover_intro_text ?? "",
   coverPartnerText: row.cover_partner_text ?? "",
   coverClosingText: row.cover_closing_text ?? "",
+  footerText: row.footer_text ?? "",
+  greetingTextEn: row.greeting_text_en ?? "",
+  warrantyTextEn: row.warranty_text_en ?? "",
+  responsibilityTextEn: row.responsibility_text_en ?? "",
+  risksTextEn: row.risks_text_en ?? "",
+  installationTextEn: row.installation_text_en ?? "",
+  validityTextEn: row.validity_text_en ?? "",
+  returnsTextEn: row.returns_text_en ?? "",
+  legalClausesEn: row.legal_clauses_en ?? "",
+  purchaseOrderInfoEn: row.purchase_order_info_en ?? "",
+  closingTextEn: row.closing_text_en ?? "",
+  coverIntroTextEn: row.cover_intro_text_en ?? "",
+  coverPartnerTextEn: row.cover_partner_text_en ?? "",
+  coverClosingTextEn: row.cover_closing_text_en ?? "",
+  footerTextEn: row.footer_text_en ?? "",
   signatureName: row.signature_name ?? "",
   signatureTitle: row.signature_title ?? "",
   signaturePhone: row.signature_phone ?? "",
   signatureEmail: row.signature_email ?? "",
   signatureImageUrl: row.signature_image_url ?? "",
-  footerText: row.footer_text ?? "",
 });
 
 const settingsToDb = (s: ProposalSettings) => ({
@@ -73,6 +92,21 @@ const settingsToDb = (s: ProposalSettings) => ({
   cover_intro_text: s.coverIntroText,
   cover_partner_text: s.coverPartnerText,
   cover_closing_text: s.coverClosingText,
+  footer_text: s.footerText,
+  greeting_text_en: s.greetingTextEn,
+  warranty_text_en: s.warrantyTextEn,
+  responsibility_text_en: s.responsibilityTextEn,
+  risks_text_en: s.risksTextEn,
+  installation_text_en: s.installationTextEn,
+  validity_text_en: s.validityTextEn,
+  returns_text_en: s.returnsTextEn,
+  legal_clauses_en: s.legalClausesEn,
+  purchase_order_info_en: s.purchaseOrderInfoEn,
+  closing_text_en: s.closingTextEn,
+  cover_intro_text_en: s.coverIntroTextEn,
+  cover_partner_text_en: s.coverPartnerTextEn,
+  cover_closing_text_en: s.coverClosingTextEn,
+  footer_text_en: s.footerTextEn,
   signature_name: s.signatureName,
   signature_title: s.signatureTitle,
   signature_phone: s.signaturePhone,
@@ -89,6 +123,7 @@ const ConfigPropuestas = () => {
   const [settings, setSettings] = useState<ProposalSettings>(emptySettings);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [langTab, setLangTab] = useState<'es' | 'en'>('es');
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sigPadRef = useRef<SignaturePad | null>(null);
@@ -278,9 +313,25 @@ const ConfigPropuestas = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">Propuestas / Ofertas</h1>
-        <p className="text-muted-foreground text-sm mt-1">Configuración de datos para las propuestas comerciales</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Propuestas / Ofertas</h1>
+          <p className="text-muted-foreground text-sm mt-1">Configuración de datos para las propuestas comerciales</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Globe className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Textos:</span>
+          <div className="flex rounded-md border overflow-hidden">
+            <button type="button" onClick={() => setLangTab('es')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${langTab === 'es' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted text-muted-foreground'}`}>
+              🇪🇸 Español
+            </button>
+            <button type="button" onClick={() => setLangTab('en')}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors border-l ${langTab === 'en' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted text-muted-foreground'}`}>
+              🇺🇸 English
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="stat-card">
@@ -471,21 +522,40 @@ const ConfigPropuestas = () => {
       </div>
 
       <div className="stat-card">
-        <h2 className="font-semibold mb-4">Carta de Presentación (Página 1)</h2>
-        <p className="text-xs text-muted-foreground mb-4">Estos textos aparecen en la primera página de la oferta pública, antes de la propuesta técnica.</p>
+        <h2 className="font-semibold mb-1">Carta de Presentación (Página 1)</h2>
+        <p className="text-xs text-muted-foreground mb-4">Textos de la primera página de la oferta pública. Edita ambos idiomas para que se usen automáticamente según el idioma de cada cotización.</p>
         <div className="space-y-4">
-          <div>
-            <Label>Párrafo Introductorio</Label>
-            <Textarea value={settings.coverIntroText} onChange={(e) => update("coverIntroText", e.target.value)} rows={3} readOnly={!canEditConfig} />
-          </div>
-          <div>
-            <Label>Párrafo de Partner SIEMENS</Label>
-            <Textarea value={settings.coverPartnerText} onChange={(e) => update("coverPartnerText", e.target.value)} rows={3} readOnly={!canEditConfig} />
-          </div>
-          <div>
-            <Label>Párrafo de Cierre</Label>
-            <Textarea value={settings.coverClosingText} onChange={(e) => update("coverClosingText", e.target.value)} rows={2} readOnly={!canEditConfig} />
-          </div>
+          {langTab === 'es' ? (
+            <>
+              <div>
+                <Label>Párrafo Introductorio</Label>
+                <Textarea value={settings.coverIntroText} onChange={(e) => update("coverIntroText", e.target.value)} rows={3} readOnly={!canEditConfig} />
+              </div>
+              <div>
+                <Label>Párrafo de Partner SIEMENS</Label>
+                <Textarea value={settings.coverPartnerText} onChange={(e) => update("coverPartnerText", e.target.value)} rows={3} readOnly={!canEditConfig} />
+              </div>
+              <div>
+                <Label>Párrafo de Cierre</Label>
+                <Textarea value={settings.coverClosingText} onChange={(e) => update("coverClosingText", e.target.value)} rows={2} readOnly={!canEditConfig} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <Label>Introductory Paragraph (English)</Label>
+                <Textarea value={settings.coverIntroTextEn} onChange={(e) => update("coverIntroTextEn", e.target.value)} rows={3} readOnly={!canEditConfig} placeholder="e.g. In response to your request for proposal and in accordance with your needs, we are pleased to submit our best technical and commercial proposal..." />
+              </div>
+              <div>
+                <Label>SIEMENS Partner Paragraph (English)</Label>
+                <Textarea value={settings.coverPartnerTextEn} onChange={(e) => update("coverPartnerTextEn", e.target.value)} rows={3} readOnly={!canEditConfig} placeholder="e.g. SINEM, as official Business Partner of SIEMENS Energy in the Dominican Republic, guarantees..." />
+              </div>
+              <div>
+                <Label>Closing Paragraph (English)</Label>
+                <Textarea value={settings.coverClosingTextEn} onChange={(e) => update("coverClosingTextEn", e.target.value)} rows={2} readOnly={!canEditConfig} placeholder="e.g. We remain at your disposal for any questions or clarifications." />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -501,66 +571,99 @@ const ConfigPropuestas = () => {
       </div>
 
       <div className="stat-card">
-        <h2 className="font-semibold mb-4">Textos de la Propuesta</h2>
+        <h2 className="font-semibold mb-1">Textos de la Propuesta</h2>
+        <p className="text-xs text-muted-foreground mb-4">Aparecen en las páginas 2 y 3 de la oferta pública (garantías, condiciones, etc.).</p>
         <div className="space-y-4">
-          <div>
-            <Label>Saludo Introductorio</Label>
-            <Textarea value={settings.greetingText} onChange={(e) => update("greetingText", e.target.value)} rows={3} readOnly={!canEditConfig} />
-            <p className="text-xs text-muted-foreground mt-1">Texto que aparece después de los datos del cliente, antes de la tabla de ítems.</p>
-          </div>
-          <div>
-            <Label>Garantía</Label>
-            <Textarea value={settings.warrantyText} onChange={(e) => update("warrantyText", e.target.value)} rows={5} readOnly={!canEditConfig} />
-          </div>
-          <div>
-            <Label>Responsabilidad</Label>
-            <Textarea value={settings.responsibilityText} onChange={(e) => update("responsibilityText", e.target.value)} rows={4} readOnly={!canEditConfig} />
-          </div>
-          <div>
-            <Label>Riesgos</Label>
-            <Textarea value={settings.risksText} onChange={(e) => update("risksText", e.target.value)} rows={5} readOnly={!canEditConfig} />
-          </div>
-          <div>
-            <Label>Instalación</Label>
-            <Textarea value={settings.installationText} onChange={(e) => update("installationText", e.target.value)} rows={3} readOnly={!canEditConfig} />
-          </div>
-          <div>
-            <Label>Vigencia de la Propuesta</Label>
-            <Textarea value={settings.validityText} onChange={(e) => update("validityText", e.target.value)} rows={2} readOnly={!canEditConfig} />
-          </div>
-          <div>
-            <Label>Devoluciones y/o Cancelaciones</Label>
-            <Textarea value={settings.returnsText} onChange={(e) => update("returnsText", e.target.value)} rows={3} readOnly={!canEditConfig} />
-          </div>
+          {langTab === 'es' ? (
+            <>
+              <div>
+                <Label>Saludo Introductorio</Label>
+                <Textarea value={settings.greetingText} onChange={(e) => update("greetingText", e.target.value)} rows={3} readOnly={!canEditConfig} />
+                <p className="text-xs text-muted-foreground mt-1">Aparece antes de la tabla de ítems.</p>
+              </div>
+              <div><Label>Garantía</Label><Textarea value={settings.warrantyText} onChange={(e) => update("warrantyText", e.target.value)} rows={5} readOnly={!canEditConfig} /></div>
+              <div><Label>Responsabilidad</Label><Textarea value={settings.responsibilityText} onChange={(e) => update("responsibilityText", e.target.value)} rows={4} readOnly={!canEditConfig} /></div>
+              <div><Label>Riesgos</Label><Textarea value={settings.risksText} onChange={(e) => update("risksText", e.target.value)} rows={5} readOnly={!canEditConfig} /></div>
+              <div><Label>Instalación</Label><Textarea value={settings.installationText} onChange={(e) => update("installationText", e.target.value)} rows={3} readOnly={!canEditConfig} /></div>
+              <div><Label>Vigencia de la Propuesta (texto adicional)</Label><Textarea value={settings.validityText} onChange={(e) => update("validityText", e.target.value)} rows={2} readOnly={!canEditConfig} /></div>
+              <div><Label>Devoluciones y/o Cancelaciones</Label><Textarea value={settings.returnsText} onChange={(e) => update("returnsText", e.target.value)} rows={3} readOnly={!canEditConfig} /></div>
+            </>
+          ) : (
+            <>
+              <div>
+                <Label>Introductory Greeting (English)</Label>
+                <Textarea value={settings.greetingTextEn} onChange={(e) => update("greetingTextEn", e.target.value)} rows={3} readOnly={!canEditConfig} placeholder="e.g. Dear Sirs, in accordance with your request, we are pleased to present our offer..." />
+                <p className="text-xs text-muted-foreground mt-1">Appears before the items table on page 2.</p>
+              </div>
+              <div><Label>Warranty (English)</Label><Textarea value={settings.warrantyTextEn} onChange={(e) => update("warrantyTextEn", e.target.value)} rows={5} readOnly={!canEditConfig} placeholder="e.g. Equipment carries 12 months warranty from commissioning or 18 months from delivery, whichever occurs first..." /></div>
+              <div><Label>Responsibility (English)</Label><Textarea value={settings.responsibilityTextEn} onChange={(e) => update("responsibilityTextEn", e.target.value)} rows={4} readOnly={!canEditConfig} placeholder="e.g. SINEM shall not, under any circumstances, be liable for loss of use or production, loss of profit..." /></div>
+              <div><Label>Risks (English)</Label><Textarea value={settings.risksTextEn} onChange={(e) => update("risksTextEn", e.target.value)} rows={5} readOnly={!canEditConfig} placeholder="e.g. Should the equipment suffer physical or electrical damage due to mishandling by the client, SINEM will not be responsible..." /></div>
+              <div><Label>Installation (English)</Label><Textarea value={settings.installationTextEn} onChange={(e) => update("installationTextEn", e.target.value)} rows={3} readOnly={!canEditConfig} placeholder="e.g. Installation is not included in this offer. If required, please request a separate quotation..." /></div>
+              <div><Label>Proposal Validity — additional text (English)</Label><Textarea value={settings.validityTextEn} onChange={(e) => update("validityTextEn", e.target.value)} rows={2} readOnly={!canEditConfig} placeholder="e.g. After this period, the offer shall be considered without any commitment from SINEM." /></div>
+              <div><Label>Returns and/or Cancellations (English)</Label><Textarea value={settings.returnsTextEn} onChange={(e) => update("returnsTextEn", e.target.value)} rows={3} readOnly={!canEditConfig} placeholder="e.g. No returns or cancellations are accepted without written authorization from SINEM..." /></div>
+            </>
+          )}
         </div>
       </div>
 
       <div className="stat-card">
-        <h2 className="font-semibold mb-4">Cláusulas Legales y Cierre</h2>
+        <h2 className="font-semibold mb-1">Cláusulas Legales y Cierre</h2>
+        <p className="text-xs text-muted-foreground mb-4">Términos y condiciones, datos para orden de compra y texto de cierre.</p>
         <div className="space-y-4">
-          <div>
-            <Label>Términos y Condiciones</Label>
-            <Textarea value={settings.legalClauses} onChange={(e) => update("legalClauses", e.target.value)} rows={6} readOnly={!canEditConfig} />
-            <p className="text-xs text-muted-foreground mt-1">Cada línea se muestra como un punto separado en la propuesta.</p>
-          </div>
-          <div>
-            <Label>Datos para Orden de Compra</Label>
-            <Textarea value={settings.purchaseOrderInfo} onChange={(e) => update("purchaseOrderInfo", e.target.value)} rows={4} readOnly={!canEditConfig} />
-            <p className="text-xs text-muted-foreground mt-1">Datos de la empresa para que el cliente emita la orden de compra. El nombre, teléfono y email del firmante se agregan automáticamente.</p>
-          </div>
-          <div>
-            <Label>Texto de Cierre</Label>
-            <Textarea value={settings.closingText} onChange={(e) => update("closingText", e.target.value)} rows={2} readOnly={!canEditConfig} />
-            <p className="text-xs text-muted-foreground mt-1">Texto que aparece antes de la firma al final de la oferta.</p>
-          </div>
+          {langTab === 'es' ? (
+            <>
+              <div>
+                <Label>Términos y Condiciones</Label>
+                <Textarea value={settings.legalClauses} onChange={(e) => update("legalClauses", e.target.value)} rows={6} readOnly={!canEditConfig} />
+                <p className="text-xs text-muted-foreground mt-1">Cada línea se muestra como un punto separado en la propuesta.</p>
+              </div>
+              <div>
+                <Label>Datos para Orden de Compra</Label>
+                <Textarea value={settings.purchaseOrderInfo} onChange={(e) => update("purchaseOrderInfo", e.target.value)} rows={4} readOnly={!canEditConfig} />
+                <p className="text-xs text-muted-foreground mt-1">El nombre, teléfono y email del firmante se agregan automáticamente.</p>
+              </div>
+              <div>
+                <Label>Texto de Cierre</Label>
+                <Textarea value={settings.closingText} onChange={(e) => update("closingText", e.target.value)} rows={2} readOnly={!canEditConfig} />
+                <p className="text-xs text-muted-foreground mt-1">Aparece antes de la firma al final de la oferta.</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <Label>Terms and Conditions (English)</Label>
+                <Textarea value={settings.legalClausesEn} onChange={(e) => update("legalClausesEn", e.target.value)} rows={6} readOnly={!canEditConfig} placeholder="e.g. 1. Prices are subject to availability and confirmation at the time of the purchase order.&#10;2. Any modification to the original scope may result in price and delivery time adjustments..." />
+                <p className="text-xs text-muted-foreground mt-1">Each line is shown as a separate point in the proposal.</p>
+              </div>
+              <div>
+                <Label>Purchase Order Information (English)</Label>
+                <Textarea value={settings.purchaseOrderInfoEn} onChange={(e) => update("purchaseOrderInfoEn", e.target.value)} rows={4} readOnly={!canEditConfig} placeholder="e.g. SINEM SRL&#10;RNC: 1-33-03034-9&#10;Winston Churchill Acropolis Business Mall..." />
+                <p className="text-xs text-muted-foreground mt-1">Company data for the client to issue the purchase order. Signatory name, phone and email are added automatically.</p>
+              </div>
+              <div>
+                <Label>Closing Text (English)</Label>
+                <Textarea value={settings.closingTextEn} onChange={(e) => update("closingTextEn", e.target.value)} rows={2} readOnly={!canEditConfig} placeholder="e.g. Should you require any further information, please do not hesitate to contact us." />
+                <p className="text-xs text-muted-foreground mt-1">Appears before the signature at the end of the offer.</p>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       <div className="stat-card">
         <h2 className="font-semibold mb-4">Pie de Página</h2>
         <div>
-          <Label>Texto del Footer</Label>
-          <Input value={settings.footerText} onChange={(e) => update("footerText", e.target.value)} readOnly={!canEditConfig} />
+          {langTab === 'es' ? (
+            <>
+              <Label>Texto del Footer</Label>
+              <Input value={settings.footerText} onChange={(e) => update("footerText", e.target.value)} readOnly={!canEditConfig} />
+            </>
+          ) : (
+            <>
+              <Label>Footer Text (English)</Label>
+              <Input value={settings.footerTextEn} onChange={(e) => update("footerTextEn", e.target.value)} readOnly={!canEditConfig} placeholder="e.g. SINEM SRL, Winston Churchill Acrópolis Business Mall floor 8, Piantini CP 10127, Santo Domingo, Dominican Republic..." />
+            </>
+          )}
         </div>
       </div>
 

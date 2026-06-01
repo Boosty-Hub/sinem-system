@@ -147,6 +147,7 @@ const Cotizaciones = () => {
       specialConsiderations: (q as any).special_considerations ?? "",
       proposalTexts: (q as any).proposal_texts ?? undefined,
       showItemSubtotals: (q as any).show_item_subtotals ?? false,
+      language: ((q as any).language ?? 'es') as 'es' | 'en',
     })));
     setLoading(false);
   };
@@ -249,6 +250,7 @@ const Cotizaciones = () => {
       special_considerations: updated.specialConsiderations ?? null,
       proposal_texts: updated.proposalTexts ?? null,
       show_item_subtotals: updated.showItemSubtotals ?? false,
+      language: updated.language ?? 'es',
       created_by: appUserId,
     };
 
@@ -467,6 +469,9 @@ const Cotizaciones = () => {
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
                         <span className="font-mono text-xs">{q.code}</span>
+                        {q.language === 'en' && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 tracking-wide">EN</span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-4 font-medium max-w-[250px] truncate">{q.subject}</td>

@@ -233,6 +233,8 @@ export interface Quotation {
   specialConsiderations?: string;
   proposalTexts?: QuotationProposalTexts;
   showItemSubtotals?: boolean;
+  /** Language for the public proposal: 'es' (default) or 'en' */
+  language?: 'es' | 'en';
 }
 
 export interface GeneralSettings {
@@ -280,6 +282,7 @@ export interface ProposalSettings {
   companyRnc: string;
   logoUrl: string;
   defaultItbisPercent: number;
+  // Spanish texts
   greetingText: string;
   warrantyText: string;
   responsibilityText: string;
@@ -293,12 +296,28 @@ export interface ProposalSettings {
   coverIntroText: string;
   coverPartnerText: string;
   coverClosingText: string;
+  footerText: string;
+  // English texts (used when quotation.language === 'en'; fallback to Spanish if empty)
+  greetingTextEn: string;
+  warrantyTextEn: string;
+  responsibilityTextEn: string;
+  risksTextEn: string;
+  installationTextEn: string;
+  validityTextEn: string;
+  returnsTextEn: string;
+  legalClausesEn: string;
+  purchaseOrderInfoEn: string;
+  closingTextEn: string;
+  coverIntroTextEn: string;
+  coverPartnerTextEn: string;
+  coverClosingTextEn: string;
+  footerTextEn: string;
+  // Signature
   signatureName: string;
   signatureTitle: string;
   signaturePhone: string;
   signatureEmail: string;
   signatureImageUrl: string;
-  footerText: string;
 }
 
 export type OfferStatus = "borrador" | "enviada" | "en_negociacion" | "ganada" | "perdida";

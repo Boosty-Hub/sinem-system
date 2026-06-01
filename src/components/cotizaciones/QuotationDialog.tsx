@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type CostEntry, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact, type ProposalSettings, type QuotationProposalTexts } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
-import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search, RotateCcw, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search, RotateCcw, AlertTriangle, Globe } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -183,6 +183,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [generalMarginInput, setGeneralMarginInput] = useState(0);
   const [proposalTexts, setProposalTexts] = useState<QuotationProposalTexts>({});
   const [textsExpanded, setTextsExpanded] = useState(false);
+  const [language, setLanguage] = useState<'es' | 'en'>('es');
 
   // Resolve current auth user to app_users id + check if they have a signature (required to approve)
   useEffect(() => {
@@ -293,7 +294,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax,
       validityDays, deliveryLocation, notes, applyItbis, itbisPercent,
       currency, exchangeRate, isOriginalCurrency, partner, showPartnerText, codeManuallyEdited,
-      proposalTexts, showItemSubtotals,
+      proposalTexts, showItemSubtotals, language,
     };
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
   };
@@ -309,6 +310,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         // Editing existing quotation
         setLineItems(quotation.lineItems.map((li) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
         setShowItemSubtotals((quotation as any).showItemSubtotals ?? false);
+        setLanguage(quotation.language ?? 'es');
         setSelectedProspectId(quotation.prospectId ?? "none");
         setSelectedClientId(quotation.clientId ?? "none");
         setSelectedContactId(quotation.contactId ?? "none");
@@ -344,6 +346,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         const d = raw ? JSON.parse(raw) : null;
         setLineItems((d?.lineItems ?? []).map((li: any) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
         setShowItemSubtotals(d?.showItemSubtotals ?? false);
+        setLanguage(d?.language ?? 'es');
         setSelectedProspectId(d?.selectedProspectId ?? prefill?.prospectId ?? "none");
         setSelectedClientId(d?.selectedClientId ?? prefill?.clientId ?? "none");
         setSelectedContactId(d?.selectedContactId ?? prefill?.contactId ?? "none");
@@ -657,7 +660,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       costUSD: effectiveCostUSD, marginPercent, marginUSD,
       distributedCosts, otherCosts,
       paymentTerms, deliveryTerms, deliveryWeeksMin, deliveryWeeksMax, deliveryTimeNote, validityDays, deliveryLocation, specialConsiderations, notes,
-      proposalTexts, showItemSubtotals,
+      proposalTexts, showItemSubtotals, language,
     };
   };
 
@@ -949,6 +952,34 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 </Label>
               </div>
             </div>
+
+            {/* Language toggle — solo al crear, no al editar */}
+            {!quotation && (
+              <div className="mt-3">
+                <Label className="flex items-center gap-1.5 mb-1.5">
+                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                  Idioma de la propuesta
+                </Label>
+                <div className="flex rounded-md border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('es')}
+                    className={cn("flex-1 py-2 px-3 text-sm font-medium transition-colors",
+                      language === 'es' ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-muted-foreground")}
+                  >
+                    🇪🇸 Español
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('en')}
+                    className={cn("flex-1 py-2 px-3 text-sm font-medium transition-colors border-l",
+                      language === 'en' ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-muted-foreground")}
+                  >
+                    🇺🇸 English
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="col-span-3">
@@ -1504,6 +1535,14 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
             </button>
             {textsExpanded && (
               <div className="p-4 space-y-4">
+                {!quotation && language === 'en' && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                    <Globe className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+                    <p className="text-xs text-blue-800 dark:text-blue-300">
+                      Esta cotización está configurada en <strong>inglés</strong>. Recuerda redactar los textos personalizados (saludo, garantías, condiciones, cierre, etc.) en inglés para que aparezcan correctamente en la propuesta del cliente.
+                    </p>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Estos textos se pre-cargan desde la configuración global y pueden modificarse para esta cotización en particular.
                 </p>
