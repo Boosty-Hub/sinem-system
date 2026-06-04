@@ -215,12 +215,13 @@ const Analitica = () => {
     if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
     return isInRevenuePeriod(p.revenue);
   });
-  const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.weighted, 0);
+  // Forecast total = pipeline ponderado + lo ya facturado (Current)
+  const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.weighted, 0) + invoicedTotal;
 
   const revenueData = [
     { name: periodPrevLabel, label: periodPrevLabel, value: budget.previousYearRevenue, fill: "#67e8f9", description: "Revenue facturado del año anterior (configurado en Budget).", details: [] },
     { name: periodLabel, label: periodLabel, value: invoicedTotal, fill: "#06b6d4", description: `Total de oportunidades marcadas como facturadas con fecha de revenue en ${periodLabel}.`, details: invoicedDeals.map((p) => ({ name: `${p.projectName} (${p.revenue ?? "s/f"})`, amount: p.priceUSD })) },
-    { name: `Forecast ${periodLabel}`, label: `Forecast ${periodLabel}`, value: revenueForecastTotal, fill: "#0891b2", description: `Suma ponderada (priceUSD × probabilidad) de oportunidades abiertas con fecha de revenue en ${periodLabel}.`, details: revenueForecastDeals.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
+    { name: `Forecast ${periodLabel}`, label: `Forecast ${periodLabel}`, value: revenueForecastTotal, fill: "#0891b2", description: `Proyección total de revenue en ${periodLabel}: ya facturado + pipeline ponderado (priceUSD × probabilidad).`, details: revenueForecastDeals.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.revenueBudget, fill: "#6d28d9", description: "Meta de revenue estipulada para el año.", details: [] },
   ];
   const maxRevenueValue = Math.max(...revenueData.map((d) => d.value), 1);
@@ -233,11 +234,11 @@ const Analitica = () => {
   if (!availableRevYears.includes(new Date().getFullYear())) availableRevYears.unshift(new Date().getFullYear());
 
   // ── Operative Margin data ──
-  // Current: ganadas/facturadas con estimatedOE del año en curso
+  // Current: ganadas/facturadas con fecha de revenue del año en curso
   const marginWonDeals = prospects.filter((p) => {
     if (p.status !== "ganado" && p.status !== "facturada" && p.status !== "cerrados") return false;
-    const oeYear = getEstimatedOEYear(p.estimatedOE);
-    return oeYear === currentYear;
+    const revenueYear = getRevenueYear(p.revenue);
+    return revenueYear === currentYear;
   });
   const marginWonTotal = marginWonDeals.reduce((s, p) => s + p.marginUSD, 0);
   
@@ -251,7 +252,7 @@ const Analitica = () => {
 
   const marginData = [
     { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearMargin, fill: "#67e8f9", description: "Margen operativo total de oportunidades ganadas del año anterior.", details: [] },
-    { name: `${currentYear}`, label: `${currentYear}`, value: marginWonTotal, fill: "#06b6d4", description: `Suma del margen USD de oportunidades ganadas/facturadas con Estimated OE en ${currentYear}.`, details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
+    { name: `${currentYear}`, label: `${currentYear}`, value: marginWonTotal, fill: "#06b6d4", description: `Suma del margen USD de oportunidades ganadas/facturadas con fecha de Revenue en ${currentYear}.`, details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
     { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: marginForecastTotal, fill: "#0891b2", description: `Suma del margen USD de oportunidades con fecha de revenue en ${currentYear} (prospecto, propuesta, seguimiento, ganado).`, details: marginForecastDeals.sort((a, b) => b.marginUSD - a.marginUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.marginBudget, fill: "#6d28d9", description: "Meta de margen operativo estipulada para el año.", details: [] },
   ];
