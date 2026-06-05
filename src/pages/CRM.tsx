@@ -211,6 +211,34 @@ const CRM = () => {
     setInvoiceProspectId(null);
   };
 
+  // Crea el proyecto asociado a una oportunidad ganada si aún no existe.
+  // Reutilizable: lo llaman el cambio de etapa (kanban), el guardado por diálogo
+  // y el cambio masivo de estado, para que ninguna ruta deje proyectos sin crear.
+  const ensureProjectForProspect = async (prospect: Prospect): Promise<boolean> => {
+    const { data: existingProj } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("origin_prospect_id", prospect.id)
+      .maybeSingle();
+    if (existingProj) return false;
+
+    const { error: projError } = await supabase.from("projects").insert({
+      name: prospect.projectName,
+      client: prospect.directCustomer,
+      value: prospect.priceUSD,
+      current_step: 1,
+      status: "activo",
+      origin_prospect_id: prospect.id,
+      client_id: prospect.clientId ?? null,
+      start_date: new Date().toISOString().split("T")[0],
+    } as any);
+    if (projError) {
+      console.error("Error creating project:", projError);
+      return false;
+    }
+    return true;
+  };
+
   const executeStageChange = async (prospectId: string, newStage: string) => {
     const oldProspect = prospects.find((p) => p.id === prospectId);
     if (!oldProspect) return;
@@ -263,23 +291,8 @@ const CRM = () => {
       }
 
       // Auto-create project
-      const { data: existingProj } = await supabase.from("projects").select("id").eq("origin_prospect_id", prospectId).maybeSingle();
-      if (existingProj) return;
-
-      const { error: projError } = await supabase.from("projects").insert({
-        name: oldProspect.projectName,
-        client: oldProspect.directCustomer,
-        value: oldProspect.priceUSD,
-        current_step: 1,
-        status: "activo",
-        origin_prospect_id: prospectId,
-        client_id: oldProspect.clientId ?? null,
-        start_date: new Date().toISOString().split("T")[0],
-      } as any);
-      if (projError) {
-        console.error("Error creating project:", projError);
-        toast({ title: "Error al crear proyecto", description: projError.message, variant: "destructive" });
-      } else {
+      const created = await ensureProjectForProspect(oldProspect);
+      if (created) {
         toast({ title: "Proyecto creado", description: `Se creó el proyecto "${oldProspect.projectName}" automáticamente.` });
       }
     }
@@ -313,13 +326,23 @@ const CRM = () => {
 
   const handleBulkStageChange = async (newStage: string) => {
     const ids = selectedIds;
+    const affected = prospects.filter(p => ids.includes(p.id));
     setProspects(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: newStage } : p));
     setSelectedIds([]);
+    let projectsCreated = 0;
     for (const id of ids) {
       await supabase.from("prospects").update({ status: newStage }).eq("id", id);
     }
+    // Si se mueven masivamente a "ganado", crear sus proyectos como en las otras rutas.
+    if (newStage === "ganado") {
+      for (const prospect of affected) {
+        const created = await ensureProjectForProspect(prospect);
+        if (created) projectsCreated++;
+      }
+    }
     const stageLabel = stages.find(s => s.key === newStage)?.label ?? newStage;
-    toast({ title: "Status actualizado", description: `${ids.length} oportunidad(es) movida(s) a "${stageLabel}".` });
+    const projectsNote = projectsCreated > 0 ? ` Se crearon ${projectsCreated} proyecto(s).` : "";
+    toast({ title: "Status actualizado", description: `${ids.length} oportunidad(es) movida(s) a "${stageLabel}".${projectsNote}` });
     setBulkStageTarget(null);
   };
 
@@ -337,18 +360,8 @@ const CRM = () => {
 
       // Auto-create project when status changed to "ganado" via dialog
       if (exists.status !== saved.status && saved.status === "ganado") {
-        const { data: existingProj } = await supabase.from("projects").select("id").eq("origin_prospect_id", saved.id).maybeSingle();
-        if (!existingProj) {
-          await supabase.from("projects").insert({
-            name: saved.projectName,
-            client: saved.directCustomer,
-            value: saved.priceUSD,
-            current_step: 1,
-            status: "activo",
-            origin_prospect_id: saved.id,
-            client_id: saved.clientId ?? null,
-            start_date: new Date().toISOString().split("T")[0],
-          } as any);
+        const created = await ensureProjectForProspect(saved);
+        if (created) {
           toast({ title: "Proyecto creado", description: `Se creó el proyecto "${saved.projectName}" automáticamente.` });
         }
       }
@@ -382,6 +395,14 @@ const CRM = () => {
     } else {
       setProspects((prev) => [saved, ...prev]);
       await supabase.from("prospects").insert(prospectToDb(saved));
+
+      // Si la oportunidad se crea directamente en "ganado", crear su proyecto.
+      if (saved.status === "ganado") {
+        const created = await ensureProjectForProspect(saved);
+        if (created) {
+          toast({ title: "Proyecto creado", description: `Se creó el proyecto "${saved.projectName}" automáticamente.` });
+        }
+      }
 
       // Notify all users about new opportunity
       if (currentAppUserId) {
