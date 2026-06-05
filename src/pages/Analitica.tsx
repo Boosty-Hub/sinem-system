@@ -234,9 +234,11 @@ const Analitica = () => {
   if (!availableRevYears.includes(new Date().getFullYear())) availableRevYears.unshift(new Date().getFullYear());
 
   // ── Operative Margin data ──
-  // Current: ganadas/facturadas con fecha de revenue del año en curso
+  // Current: SOLO lo ya facturado a la fecha en el año en curso.
+  // Lo ganado pero aún no facturado (revenue futuro, ej. BESS ENERGAS 251 en noviembre)
+  // NO cuenta aquí — va en el Forecast. El margen Current = margen ya realizado.
   const marginWonDeals = prospects.filter((p) => {
-    if (p.status !== "ganado" && p.status !== "facturada" && p.status !== "cerrados") return false;
+    if (p.status !== "facturada" && p.status !== "cerrados") return false;
     const revenueYear = getRevenueYear(p.revenue);
     return revenueYear === currentYear;
   });
@@ -252,7 +254,7 @@ const Analitica = () => {
 
   const marginData = [
     { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearMargin, fill: "#67e8f9", description: "Margen operativo total de oportunidades ganadas del año anterior.", details: [] },
-    { name: `${currentYear}`, label: `${currentYear}`, value: marginWonTotal, fill: "#06b6d4", description: `Suma del margen USD de oportunidades ganadas/facturadas con fecha de Revenue en ${currentYear}.`, details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
+    { name: `${currentYear}`, label: `${currentYear}`, value: marginWonTotal, fill: "#06b6d4", description: `Margen USD ya realizado: solo oportunidades facturadas a la fecha con Revenue en ${currentYear}. Lo ganado pero aún no facturado va en el Forecast.`, details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
     { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: marginForecastTotal, fill: "#0891b2", description: `Suma del margen USD de oportunidades con fecha de revenue en ${currentYear} (prospecto, propuesta, seguimiento, ganado).`, details: marginForecastDeals.sort((a, b) => b.marginUSD - a.marginUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.marginBudget, fill: "#6d28d9", description: "Meta de margen operativo estipulada para el año.", details: [] },
   ];
@@ -530,8 +532,8 @@ const Analitica = () => {
             <TooltipContent side="right" className="max-w-[340px] p-3 space-y-2 text-xs leading-relaxed">
               <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
               <div><strong>{previousYear}:</strong> Margen USD total de oportunidades ganadas del año anterior.</div>
-              <div><strong>Current:</strong> Margen USD de oportunidades ganadas/facturadas en el año en curso.</div>
-              <div><strong>Forecast:</strong> Margen USD de oportunidades abiertas (aún no ganadas).</div>
+              <div><strong>Current:</strong> Margen USD ya realizado — solo lo facturado a la fecha en el año en curso.</div>
+              <div><strong>Forecast:</strong> Margen USD de oportunidades aún no facturadas (incluye ganadas pendientes de facturar y pipeline abierto).</div>
               <div><strong>Budget {currentYear}:</strong> Meta de margen operativo para el año.</div>
             </TooltipContent>
           </Tooltip>
