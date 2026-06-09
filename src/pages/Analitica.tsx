@@ -210,18 +210,23 @@ const Analitica = () => {
   );
   const invoicedTotal = invoicedDeals.reduce((s, p) => s + p.priceUSD, 0);
 
-  // Forecast: open opportunities (prospecto, propuesta, seguimiento, ganado) within the same period
+  // Forecast: oportunidades proyectadas a ganarse y cobrarse en el período.
+  // Excluye estados "muertos" (perdido, cancelado) y los ya cobrados (facturada, cerrados,
+  // que cuentan como Current). Incluye el pipeline activo: prospecto, propuesta,
+  // seguimiento, standby, calificado, negociacion y ganado (aún no cobrado).
   const revenueForecastDeals = prospects.filter((p) => {
-    if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
+    if (p.status === "perdido" || p.status === "cancelado" || p.status === "facturada" || p.status === "cerrados") return false;
     return isInRevenuePeriod(p.revenue);
   });
-  // Forecast total = pipeline ponderado + lo ya facturado (Current)
+  // Forecast = pipeline ponderado pendiente + el Current ya facturado del mismo período.
+  // El Forecast representa la proyección TOTAL de revenue del año: lo ya facturado más
+  // lo que falta por facturar (pipeline ponderado por probabilidad).
   const revenueForecastTotal = revenueForecastDeals.reduce((s, p) => s + p.weighted, 0) + invoicedTotal;
 
   const revenueData = [
     { name: periodPrevLabel, label: periodPrevLabel, value: budget.previousYearRevenue, fill: "#67e8f9", description: "Revenue facturado del año anterior (configurado en Budget).", details: [] },
     { name: periodLabel, label: periodLabel, value: invoicedTotal, fill: "#06b6d4", description: `Total de oportunidades marcadas como facturadas con fecha de revenue en ${periodLabel}.`, details: invoicedDeals.map((p) => ({ name: `${p.projectName} (${p.revenue ?? "s/f"})`, amount: p.priceUSD })) },
-    { name: `Forecast ${periodLabel}`, label: `Forecast ${periodLabel}`, value: revenueForecastTotal, fill: "#0891b2", description: `Proyección total de revenue en ${periodLabel}: ya facturado + pipeline ponderado (priceUSD × probabilidad).`, details: revenueForecastDeals.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
+    { name: `Forecast ${periodLabel}`, label: `Forecast ${periodLabel}`, value: revenueForecastTotal, fill: "#0891b2", description: `Proyección total de revenue en ${periodLabel}: Current ya facturado + pipeline pendiente ponderado (priceUSD × probabilidad).`, details: revenueForecastDeals.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.revenueBudget, fill: "#6d28d9", description: "Meta de revenue estipulada para el año.", details: [] },
   ];
   const maxRevenueValue = Math.max(...revenueData.map((d) => d.value), 1);
@@ -244,9 +249,11 @@ const Analitica = () => {
   });
   const marginWonTotal = marginWonDeals.reduce((s, p) => s + p.marginUSD, 0);
   
-  // Forecast: prospecto, propuesta, seguimiento, ganado (not perdido, not facturada) con revenue del año en curso
+  // Forecast = margen de TODO lo ganado del año: lo ya facturado (Current) + lo ganado
+  // pendiente de cobrar. Excluye el pipeline aún no ganado (seguimiento, prospecto,
+  // propuesta, standby): para el margen solo se proyecta el negocio ya ganado.
   const marginForecastDeals = prospects.filter((p) => {
-    if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
+    if (p.status !== "ganado" && p.status !== "facturada" && p.status !== "cerrados") return false;
     const revYear = getRevenueYear(p.revenue);
     return revYear === currentYear;
   });
@@ -255,7 +262,7 @@ const Analitica = () => {
   const marginData = [
     { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearMargin, fill: "#67e8f9", description: "Margen operativo total de oportunidades ganadas del año anterior.", details: [] },
     { name: `${currentYear}`, label: `${currentYear}`, value: marginWonTotal, fill: "#06b6d4", description: `Margen USD ya realizado: solo oportunidades facturadas a la fecha con Revenue en ${currentYear}. Lo ganado pero aún no facturado va en el Forecast.`, details: marginWonDeals.map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
-    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: marginForecastTotal, fill: "#0891b2", description: `Suma del margen USD de oportunidades con fecha de revenue en ${currentYear} (prospecto, propuesta, seguimiento, ganado).`, details: marginForecastDeals.sort((a, b) => b.marginUSD - a.marginUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
+    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: marginForecastTotal, fill: "#0891b2", description: `Margen USD de todo lo ganado con cobro en ${currentYear}: ya facturado (Current) + ganado pendiente de cobrar. No incluye pipeline aún no ganado.`, details: marginForecastDeals.sort((a, b) => b.marginUSD - a.marginUSD).slice(0, 6).map((p) => ({ name: p.projectName, amount: p.marginUSD })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.marginBudget, fill: "#6d28d9", description: "Meta de margen operativo estipulada para el año.", details: [] },
   ];
   const maxMarginValue = Math.max(...marginData.map((d) => d.value), 1);
@@ -451,7 +458,7 @@ const Analitica = () => {
                 <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
                 <div><strong>{periodPrevLabel}:</strong> Revenue facturado del año anterior (configurado en Budget).</div>
                 <div><strong>{periodLabel}:</strong> Oportunidades facturadas con fecha de revenue en el período seleccionado.</div>
-                <div><strong>Forecast {periodLabel}:</strong> Oportunidades abiertas (no facturadas aún) con fecha de revenue dentro del período.</div>
+                <div><strong>Forecast {periodLabel}:</strong> Proyección total del período: lo ya facturado (Current) + pipeline abierto ponderado por probabilidad.</div>
                 <div><strong>Budget {currentYear}:</strong> Meta de revenue estipulada para el año en curso.</div>
               </TooltipContent>
             </Tooltip>
@@ -533,7 +540,7 @@ const Analitica = () => {
               <p className="font-semibold text-sm mb-1">¿Qué muestra esta gráfica?</p>
               <div><strong>{previousYear}:</strong> Margen USD total de oportunidades ganadas del año anterior.</div>
               <div><strong>Current:</strong> Margen USD ya realizado — solo lo facturado a la fecha en el año en curso.</div>
-              <div><strong>Forecast:</strong> Margen USD de oportunidades aún no facturadas (incluye ganadas pendientes de facturar y pipeline abierto).</div>
+              <div><strong>Forecast:</strong> Margen USD de todo lo ganado con cobro en el año (facturado + ganado pendiente). No incluye pipeline aún no ganado.</div>
               <div><strong>Budget {currentYear}:</strong> Meta de margen operativo para el año.</div>
             </TooltipContent>
           </Tooltip>
