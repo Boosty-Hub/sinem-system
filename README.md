@@ -1,73 +1,68 @@
-# Welcome to your Lovable project
+# SINEM — Sistema de Gestión
 
-## Project info
+Plataforma interna de SINEM para la gestión comercial y operativa: CRM de
+oportunidades, cotizaciones, proyectos, tareas, clientes/contactos, analítica y
+forecast, con una propuesta/oferta pública para clientes.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Stack
 
-## How can I edit this code?
+- **Frontend:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui
+- **Backend:** Supabase (PostgreSQL + Auth + Storage + Edge Functions)
+- **Email:** Resend
+- **Deploy:** Netlify
 
-There are several ways of editing your application.
+## Módulos
 
-**Use Lovable**
+| Ruta | Módulo |
+|------|--------|
+| `/` | Dashboard |
+| `/crm` | CRM — Oportunidades / Prospectos |
+| `/cotizaciones` | Cotizaciones (ES/EN) |
+| `/clientes` · `/contactos` | Clientes y Contactos |
+| `/projects` · `/projects/:id` | Proyectos (pasos 1–11 + archivos) |
+| `/tareas` | Tareas (Kanban + Lista) |
+| `/analitica` | Analítica y reportes |
+| `/forecast` | Forecast / Presupuesto |
+| `/oferta/:id` | Propuesta pública (sin auth) |
+| `/perfil` | Perfil y preferencias de notificaciones |
+| `/configuracion` | Configuración general, usuarios, permisos, campos |
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Desarrollo
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Requiere Node.js y npm.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Instalar dependencias
+npm install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Servidor de desarrollo (http://localhost:8087)
+npm run dev -- --port 8087
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Build de producción
+npm run build
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Previsualizar el build
+npm run preview
 ```
 
-**Edit a file directly in GitHub**
+## Estructura
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```
+src/
+  pages/                 # Páginas por módulo (CRM, Cotizaciones, Proyectos, …)
+  components/            # Componentes UI y de cada módulo
+  lib/                   # Tipos, mappers, notificaciones, utilidades
+  integrations/supabase/ # Cliente y tipos de Supabase
+supabase/
+  functions/             # Edge Functions (create-user, update-user, …)
+  migrations/            # Migraciones SQL (YYYYMMDDHHMMSS_descripcion.sql)
+```
 
-**Use GitHub Codespaces**
+## Notas
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Las cotizaciones soportan español e inglés; la propuesta pública usa los datos
+  del aprobador de la cotización.
+- Las notificaciones (centro + email) respetan las preferencias `notif_system` y
+  `notif_email` de cada usuario.
+- Repositorio **privado**: la configuración del proyecto incluye credenciales
+  sensibles. No hacerlo público.
