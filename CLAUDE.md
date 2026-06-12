@@ -22,7 +22,7 @@ Guía de contexto para Claude Code en este proyecto. Leer antes de cualquier tar
 |----------|-------|
 | **Project ID** | `fxsshhrxzjyjvfszaorq` |
 | **Project URL** | `https://fxsshhrxzjyjvfszaorq.supabase.co` |
-| **Management API Token** | `sbp_6b72188f02a837f2ef98b8e755eaa497b4a6bd73` |
+| **Management API Token** | `<SUPABASE_MANAGEMENT_TOKEN>` |
 | **Anon Key** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4c3NoaHJ4emp5anZmc3phb3JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyOTEwODQsImV4cCI6MjA4Njg2NzA4NH0.qJl7Dle-5iqFnNXir4mDPKR2c3-s8Og4e_6h6ZgquIE` |
 
 ### Ejecutar SQL directo

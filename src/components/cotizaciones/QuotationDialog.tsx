@@ -31,6 +31,7 @@ interface LineItem {
   unitPriceUSD: number;
   totalUSD: number;
   unitCostUSD: number;
+  costCurrency: string;
   itemMarginPercent: number | null;
   subtotalGroup?: string;
 }
@@ -308,7 +309,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
       if (quotation) {
         // Editing existing quotation
-        setLineItems(quotation.lineItems.map((li) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
+        setLineItems(quotation.lineItems.map((li) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, costCurrency: li.costCurrency ?? "USD", itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
         setShowItemSubtotals((quotation as any).showItemSubtotals ?? false);
         setLanguage(quotation.language ?? 'es');
         setSelectedProspectId(quotation.prospectId ?? "none");
@@ -344,7 +345,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
         // New quotation — try restoring draft (only if no prefill)
         const raw = !prefill ? sessionStorage.getItem(DRAFT_KEY) : null;
         const d = raw ? JSON.parse(raw) : null;
-        setLineItems((d?.lineItems ?? []).map((li: any) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
+        setLineItems((d?.lineItems ?? []).map((li: any) => ({ ...li, unitCostUSD: li.unitCostUSD ?? 0, costCurrency: li.costCurrency ?? "USD", itemMarginPercent: li.itemMarginPercent ?? null, subtotalGroup: li.subtotalGroup ?? undefined })));
         setShowItemSubtotals(d?.showItemSubtotals ?? false);
         setLanguage(d?.language ?? 'es');
         setSelectedProspectId(d?.selectedProspectId ?? prefill?.prospectId ?? "none");
@@ -545,7 +546,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const addItem = () => {
     setLineItems((prev) => [
       ...prev,
-      { id: `new-${Date.now()}`, description: "", quantity: 1, unitPriceUSD: 0, totalUSD: 0, unitCostUSD: 0, itemMarginPercent: null },
+      { id: `new-${Date.now()}`, description: "", quantity: 1, unitPriceUSD: 0, totalUSD: 0, unitCostUSD: 0, costCurrency: "USD", itemMarginPercent: null },
     ]);
   };
 
@@ -645,6 +646,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       id: li.id, description: li.description, quantity: li.quantity,
       unitPriceUSD: li.unitPriceUSD, totalUSD: li.totalUSD,
       unitCostUSD: li.unitCostUSD || undefined,
+      costCurrency: li.costCurrency || "USD",
       itemMarginPercent: li.itemMarginPercent ?? undefined,
       subtotalGroup: li.subtotalGroup || undefined,
     }));
@@ -753,6 +755,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       code: quotation.code,
       subject: quotation.subject,
       lineItems: quotation.lineItems,
+      distributedCosts: quotation.distributedCosts ?? [],
       subtotalUSD: quotation.subtotalUSD,
       totalUSD: quotation.totalUSD,
       costUSD: quotation.costUSD,
@@ -808,9 +811,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const restoreVersion = (snap: QuotationSnapshot) => {
     setCode(snap.code);
     setSubject(snap.subject);
-    setLineItems(snap.lineItems.map((li) => ({ ...li, unitCostUSD: (li as any).unitCostUSD ?? 0, itemMarginPercent: (li as any).itemMarginPercent ?? null })));
+    setLineItems(snap.lineItems.map((li) => ({ ...li, unitCostUSD: (li as any).unitCostUSD ?? 0, costCurrency: (li as any).costCurrency ?? "USD", itemMarginPercent: (li as any).itemMarginPercent ?? null })));
     setCostUSD(snap.costUSD);
-    setDistributedCosts([]);
+    setDistributedCosts(snap.distributedCosts ?? []);
     setOtherCosts([]);
     setPaymentTerms(snap.paymentTerms);
     setDeliveryTerms(snap.deliveryTerms);
@@ -1150,15 +1153,16 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 <thead>
                   <tr className="bg-muted/50 border-b">
                     <th className="text-center py-2 px-2 font-medium text-muted-foreground text-xs w-8">N°</th>
-                    {showItemSubtotals && <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs w-14">Grp.</th>}
+                    {showItemSubtotals && <th className="text-center py-2 px-1 font-medium text-muted-foreground text-xs w-16">Grp.</th>}
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Descripción</th>
                     <th className="text-center py-2 px-3 font-medium text-muted-foreground text-xs w-20">Cant.</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo</th>
+                    <th className="text-center py-2 px-2 font-medium text-muted-foreground text-xs w-20">Moneda Costo</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Dist.</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Costo Total</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-24">Margen %</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">P. Unit. {isOriginalCurrency ? currency : "USD"}</th>
-                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Total {isOriginalCurrency ? currency : "USD"}</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">P. Unit. USD</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs w-28">Total USD</th>
                     <th className="w-8"></th>
                   </tr>
                 </thead>
@@ -1166,19 +1170,23 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   {lineItems.map((item, itemIdx) => {
                     const unitDistCost = computeItemUnitDist(item, lineItems, distributedCosts);
                     const costUnitTotal = (item.unitCostUSD + unitDistCost) * item.quantity;
-                    const sym = isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$";
+                    const sym = "$";
                     return (
                       <tr key={item.id} className="border-b last:border-0">
                         <td className="py-2 px-2 text-center text-xs text-muted-foreground font-medium">{itemIdx + 1}</td>
                         {showItemSubtotals && (
                           <td className="py-2 px-1">
-                            <Input
-                              value={item.subtotalGroup ?? ""}
-                              onChange={(e) => updateItem(item.id, "subtotalGroup", e.target.value.slice(0, 3).toUpperCase())}
-                              className="h-8 text-xs text-center px-1 w-12 uppercase"
-                              placeholder="—"
-                              maxLength={3}
-                            />
+                            <Select value={item.subtotalGroup ?? "none"} onValueChange={(v) => updateItem(item.id, "subtotalGroup", v === "none" ? undefined : v)}>
+                              <SelectTrigger className="h-8 text-xs w-14"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">—</SelectItem>
+                                <SelectItem value="A">A</SelectItem>
+                                <SelectItem value="B">B</SelectItem>
+                                <SelectItem value="C">C</SelectItem>
+                                <SelectItem value="D">D</SelectItem>
+                                <SelectItem value="E">E</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </td>
                         )}
                         <td className="py-2 px-3">
@@ -1206,6 +1214,16 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                             min={0}
                             placeholder="0"
                           />
+                        </td>
+                        <td className="py-2 px-1">
+                          <Select value={item.costCurrency ?? "USD"} onValueChange={(v) => updateItem(item.id, "costCurrency", v)}>
+                            <SelectTrigger className="h-8 text-xs w-16"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="USD">USD</SelectItem>
+                              <SelectItem value="DOP">DOP</SelectItem>
+                              <SelectItem value="EUR">EUR</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </td>
                         <td className="py-2 px-3 text-right text-xs text-muted-foreground">
                           {unitDistCost > 0 ? `$${unitDistCost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-muted-foreground/40">—</span>}
@@ -1245,7 +1263,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   })}
                   {lineItems.length === 0 && (
                     <tr>
-                      <td colSpan={showItemSubtotals ? 11 : 10} className="py-6 text-center text-muted-foreground text-xs">
+                      <td colSpan={showItemSubtotals ? 12 : 11} className="py-6 text-center text-muted-foreground text-xs">
                         Sin ítems. Haz clic en "Agregar Ítem" para comenzar.
                       </td>
                     </tr>
@@ -1296,26 +1314,16 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                     </div>
                   )}
                 </div>
-                {currency !== "USD" && (
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <Checkbox id="originalCurrency" checked={isOriginalCurrency} onCheckedChange={(v) => { setIsOriginalCurrency(!!v); if (v) setExchangeRate(1); }} />
-                    <Label htmlFor="originalCurrency" className="text-xs text-muted-foreground">
-                      Moneda original ({CURRENCIES.find((c) => c.key === currency)?.label}) — ítems y montos directamente en {currency}
-                    </Label>
-                  </div>
-                )}
               </div>
             </div>
             <div className="space-y-1 text-sm">
               {(() => {
-                const sym = isOriginalCurrency ? (CURRENCIES.find((c) => c.key === currency)?.symbol ?? "$") : "$";
-                const label = isOriginalCurrency ? currency : "USD";
                 return (
                   <>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">{sym}{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                    {applyItbis && <div className="flex justify-between"><span className="text-muted-foreground">ITBIS ({itbisPercent}%):</span><span className="font-medium">{sym}{itbisUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>}
-                    <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total {label}:</span><span className="text-primary">{sym}{totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                    {currency !== "USD" && !isOriginalCurrency && exchangeRate > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">${subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                    {applyItbis && <div className="flex justify-between"><span className="text-muted-foreground">ITBIS ({itbisPercent}%):</span><span className="font-medium">${itbisUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>}
+                    <div className="flex justify-between font-semibold text-base border-t pt-1"><span>Total USD:</span><span className="text-primary">${totalUSD.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                    {currency !== "USD" && exchangeRate > 0 && (
                       <div className="flex justify-between font-semibold text-sm text-muted-foreground">
                         <span>Total {currency}:</span>
                         <span>{CURRENCIES.find((c) => c.key === currency)?.symbol}{(totalUSD * exchangeRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

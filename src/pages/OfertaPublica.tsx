@@ -691,31 +691,37 @@ const OfertaPublica = () => {
                   ));
                 }
 
-                // Group consecutive items with the same subtotalGroup label
+                // Group ALL items with the same subtotalGroup label together (first-appearance order of labels)
                 type Run = { grp: string; items: typeof items; startGlobalIdx: number };
                 type Solo = { grp: undefined; item: typeof items[0]; globalIdx: number };
-                const runs: (Run | Solo)[] = [];
-                let gi = 0;
-                let idx = 0;
-                while (idx < items.length) {
-                  const item = items[idx];
+                const seenGrp = new Set<string>();
+                const orderedRuns: (Run | Solo)[] = [];
+                items.forEach((item) => {
                   const g = (item as any).subtotalGroup as string | undefined;
-                  if (g) {
-                    const run: Run = { grp: g, items: [item], startGlobalIdx: gi };
-                    gi++;
-                    idx++;
-                    while (idx < items.length && ((items[idx] as any).subtotalGroup as string | undefined) === g) {
-                      run.items.push(items[idx]);
-                      gi++;
-                      idx++;
-                    }
-                    runs.push(run);
-                  } else {
-                    runs.push({ grp: undefined, item, globalIdx: gi });
-                    gi++;
-                    idx++;
+                  if (!g) return; // handled below
+                  if (!seenGrp.has(g)) {
+                    seenGrp.add(g);
+                    orderedRuns.push({ grp: g, items: items.filter((i) => (i as any).subtotalGroup === g), startGlobalIdx: 0 });
                   }
-                }
+                });
+                // Add ungrouped items (no subtotalGroup) in their original order, at the end
+                items.forEach((item) => {
+                  const g = (item as any).subtotalGroup as string | undefined;
+                  if (!g) orderedRuns.push({ grp: undefined, item, globalIdx: 0 });
+                });
+                // Assign sequential global indices for display numbering
+                let gi = 0;
+                const runs: (Run | Solo)[] = orderedRuns.map((r) => {
+                  if (r.grp === undefined) {
+                    const solo = { ...r, globalIdx: gi } as Solo;
+                    gi++;
+                    return solo;
+                  } else {
+                    const run = { ...r, startGlobalIdx: gi } as Run;
+                    gi += r.items.length;
+                    return run;
+                  }
+                });
 
                 const allRows: React.ReactElement[] = [];
                 runs.forEach((run, runIdx) => {
@@ -744,7 +750,7 @@ const OfertaPublica = () => {
                         </tr>
                       );
                     });
-                    if (r.items.length >= 2) {
+                    if (r.items.length >= 1) {
                       const groupSubtotal = r.items.reduce((s, it) => s + it.totalUSD, 0);
                       const groupItbis = quotation.applyItbis
                         ? Math.round(groupSubtotal * (quotation.itbisPercent / 100) * 100) / 100
