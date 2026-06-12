@@ -757,10 +757,20 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       lineItems: quotation.lineItems,
       distributedCosts: quotation.distributedCosts ?? [],
       subtotalUSD: quotation.subtotalUSD,
+      applyItbis: quotation.applyItbis,
+      itbisPercent: quotation.itbisPercent,
       totalUSD: quotation.totalUSD,
       costUSD: quotation.costUSD,
       marginPercent: quotation.marginPercent,
       marginUSD: quotation.marginUSD,
+      currency: quotation.currency,
+      exchangeRate: quotation.exchangeRate,
+      client: quotation.client,
+      partner: quotation.partner,
+      showPartnerText: quotation.showPartnerText,
+      proposalTexts: quotation.proposalTexts,
+      showItemSubtotals: (quotation as any).showItemSubtotals,
+      language: quotation.language,
       paymentTerms: quotation.paymentTerms,
       deliveryTerms: quotation.deliveryTerms,
       deliveryWeeksMin: quotation.deliveryWeeksMin,
@@ -815,6 +825,16 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
     setCostUSD(snap.costUSD);
     setDistributedCosts(snap.distributedCosts ?? []);
     setOtherCosts([]);
+    if (snap.applyItbis !== undefined) setApplyItbis(snap.applyItbis);
+    if (snap.itbisPercent !== undefined) setItbisPercent(snap.itbisPercent);
+    if (snap.currency) setCurrency(snap.currency);
+    if (snap.exchangeRate !== undefined) setExchangeRate(snap.exchangeRate);
+    if (snap.client) setClientData({ ...emptyClientData, ...snap.client });
+    if (snap.partner) setPartner(snap.partner);
+    if (snap.showPartnerText !== undefined) setShowPartnerText(snap.showPartnerText);
+    if (snap.proposalTexts) setProposalTexts(snap.proposalTexts);
+    if (snap.showItemSubtotals !== undefined) setShowItemSubtotals(snap.showItemSubtotals);
+    if (snap.language) setLanguage(snap.language);
     setPaymentTerms(snap.paymentTerms);
     setDeliveryTerms(snap.deliveryTerms);
     setDeliveryWeeksMin(snap.deliveryWeeksMin);
