@@ -40,6 +40,8 @@ interface WonProspect {
   direct_customer: string;
   price_usd: number;
   client_id: string | null;
+  estimated_oe?: string | null;
+  revenue?: string | null;
 }
 
 const formatDuration = (days: number): string => {
@@ -150,7 +152,7 @@ const Projects = () => {
     // Get won prospects that don't already have a project linked
     const { data: prospects } = await supabase
       .from("prospects")
-      .select("id, code, project_name, direct_customer, price_usd, client_id")
+      .select("id, code, project_name, direct_customer, price_usd, client_id, estimated_oe, revenue")
       .in("status", ["ganado", "facturada"])
       .order("code");
 
@@ -258,6 +260,7 @@ const Projects = () => {
       name: prospect.project_name,
       client: prospect.direct_customer,
       value: String(prospect.price_usd),
+      startDate: prospect.estimated_oe ?? f.startDate,
     }));
     setProspectPopoverOpen(false);
   };
@@ -528,7 +531,7 @@ const Projects = () => {
                       {cfg.label}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-muted-foreground text-xs">{project.start_date ?? "—"}</td>
+                  <td className="py-3 px-4 text-muted-foreground text-xs">{formatDateLabel(prog.oeDate ?? project.start_date)}</td>
                   <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center gap-0.5">
                       {canEditProj && (

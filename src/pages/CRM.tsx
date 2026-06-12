@@ -230,7 +230,7 @@ const CRM = () => {
       status: "activo",
       origin_prospect_id: prospect.id,
       client_id: prospect.clientId ?? null,
-      start_date: new Date().toISOString().split("T")[0],
+      start_date: prospect.estimatedOE || new Date().toISOString().split("T")[0],
     } as any);
     if (projError) {
       console.error("Error creating project:", projError);
@@ -356,6 +356,14 @@ const CRM = () => {
         setProspects((prev) => prev.map((p) => (p.id === saved.id ? exists : p)));
         toast({ title: "Error al guardar", description: updateError.message, variant: "destructive" });
         return;
+      }
+
+      // Sync OE date to linked project start_date when it changes
+      if (exists.estimatedOE !== saved.estimatedOE && saved.estimatedOE) {
+        await supabase
+          .from("projects")
+          .update({ start_date: saved.estimatedOE })
+          .eq("origin_prospect_id", saved.id);
       }
 
       // Auto-create project when status changed to "ganado" via dialog
