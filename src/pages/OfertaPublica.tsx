@@ -462,6 +462,14 @@ const OfertaPublica = () => {
         pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
       };
 
+      // Drop the last slice if it has negligible content (flex minHeight overflow artifact).
+      // 40px canvas = ~20 DOM px — less than one line of text, visually blank.
+      const MIN_SLICE_PX = 40;
+      if (sliceStarts.length > 1) {
+        const lastSliceH = contentH_px - sliceStarts[sliceStarts.length - 1];
+        if (lastSliceH < MIN_SLICE_PX) sliceStarts.pop();
+      }
+
       if (sliceStarts.length === 1) {
         // Whole content fits on one page
         if (i > 0) pdf.addPage("letter", "portrait");
