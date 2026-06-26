@@ -185,6 +185,23 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const [proposalTexts, setProposalTexts] = useState<QuotationProposalTexts>({});
   const [textsExpanded, setTextsExpanded] = useState(false);
   const [language, setLanguage] = useState<'es' | 'en'>('es');
+  const psRowRef = useRef<any>(null);
+
+  const getDefaultTextsForLang = (row: any, lang: 'es' | 'en'): QuotationProposalTexts => {
+    if (!row) return {};
+    const useEn = lang === 'en';
+    return {
+      greetingText: (useEn ? row.greeting_text_en : null) || row.greeting_text || "",
+      warrantyText: (useEn ? row.warranty_text_en : null) || row.warranty_text || "",
+      responsibilityText: (useEn ? row.responsibility_text_en : null) || row.responsibility_text || "",
+      risksText: (useEn ? row.risks_text_en : null) || row.risks_text || "",
+      installationText: (useEn ? row.installation_text_en : null) || row.installation_text || "",
+      validityText: (useEn ? row.validity_text_en : null) || row.validity_text || "",
+      returnsText: (useEn ? row.returns_text_en : null) || row.returns_text || "",
+      legalClauses: (useEn ? row.legal_clauses_en : null) || row.legal_clauses || "",
+      closingText: (useEn ? row.closing_text_en : null) || row.closing_text || "",
+    };
+  };
 
   // Resolve current auth user to app_users id + check if they have a signature (required to approve)
   useEffect(() => {
@@ -223,17 +240,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       if (dbCl) setClients(dbCl.map(dbToClient));
       if (dbCt) setContacts(dbCt.map(dbToContact));
 
-      const defaultTexts: QuotationProposalTexts = psRow ? {
-        greetingText: psRow.greeting_text ?? "",
-        warrantyText: psRow.warranty_text ?? "",
-        responsibilityText: psRow.responsibility_text ?? "",
-        risksText: psRow.risks_text ?? "",
-        installationText: psRow.installation_text ?? "",
-        validityText: psRow.validity_text ?? "",
-        returnsText: psRow.returns_text ?? "",
-        legalClauses: psRow.legal_clauses ?? "",
-        closingText: psRow.closing_text ?? "",
-      } : {};
+      psRowRef.current = psRow;
+      const initLang = quotation ? ((quotation.language ?? 'es') as 'es' | 'en') : 'es';
+      const defaultTexts = getDefaultTextsForLang(psRow, initLang);
 
       if (quotation) {
         setProposalTexts(quotation.proposalTexts ?? defaultTexts);
@@ -986,7 +995,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 <div className="flex rounded-md border overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setLanguage('es')}
+                    onClick={() => { setLanguage('es'); setProposalTexts(getDefaultTextsForLang(psRowRef.current, 'es')); }}
                     className={cn("flex-1 py-2 px-3 text-sm font-medium transition-colors",
                       language === 'es' ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-muted-foreground")}
                   >
@@ -994,7 +1003,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                   </button>
                   <button
                     type="button"
-                    onClick={() => setLanguage('en')}
+                    onClick={() => { setLanguage('en'); setProposalTexts(getDefaultTextsForLang(psRowRef.current, 'en')); }}
                     className={cn("flex-1 py-2 px-3 text-sm font-medium transition-colors border-l",
                       language === 'en' ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-muted-foreground")}
                   >
