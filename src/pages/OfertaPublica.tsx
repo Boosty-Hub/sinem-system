@@ -429,10 +429,11 @@ const OfertaPublica = () => {
           if (hit.top > y) {
             // Break before the zone starts
             proposed = hit.top;
-          } else {
-            // Zone is too tall to fit entirely — break after it ends
+          } else if (hit.bottom - y <= usable_px) {
+            // Zone fits within one usable page from current y — break after it
             proposed = hit.bottom;
           }
+          // else: zone is taller than one page — cut naturally to avoid blank page
         }
         sliceStarts.push(proposed);
         y = proposed;
@@ -674,14 +675,21 @@ const OfertaPublica = () => {
           <p style={{ margin: "0 0 18px 0", fontSize: "13px" }}>{eff?.greetingText}</p>
 
           {/* Items table */}
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "28px" }} />
+              <col />
+              <col style={{ width: "40px" }} />
+              <col style={{ width: "88px" }} />
+              <col style={{ width: "88px" }} />
+            </colgroup>
             <thead>
               <tr style={{ backgroundColor: "#0097A7", color: "white" }}>
-                <th style={{ padding: "9px 10px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "36px" }}>No.</th>
+                <th style={{ padding: "9px 8px", textAlign: "center", fontSize: "11px", fontWeight: 600 }}>No.</th>
                 <th style={{ padding: "9px 10px", textAlign: "left", fontSize: "11px", fontWeight: 600 }}>{L.tableDescription}</th>
-                <th style={{ padding: "9px 10px", textAlign: "center", fontSize: "11px", fontWeight: 600, width: "50px" }}>{L.tableQty}</th>
-                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>{L.tableUnitPrice} {qCurrency}</th>
-                <th style={{ padding: "9px 10px", textAlign: "right", fontSize: "11px", fontWeight: 600, width: "100px" }}>{L.tableTotal} {qCurrency}</th>
+                <th style={{ padding: "9px 6px", textAlign: "center", fontSize: "11px", fontWeight: 600 }}>{L.tableQty}</th>
+                <th style={{ padding: "9px 8px", textAlign: "right", fontSize: "11px", fontWeight: 600 }}>{L.tableUnitPrice} {qCurrency}</th>
+                <th style={{ padding: "9px 8px", textAlign: "right", fontSize: "11px", fontWeight: 600 }}>{L.tableTotal} {qCurrency}</th>
               </tr>
             </thead>
             <tbody>
@@ -690,11 +698,11 @@ const OfertaPublica = () => {
                 if (!quotation?.showItemSubtotals) {
                   return items.map((item, i) => (
                     <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
-                      <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
-                      <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
-                      <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
+                      <td style={{ padding: "6px 10px", fontSize: "12px", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                      <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
                     </tr>
                   ));
                 }
@@ -737,11 +745,11 @@ const OfertaPublica = () => {
                     const solo = run as Solo;
                     allRows.push(
                       <tr key={`r-${solo.item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: solo.globalIdx % 2 === 0 ? "#fafafa" : "white" }}>
-                        <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{solo.globalIdx + 1}</td>
-                        <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
-                        <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{solo.item.quantity}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(solo.item.unitPriceUSD)}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(solo.item.totalUSD)}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{solo.globalIdx + 1}</td>
+                        <td style={{ padding: "6px 10px", fontSize: "12px", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
+                        <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{solo.item.quantity}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(solo.item.unitPriceUSD)}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(solo.item.totalUSD)}</td>
                       </tr>
                     );
                   } else {
@@ -750,11 +758,11 @@ const OfertaPublica = () => {
                       const rowIdx = r.startGlobalIdx + j;
                       allRows.push(
                         <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #f0f0f0", backgroundColor: rowIdx % 2 === 0 ? "#fafafa" : "white" }}>
-                          <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{rowIdx + 1}</td>
-                          <td style={{ padding: "8px 10px", fontSize: "12px" }} dangerouslySetInnerHTML={{ __html: item.description }} />
-                          <td style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                          <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{rowIdx + 1}</td>
+                          <td style={{ padding: "6px 10px", fontSize: "12px", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                          <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
                         </tr>
                       );
                     });
@@ -826,38 +834,40 @@ const OfertaPublica = () => {
           )}
 
           {quotation.notes && (
-            <div style={{ marginBottom: "18px", padding: "10px 14px", backgroundColor: "#f8f9fa", borderLeft: "3px solid #0097A7", borderRadius: "4px" }}>
+            <div className="pdf-no-break" style={{ marginBottom: "18px", padding: "10px 14px", backgroundColor: "#f8f9fa", borderLeft: "3px solid #0097A7", borderRadius: "4px" }}>
               <p style={{ fontWeight: 600, fontSize: "11px", color: "#555", margin: "0 0 3px 0" }}>{L.notes}</p>
-              <p style={{ margin: 0, fontSize: "12px" }}>{quotation.notes}</p>
+              <p style={{ margin: 0, fontSize: "12px", whiteSpace: "pre-wrap" }}>{quotation.notes}</p>
             </div>
           )}
 
           {/* Condiciones Comerciales */}
-          <div className="pdf-no-break" style={{ marginBottom: "18px" }}>
-            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "8px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
-              {L.commercialTerms}
-            </h3>
-            <table style={{ fontSize: "12px", borderCollapse: "collapse", width: "100%" }}>
-              <tbody>
-                {[
-                  [L.currencyLabel, L.currencyName[qCurrency] ?? qCurrency],
-                  [L.paymentTerms, quotation.paymentTerms],
-                  [L.deliveryTerms, quotation.deliveryTerms ?? "—"],
-                  [L.deliveryTime, (() => { const mn = quotation.deliveryWeeksMin; const mx = quotation.deliveryWeeksMax; const hasMin = mn != null && mn !== 0; const hasMax = mx != null && mx !== 0; const wStr = hasMin && hasMax ? `${mn}-${mx} ${L.weeks}` : hasMax ? `${mx} ${L.weeks}` : hasMin ? `${mn} ${L.weeks}` : null; return [wStr, quotation.deliveryTimeNote].filter(Boolean).join(" — ") || "—"; })()],
-                  [L.offerValidity, `${quotation.validityDays} ${L.days}`],
-                  [L.deliveryLocation, quotation.deliveryLocation],
-                ].map(([label, value]) => (
-                  <tr key={label} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={{ fontWeight: 600, padding: "5px 0", width: "175px", color: "#555" }}>{label}</td>
-                    <td style={{ padding: "5px 0" }}>{value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ marginBottom: "18px" }}>
+            <div className="pdf-no-break">
+              <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#0097A7", marginBottom: "8px", borderBottom: "2px solid #0097A7", paddingBottom: "4px" }}>
+                {L.commercialTerms}
+              </h3>
+              <table style={{ fontSize: "12px", borderCollapse: "collapse", width: "100%" }}>
+                <tbody>
+                  {[
+                    [L.currencyLabel, L.currencyName[qCurrency] ?? qCurrency],
+                    [L.paymentTerms, quotation.paymentTerms],
+                    [L.deliveryTerms, quotation.deliveryTerms ?? "—"],
+                    [L.deliveryTime, (() => { const mn = quotation.deliveryWeeksMin; const mx = quotation.deliveryWeeksMax; const hasMin = mn != null && mn !== 0; const hasMax = mx != null && mx !== 0; const wStr = hasMin && hasMax ? `${mn}-${mx} ${L.weeks}` : hasMax ? `${mx} ${L.weeks}` : hasMin ? `${mn} ${L.weeks}` : null; return [wStr, quotation.deliveryTimeNote].filter(Boolean).join(" — ") || "—"; })()],
+                    [L.offerValidity, `${quotation.validityDays} ${L.days}`],
+                    [L.deliveryLocation, quotation.deliveryLocation],
+                  ].map(([label, value]) => (
+                    <tr key={label} style={{ borderBottom: "1px solid #eee" }}>
+                      <td style={{ fontWeight: 600, padding: "5px 0", width: "175px", color: "#555" }}>{label}</td>
+                      <td style={{ padding: "5px 0" }}>{value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {quotation.specialConsiderations && (
-              <div style={{ marginTop: "10px" }}>
+              <div className="pdf-no-break" style={{ marginTop: "10px" }}>
                 <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "4px" }}>{L.specialConsiderations}</p>
-                <p style={{ fontSize: "12px", whiteSpace: "pre-wrap", color: "#333" }}>{quotation.specialConsiderations}</p>
+                <p style={{ fontSize: "12px", whiteSpace: "pre-wrap", color: "#333", lineHeight: "1.6" }}>{quotation.specialConsiderations}</p>
               </div>
             )}
           </div>
