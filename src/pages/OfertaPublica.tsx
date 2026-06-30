@@ -428,8 +428,8 @@ const OfertaPublica = () => {
       // near-blank page — so we cut naturally at usable_px instead.
       const MIN_SLICE_PX = Math.floor(usable_px * 0.3);
 
-      // ── Compute raw break points ──
-      const rawSlices: number[] = [0];
+      // ── Compute break points ──
+      const sliceStarts: number[] = [0];
       let y = 0;
       while (y + usable_px < contentH_px) {
         let proposed = y + usable_px;
@@ -439,26 +439,15 @@ const OfertaPublica = () => {
           proposed = hit.top;
         }
         // else: cut naturally (zone too tall, starts at y, or not enough preceding content)
-        rawSlices.push(proposed);
+        sliceStarts.push(proposed);
         y = proposed;
       }
 
-      // ── Verification pass: remove micro-slices that would produce near-blank pages ──
-      const sliceStarts: number[] = [0];
-      for (let k = 1; k < rawSlices.length; k++) {
-        const prevStart = sliceStarts[sliceStarts.length - 1];
-        const thisStart = rawSlices[k];
-        const nextStart = k + 1 < rawSlices.length ? rawSlices[k + 1] : contentH_px;
-        const sliceH    = thisStart - prevStart;
-        const mergedH   = nextStart - prevStart;
-        // Skip break point if: slice is tiny AND merging with next slice stays within one page
-        if (sliceH < MIN_SLICE_PX && mergedH <= usable_px) continue;
-        sliceStarts.push(thisStart);
-      }
-      // Drop trailing micro-slice (flex minHeight overflow artifact)
+      // Drop trailing micro-slice only when truly negligible (flex minHeight overflow artifact).
+      // Use a small fixed threshold — NOT MIN_SLICE_PX — to avoid creating an oversized final slice.
       if (sliceStarts.length > 1) {
         const lastH = contentH_px - sliceStarts[sliceStarts.length - 1];
-        if (lastH < MIN_SLICE_PX) sliceStarts.pop();
+        if (lastH < 40) sliceStarts.pop();
       }
 
       // ── Build one composite PDF page per slice ──
