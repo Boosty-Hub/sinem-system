@@ -409,6 +409,7 @@ const OfertaPublica = () => {
       }
 
       // ── Collect no-break zones (relative to content start = headerBottom_px) ──
+      // Only zones that fit on one page — zones taller than usable_px can't be kept intact anyway
       const noBreakEls = Array.from(pageEl.querySelectorAll<HTMLElement>(".pdf-no-break"));
       const noBreakZones = noBreakEls.map((el) => {
         const r = el.getBoundingClientRect();
@@ -416,27 +417,48 @@ const OfertaPublica = () => {
           top:    Math.round((r.top    - pageRect.top) * SCALE) - headerBottom_px,
           bottom: Math.round((r.bottom - pageRect.top) * SCALE) - headerBottom_px,
         };
-      }).filter((z) => z.top >= 0 && z.top < contentH_px);
+      }).filter((z) =>
+        z.top >= 0 &&
+        z.top < contentH_px &&
+        (z.bottom - z.top) < usable_px
+      );
 
-      // ── Compute smart break points that avoid cutting no-break zones ──
-      const sliceStarts: number[] = [0]; // content-relative starts
+      // Minimum content height to justify breaking early for a no-break zone.
+      // If a zone starts closer than this to the current y, cutting there would produce a
+      // near-blank page — so we cut naturally at usable_px instead.
+      const MIN_SLICE_PX = Math.floor(usable_px * 0.3);
+
+      // ── Compute raw break points ──
+      const rawSlices: number[] = [0];
       let y = 0;
       while (y + usable_px < contentH_px) {
         let proposed = y + usable_px;
-        // Check whether proposed cut falls inside any no-break zone
         const hit = noBreakZones.find((z) => z.top < proposed && z.bottom > proposed);
-        if (hit) {
-          if (hit.top > y) {
-            // Break before the zone starts
-            proposed = hit.top;
-          } else if (hit.bottom - y <= usable_px) {
-            // Zone fits within one usable page from current y — break after it
-            proposed = hit.bottom;
-          }
-          // else: zone is taller than one page — cut naturally to avoid blank page
+        if (hit && hit.top > y && hit.top - y >= MIN_SLICE_PX) {
+          // Break before the zone — only when enough content precedes it on this page
+          proposed = hit.top;
         }
-        sliceStarts.push(proposed);
+        // else: cut naturally (zone too tall, starts at y, or not enough preceding content)
+        rawSlices.push(proposed);
         y = proposed;
+      }
+
+      // ── Verification pass: remove micro-slices that would produce near-blank pages ──
+      const sliceStarts: number[] = [0];
+      for (let k = 1; k < rawSlices.length; k++) {
+        const prevStart = sliceStarts[sliceStarts.length - 1];
+        const thisStart = rawSlices[k];
+        const nextStart = k + 1 < rawSlices.length ? rawSlices[k + 1] : contentH_px;
+        const sliceH    = thisStart - prevStart;
+        const mergedH   = nextStart - prevStart;
+        // Skip break point if: slice is tiny AND merging with next slice stays within one page
+        if (sliceH < MIN_SLICE_PX && mergedH <= usable_px) continue;
+        sliceStarts.push(thisStart);
+      }
+      // Drop trailing micro-slice (flex minHeight overflow artifact)
+      if (sliceStarts.length > 1) {
+        const lastH = contentH_px - sliceStarts[sliceStarts.length - 1];
+        if (lastH < MIN_SLICE_PX) sliceStarts.pop();
       }
 
       // ── Build one composite PDF page per slice ──
@@ -462,14 +484,6 @@ const OfertaPublica = () => {
 
         pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
       };
-
-      // Drop the last slice if it has negligible content (flex minHeight overflow artifact).
-      // 40px canvas = ~20 DOM px — less than one line of text, visually blank.
-      const MIN_SLICE_PX = 40;
-      if (sliceStarts.length > 1) {
-        const lastSliceH = contentH_px - sliceStarts[sliceStarts.length - 1];
-        if (lastSliceH < MIN_SLICE_PX) sliceStarts.pop();
-      }
 
       if (sliceStarts.length === 1) {
         // Whole content fits on one page
