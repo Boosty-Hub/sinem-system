@@ -764,9 +764,12 @@ const OfertaPublica = () => {
           <span className="text-sm font-semibold text-gray-700">
             {quotation.code} — {quotation.client.company}
           </span>
-          <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
-            <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
-          </Button>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v4 · bitmap</span>
+            <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
+              <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
+            </Button>
+          </div>
         </div>
       </div>
 
