@@ -14,8 +14,6 @@ const PAGE_H = 1056;
 const PAD_H = 45; // top padding
 const PAD_V = 55; // side padding
 const PAD_B = 30; // bottom padding
-const HEADER_H = 72;  // logo (55px) + 10px margin-bottom + some gap
-const FOOTER_H = 44;  // border + text + padding
 
 const PAGE_STYLE: React.CSSProperties = {
   fontFamily: "'Inter', Arial, sans-serif",
@@ -173,6 +171,201 @@ const dbToSettings = (row: any): ProposalSettings => ({
   signatureEmail: row.signature_email ?? "",
   signatureImageUrl: row.signature_image_url ?? "",
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF pagination helpers (line-aware slicing)
+//
+// The download renders each .pdf-page section to canvas via html2canvas. When a
+// section is taller than one physical page it must be split. The break points
+// are snapped to the GAPS between real text line boxes (measured with the Range
+// API on the live DOM) so a cut never bisects a line — which is exactly how the
+// browser preview paginates. Page numbers are then stamped sequentially across
+// all physical pages.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Wait for fonts + images to settle so measured line boxes match what renders.
+async function ensureAssetsReady(root: HTMLElement) {
+  try { await (document as any).fonts?.ready; } catch { /* no-op */ }
+  const imgs = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return (img.decode?.() ?? Promise.reject()).catch(
+        () =>
+          new Promise<void>((res) => {
+            img.onload = () => res();
+            img.onerror = () => res();
+          })
+      );
+    })
+  );
+}
+
+// The children of a .pdf-page that sit between the header and footer, plus the
+// absolute top of the content and its real height (max child bottom, NOT the
+// footer top which marginTop:auto pushes down).
+function measureGeometry(pageEl: HTMLElement) {
+  const headerEl = pageEl.querySelector<HTMLElement>(".pdf-header");
+  const footerEl = pageEl.querySelector<HTMLElement>(".pdf-footer");
+  const all = Array.from(pageEl.children) as HTMLElement[];
+  const hIdx = headerEl ? all.indexOf(headerEl) : -1;
+  const fIdx = footerEl ? all.indexOf(footerEl) : all.length;
+  const contentChildren = all.slice(hIdx + 1, fIdx);
+
+  const contentTop_abs = contentChildren.length
+    ? contentChildren[0].getBoundingClientRect().top
+    : pageEl.getBoundingClientRect().top;
+  let contentBottom_abs = contentTop_abs;
+  for (const ch of contentChildren) {
+    contentBottom_abs = Math.max(contentBottom_abs, ch.getBoundingClientRect().bottom);
+  }
+  const contentH = contentBottom_abs - contentTop_abs;
+  return { headerEl, footerEl, contentChildren, contentTop_abs, contentH };
+}
+
+interface BreakInterval { top: number; bottom: number; }
+
+// Enumerate Y positions (relative to content top) where a break is SAFE — i.e.
+// not inside any text line box, image, or small no-break element. The giant
+// description cell (taller than the usable window) is intentionally splittable
+// so it breaks between its own line boxes.
+function collectBreakModel(contentChildren: HTMLElement[], originAbsY: number, winH: number) {
+  const candidates = new Set<number>([0]);
+  const forbidden: BreakInterval[] = [];
+  const add = (top: number, bottom: number, forbid: boolean) => {
+    candidates.add(top);
+    candidates.add(bottom);
+    if (forbid && bottom - top > 0.5) forbidden.push({ top, bottom });
+  };
+  const range = document.createRange();
+
+  for (const child of contentChildren) {
+    // One rect per line box from each text node → forbidden intervals.
+    const walker = document.createTreeWalker(child, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) =>
+        n.nodeValue && n.nodeValue.trim()
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    });
+    let tn: Node | null;
+    while ((tn = walker.nextNode())) {
+      range.selectNodeContents(tn);
+      const rects = range.getClientRects();
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
+        if (r.width === 0 || r.height === 0) continue;
+        add(r.top - originAbsY, r.bottom - originAbsY, true);
+      }
+    }
+    // Block / row / image boundaries are candidate cut points.
+    child.querySelectorAll<HTMLElement>("tr,p,div,table,img,h1,h2,h3,h4,li,hr").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.height === 0) return;
+      const top = r.top - originAbsY;
+      const bottom = r.bottom - originAbsY;
+      const isImg = el.tagName === "IMG";
+      const noBreak = el.classList.contains("pdf-no-break");
+      add(top, bottom, isImg || (noBreak && bottom - top <= winH));
+    });
+  }
+
+  const EPS = 0.75;
+  const isSafe = (y: number) => !forbidden.some((f) => f.top + EPS < y && y < f.bottom - EPS);
+  const safeBreaks = [...candidates]
+    .filter((y) => y > EPS)
+    .filter(isSafe)
+    .sort((a, b) => a - b);
+  return { safeBreaks };
+}
+
+// Greedy: each page takes as much as fits up to the largest safe break ≤ y+winH.
+function computeSlices(safeBreaks: number[], contentH: number, winH: number): number[] {
+  const EPS = 0.75;
+  const starts = [0];
+  let y = 0;
+  while (y + winH < contentH - EPS) {
+    const limit = y + winH;
+    let pick = -1;
+    for (const b of safeBreaks) {
+      if (b > y + 1 && b <= limit + EPS) pick = b;
+      else if (b > limit + EPS) break;
+    }
+    if (pick < 0) pick = limit; // pathological: a single line taller than a page
+    starts.push(pick);
+    y = pick;
+  }
+  if (starts.length > 1 && contentH - starts[starts.length - 1] < 2) starts.pop();
+  return starts;
+}
+
+// Off-screen 816×1056 skeleton that mirrors the .pdf-page layout exactly so the
+// clip window (win) and text wrapping match the live page. The header and footer
+// are cloned in BEFORE measuring so winH is the real space left for content —
+// never an arithmetic guess. Read winH straight off the element.
+function buildContainer(headerEl: HTMLElement | null, footerEl: HTMLElement | null) {
+  const container = document.createElement("div");
+  Object.assign(container.style, {
+    fontFamily: "'Inter', Arial, sans-serif",
+    color: "#1a1a1a",
+    fontSize: "13px",
+    lineHeight: "1.7",
+    width: `${PAGE_W}px`,
+    height: `${PAGE_H}px`,
+    padding: `${PAD_H}px ${PAD_V}px ${PAD_B}px ${PAD_V}px`,
+    display: "flex",
+    flexDirection: "column",
+    boxSizing: "border-box",
+    overflow: "hidden",
+    background: "white",
+    position: "fixed",
+    left: `-${PAGE_W + 200}px`,
+    top: "0",
+    pointerEvents: "none",
+  });
+  const headerHost = document.createElement("div");
+  if (headerEl) headerHost.appendChild(headerEl.cloneNode(true));
+  const win = document.createElement("div");
+  Object.assign(win.style, { flex: "1", minHeight: "0", overflow: "hidden", position: "relative" });
+  const footerHost = document.createElement("div");
+  if (footerEl) {
+    const fc = footerEl.cloneNode(true) as HTMLElement;
+    fc.style.marginTop = "0";
+    footerHost.appendChild(fc);
+  }
+  container.append(headerHost, win, footerHost);
+  document.body.appendChild(container);
+  const winH = Math.floor(win.getBoundingClientRect().height);
+  return { container, headerHost, win, winH };
+}
+
+// Render exactly the band [srcY, endY): the content is shifted up by srcY and
+// clipped to (endY - srcY) so the slice ends at the chosen safe break — NOT at
+// the full window height. Without this clip the line straddling the window
+// bottom would be cut here AND repeated whole on the next page (the original bug).
+// Shared Math.round on both bounds keeps the seam pixel-aligned across pages.
+function renderSlice(win: HTMLElement, contentChildren: HTMLElement[], srcY: number, endY: number) {
+  win.innerHTML = "";
+  const top = Math.round(srcY);
+  const clip = document.createElement("div");
+  clip.style.position = "relative";
+  clip.style.overflow = "hidden";
+  clip.style.height = `${Math.max(0, Math.round(endY) - top)}px`;
+  const holder = document.createElement("div");
+  holder.style.position = "relative";
+  holder.style.top = `-${top}px`;
+  contentChildren.forEach((ch) => holder.appendChild(ch.cloneNode(true)));
+  clip.appendChild(holder);
+  win.appendChild(clip);
+}
+
+// Locate the "Pág. N" node inside a cloned header (class first, then label, then last <p>).
+function locatePageNumberNode(headerClone: HTMLElement, pageLabel: string): HTMLElement | null {
+  const byClass = headerClone.querySelector<HTMLElement>(".pdf-pagenum");
+  if (byClass) return byClass;
+  const ps = Array.from(headerClone.querySelectorAll("p"));
+  const byLabel = ps.find((p) => (p.textContent ?? "").trim().startsWith(pageLabel));
+  return (byLabel as HTMLElement) ?? (ps[ps.length - 1] ?? null);
+}
 
 const OfertaPublica = () => {
   const { id } = useParams();
@@ -348,14 +541,15 @@ const OfertaPublica = () => {
     );
     if (pageEls.length === 0) return;
 
+    // Measure only after fonts + images are settled, otherwise line boxes shift.
+    await ensureAssetsReady(contentRef.current);
+
     const pdf = new jsPDF({
       unit: "mm",
       format: "letter",
       orientation: "portrait",
       compress: true,
     });
-
-    let isFirstPage = true;
 
     const h2cBase = {
       scale: SCALE,
@@ -375,132 +569,80 @@ const OfertaPublica = () => {
       },
     };
 
-    for (const pageEl of pageEls) {
-      const pageRect  = pageEl.getBoundingClientRect();
-      const headerEl  = pageEl.querySelector<HTMLElement>(".pdf-header");
-      const footerEl  = pageEl.querySelector<HTMLElement>(".pdf-footer");
+    // ── PASS 1: plan every physical page ──────────────────────────────────────
+    // A non-overflowing section is one physical page; an overflowing one is split
+    // into line-aligned slices. The plan is flat so page numbers can be stamped
+    // sequentially across all sections in pass 2.
+    type PlanItem = { pageEl: HTMLElement; srcY: number; endY: number; single: boolean };
+    const plan: PlanItem[] = [];
 
-      // All measurements in DOM pixels (layout coordinates, not canvas)
-      const headerBottom_dom = headerEl
-        ? headerEl.getBoundingClientRect().bottom - pageRect.top
-        : PAD_H + HEADER_H;
-      const footerTop_dom = footerEl
-        ? footerEl.getBoundingClientRect().top - pageRect.top
-        : pageEl.offsetHeight - FOOTER_H - PAD_B;
-      const footerH_dom   = pageEl.offsetHeight - footerTop_dom;
-      const contentH_dom  = footerTop_dom - headerBottom_dom;
-      const usable_dom    = PAGE_H - headerBottom_dom - footerH_dom;
+    for (let pi = 0; pi < pageEls.length; pi++) {
+      const pageEl = pageEls[pi];
+      pageEl.dataset.pdfIndex = String(pi);
+      const { headerEl, footerEl, contentChildren, contentTop_abs, contentH } = measureGeometry(pageEl);
 
-      if (usable_dom <= 0 || contentH_dom <= usable_dom) {
-        // Single page: render the original element as-is
-        if (!isFirstPage) pdf.addPage("letter", "portrait");
-        isFirstPage = false;
-        const canvas = await html2canvas(pageEl, { ...h2cBase, width: PAGE_W } as any);
+      // winH = the real clip-window height (header + footer + padding baked in).
+      const probe = buildContainer(headerEl, footerEl);
+      const winH = probe.winH;
+      document.body.removeChild(probe.container);
+
+      if (winH <= 0 || contentH <= winH || contentChildren.length === 0) {
+        plan.push({ pageEl, srcY: 0, endY: contentH, single: true });
+        continue;
+      }
+
+      const { safeBreaks } = collectBreakModel(contentChildren, contentTop_abs, winH);
+      const starts = computeSlices(safeBreaks, contentH, winH);
+      starts.forEach((srcY, i) => {
+        const endY = i + 1 < starts.length ? starts[i + 1] : contentH;
+        plan.push({ pageEl, srcY, endY, single: false });
+      });
+    }
+
+    const totalPages = plan.length;
+
+    // ── PASS 2: render with a single monotonic physical page number ───────────
+    for (let n = 0; n < totalPages; n++) {
+      const { pageEl, srcY, endY, single } = plan[n];
+      if (n > 0) pdf.addPage("letter", "portrait");
+      const pageNum = n + 1;
+
+      if (single) {
+        // Render the live element directly to preserve its exact flex layout.
+        const canvas = await html2canvas(pageEl, {
+          ...h2cBase,
+          width: PAGE_W,
+          onclone: (doc: Document) => {
+            h2cBase.onclone(doc);
+            const cl = doc.querySelector<HTMLElement>(
+              `.pdf-page[data-pdf-index="${pageEl.dataset.pdfIndex}"]`
+            );
+            const hdr = cl?.querySelector<HTMLElement>(".pdf-header");
+            const node = hdr ? locatePageNumberNode(hdr, L.page) : null;
+            if (node) node.textContent = `${L.page} ${pageNum}`;
+          },
+        } as any);
         pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
         continue;
       }
 
-      // ── Compute break points in DOM pixels ──
-      const noBreakEls = Array.from(pageEl.querySelectorAll<HTMLElement>(".pdf-no-break"));
-      const noBreakZones = noBreakEls.map((el) => {
-        const r = el.getBoundingClientRect();
-        return {
-          top:    r.top    - pageRect.top - headerBottom_dom,
-          bottom: r.bottom - pageRect.top - headerBottom_dom,
-        };
-      }).filter((z) =>
-        z.top >= 0 &&
-        z.top < contentH_dom &&
-        (z.bottom - z.top) < usable_dom
-      );
+      const { headerEl, footerEl, contentChildren } = measureGeometry(pageEl);
+      const { container, headerHost, win } = buildContainer(headerEl, footerEl);
+      try {
+        // Header was cloned inside buildContainer — stamp the running page number on it.
+        const node = locatePageNumberNode(headerHost, L.page);
+        if (node) node.textContent = `${L.page} ${pageNum}`;
+        renderSlice(win, contentChildren, srcY, endY);
+        await ensureAssetsReady(container);
 
-      const MIN_BREAK = Math.floor(usable_dom * 0.3);
-      const sliceStarts: number[] = [0];
-      let y = 0;
-      while (y + usable_dom < contentH_dom) {
-        let proposed = y + usable_dom;
-        const hit = noBreakZones.find((z) => z.top < proposed && z.bottom > proposed);
-        if (hit && hit.top > y && hit.top - y >= MIN_BREAK) proposed = hit.top;
-        sliceStarts.push(proposed);
-        y = proposed;
-      }
-      if (sliceStarts.length > 1) {
-        const lastH = contentH_dom - sliceStarts[sliceStarts.length - 1];
-        if (lastH < 2) sliceStarts.pop();
-      }
-
-      // Content children sit between header and footer inside the flex page
-      const allChildren = Array.from(pageEl.children);
-      const hIdx = headerEl ? allChildren.indexOf(headerEl) : -1;
-      const fIdx = footerEl ? allChildren.indexOf(footerEl) : allChildren.length;
-      const contentChildren = allChildren.slice(hIdx + 1, fIdx >= 0 ? fIdx : allChildren.length);
-
-      // ── Render each slice as an independent 816×1056 DOM element ──
-      for (let p = 0; p < sliceStarts.length; p++) {
-        if (!isFirstPage) pdf.addPage("letter", "portrait");
-        isFirstPage = false;
-
-        const srcY = sliceStarts[p];
-
-        // Off-screen container that mirrors the .pdf-page layout exactly
-        const container = document.createElement("div");
-        Object.assign(container.style, {
-          fontFamily:    "'Inter', Arial, sans-serif",
-          color:         "#1a1a1a",
-          fontSize:      "13px",
-          lineHeight:    "1.7",
-          width:         `${PAGE_W}px`,
-          height:        `${PAGE_H}px`,
-          padding:       `${PAD_H}px ${PAD_V}px ${PAD_B}px ${PAD_V}px`,
-          display:       "flex",
-          flexDirection: "column",
-          boxSizing:     "border-box",
-          overflow:      "hidden",
-          background:    "white",
-          position:      "fixed",
-          left:          `-${PAGE_W + 200}px`,
-          top:           "0",
-          pointerEvents: "none",
-        });
-
-        // Header
-        if (headerEl) container.appendChild(headerEl.cloneNode(true));
-
-        // Content window: clips to the usable area via overflow:hidden
-        const win = document.createElement("div");
-        Object.assign(win.style, {
-          flex:      "1",
-          minHeight: "0",
-          overflow:  "hidden",
-          position:  "relative",
-        });
-
-        // Content holder: shifted up so the correct slice is visible through the window
-        const holder = document.createElement("div");
-        holder.style.position = "relative";
-        holder.style.top      = `-${srcY}px`;
-        contentChildren.forEach((ch) => holder.appendChild(ch.cloneNode(true)));
-        win.appendChild(holder);
-        container.appendChild(win);
-
-        // Footer (marginTop:auto is redundant when win has flex:1, but harmless)
-        if (footerEl) {
-          const fc = footerEl.cloneNode(true) as HTMLElement;
-          fc.style.marginTop = "0";
-          container.appendChild(fc);
-        }
-
-        document.body.appendChild(container);
-
-        const pageCanvas = await html2canvas(container, {
+        const canvas = await html2canvas(container, {
           ...h2cBase,
-          width:  PAGE_W,
+          width: PAGE_W,
           height: PAGE_H,
         } as any);
-
-        document.body.removeChild(container);
-
-        pdf.addImage(pageCanvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
+      } finally {
+        if (container.parentNode) document.body.removeChild(container);
       }
     }
 
@@ -510,7 +652,7 @@ const OfertaPublica = () => {
   useEffect(() => {
     if (autoDownload && !downloadTriggered && contentRef.current && quotation) {
       const timer = setTimeout(() => {
-        handleDownloadPDF();
+        handleDownloadPDF().catch((err) => console.error("PDF download failed:", err));
         setDownloadTriggered(true);
       }, 1500);
       return () => clearTimeout(timer);
@@ -565,7 +707,7 @@ const OfertaPublica = () => {
       <div style={{ textAlign: "right", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
         <p style={{ margin: 0, fontWeight: 600, fontSize: "12px", color: "#333" }}>{quotation.code}</p>
         <p style={{ margin: "2px 0 0 0" }}>{formatDateShort(quotation.createdAt)}</p>
-        <p style={{ margin: "2px 0 0 0", color: "#999" }}>{L.page} {pageNum}</p>
+        <p className="pdf-pagenum" style={{ margin: "2px 0 0 0", color: "#999" }}>{L.page} {pageNum}</p>
       </div>
     </div>
   );
