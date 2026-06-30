@@ -298,64 +298,42 @@ function computeSlices(safeBreaks: number[], contentH: number, winH: number): nu
   return starts;
 }
 
-// Off-screen 816×1056 skeleton that mirrors the .pdf-page layout exactly so the
-// clip window (win) and text wrapping match the live page. The header and footer
-// are cloned in BEFORE measuring so winH is the real space left for content —
-// never an arithmetic guess. Read winH straight off the element.
-function buildContainer(headerEl: HTMLElement | null, footerEl: HTMLElement | null) {
-  const container = document.createElement("div");
-  Object.assign(container.style, {
+// Render the page header on its own — at the page's real width and padding, with
+// the correct page number stamped — as a 2× canvas. The section bitmap is rendered
+// once, so its baked-in header number is wrong on continuation pages; this draws a
+// pixel-identical header with the right "Pág. N" to overlay on every physical page.
+async function renderHeaderCanvas(
+  headerEl: HTMLElement,
+  pageNumText: string,
+  pageLabel: string,
+  h2cOptions: Record<string, unknown>
+): Promise<HTMLCanvasElement> {
+  const cont = document.createElement("div");
+  Object.assign(cont.style, {
+    width: `${PAGE_W}px`,
+    padding: `${PAD_H}px ${PAD_V}px 0 ${PAD_V}px`,
+    boxSizing: "border-box",
+    background: "white",
     fontFamily: "'Inter', Arial, sans-serif",
     color: "#1a1a1a",
     fontSize: "13px",
     lineHeight: "1.7",
-    width: `${PAGE_W}px`,
-    height: `${PAGE_H}px`,
-    padding: `${PAD_H}px ${PAD_V}px ${PAD_B}px ${PAD_V}px`,
-    display: "flex",
-    flexDirection: "column",
-    boxSizing: "border-box",
-    overflow: "hidden",
-    background: "white",
     position: "fixed",
     left: `-${PAGE_W + 200}px`,
     top: "0",
     pointerEvents: "none",
   });
-  const headerHost = document.createElement("div");
-  if (headerEl) headerHost.appendChild(headerEl.cloneNode(true));
-  const win = document.createElement("div");
-  Object.assign(win.style, { flex: "1", minHeight: "0", overflow: "hidden", position: "relative" });
-  const footerHost = document.createElement("div");
-  if (footerEl) {
-    const fc = footerEl.cloneNode(true) as HTMLElement;
-    fc.style.marginTop = "0";
-    footerHost.appendChild(fc);
+  const hc = headerEl.cloneNode(true) as HTMLElement;
+  const node = locatePageNumberNode(hc, pageLabel);
+  if (node) node.textContent = pageNumText;
+  cont.appendChild(hc);
+  document.body.appendChild(cont);
+  try {
+    await ensureAssetsReady(cont);
+    return await html2canvas(cont, { ...h2cOptions, width: PAGE_W } as any);
+  } finally {
+    if (cont.parentNode) document.body.removeChild(cont);
   }
-  container.append(headerHost, win, footerHost);
-  document.body.appendChild(container);
-  const winH = Math.floor(win.getBoundingClientRect().height);
-  return { container, headerHost, win, winH };
-}
-
-// Render exactly the band [srcY, endY): the content is shifted up by srcY and
-// clipped to (endY - srcY) so the slice ends at the chosen safe break — NOT at
-// the full window height. Without this clip the line straddling the window
-// bottom would be cut here AND repeated whole on the next page (the original bug).
-// Shared Math.round on both bounds keeps the seam pixel-aligned across pages.
-function renderSlice(win: HTMLElement, contentChildren: HTMLElement[], srcY: number, endY: number) {
-  win.innerHTML = "";
-  const top = Math.round(srcY);
-  const clip = document.createElement("div");
-  clip.style.position = "relative";
-  clip.style.overflow = "hidden";
-  clip.style.height = `${Math.max(0, Math.round(endY) - top)}px`;
-  const holder = document.createElement("div");
-  holder.style.position = "relative";
-  holder.style.top = `-${top}px`;
-  contentChildren.forEach((ch) => holder.appendChild(ch.cloneNode(true)));
-  clip.appendChild(holder);
-  win.appendChild(clip);
 }
 
 // Locate the "Pág. N" node inside a cloned header (class first, then label, then last <p>).
@@ -551,6 +529,9 @@ const OfertaPublica = () => {
       compress: true,
     });
 
+    const PAGE_W_PX = PAGE_W * SCALE;
+    const PAGE_H_PX = PAGE_H * SCALE;
+
     const h2cBase = {
       scale: SCALE,
       useCORS: true,
@@ -569,80 +550,87 @@ const OfertaPublica = () => {
       },
     };
 
-    // ── PASS 1: plan every physical page ──────────────────────────────────────
-    // A non-overflowing section is one physical page; an overflowing one is split
-    // into line-aligned slices. The plan is flat so page numbers can be stamped
-    // sequentially across all sections in pass 2.
-    type PlanItem = { pageEl: HTMLElement; srcY: number; endY: number; single: boolean };
-    const plan: PlanItem[] = [];
+    // Strategy: render each .pdf-page section ONCE to a faithful 2× bitmap, then
+    // slice that bitmap at line-aware break points measured on the SAME live DOM.
+    // Because the bitmap IS the live render, a measured line boundary maps to the
+    // exact pixel row — no re-layout, and nothing relies on html2canvas honoring a
+    // nested clip (which it does not). The header is re-rendered per physical page
+    // so the page number is correct and pixel-identical.
+    let isFirst = true;
+    let physPage = 0;
 
-    for (let pi = 0; pi < pageEls.length; pi++) {
-      const pageEl = pageEls[pi];
-      pageEl.dataset.pdfIndex = String(pi);
-      const { headerEl, footerEl, contentChildren, contentTop_abs, contentH } = measureGeometry(pageEl);
+    for (const pageEl of pageEls) {
+      const pageRect = pageEl.getBoundingClientRect();
+      const headerEl = pageEl.querySelector<HTMLElement>(".pdf-header");
+      const footerEl = pageEl.querySelector<HTMLElement>(".pdf-footer");
 
-      // winH = the real clip-window height (header + footer + padding baked in).
-      const probe = buildContainer(headerEl, footerEl);
-      const winH = probe.winH;
-      document.body.removeChild(probe.container);
+      const { contentChildren, contentTop_abs, contentH } = measureGeometry(pageEl);
+      const contentTop_css = contentTop_abs - pageRect.top;
 
-      if (winH <= 0 || contentH <= winH || contentChildren.length === 0) {
-        plan.push({ pageEl, srcY: 0, endY: contentH, single: true });
-        continue;
+      const footerRect = footerEl ? footerEl.getBoundingClientRect() : null;
+      const footerH_css = footerRect ? footerRect.height : 0;
+      const footerSrcTop_css = footerRect ? footerRect.top - pageRect.top : 0;
+      // The footer sits just above the bottom padding on every physical page.
+      const footerDestTop_css = PAGE_H - PAD_B - footerH_css;
+
+      // Vertical space for content between the header and the footer.
+      const usable_css = Math.max(0, footerDestTop_css - contentTop_css);
+
+      // One faithful bitmap of the entire section.
+      const fullCanvas = await html2canvas(pageEl, { ...h2cBase, width: PAGE_W } as any);
+
+      // Line-aware slice starts (no mid-line cuts). One slice if it all fits.
+      let starts: number[];
+      if (usable_css <= 0 || contentH <= usable_css || contentChildren.length === 0) {
+        starts = [0];
+      } else {
+        const { safeBreaks } = collectBreakModel(contentChildren, contentTop_abs, usable_css);
+        starts = computeSlices(safeBreaks, contentH, usable_css);
       }
 
-      const { safeBreaks } = collectBreakModel(contentChildren, contentTop_abs, winH);
-      const starts = computeSlices(safeBreaks, contentH, winH);
-      starts.forEach((srcY, i) => {
-        const endY = i + 1 < starts.length ? starts[i + 1] : contentH;
-        plan.push({ pageEl, srcY, endY, single: false });
-      });
-    }
+      for (let si = 0; si < starts.length; si++) {
+        const srcY = starts[si];
+        const endY = si + 1 < starts.length ? starts[si + 1] : contentH;
+        physPage += 1;
+        if (!isFirst) pdf.addPage("letter", "portrait");
+        isFirst = false;
 
-    const totalPages = plan.length;
+        const comp = document.createElement("canvas");
+        comp.width = PAGE_W_PX;
+        comp.height = PAGE_H_PX;
+        const ctx = comp.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, PAGE_W_PX, PAGE_H_PX);
 
-    // ── PASS 2: render with a single monotonic physical page number ───────────
-    for (let n = 0; n < totalPages; n++) {
-      const { pageEl, srcY, endY, single } = plan[n];
-      if (n > 0) pdf.addPage("letter", "portrait");
-      const pageNum = n + 1;
+        // Header with the correct running page number.
+        if (headerEl) {
+          const headerCanvas = await renderHeaderCanvas(
+            headerEl,
+            `${L.page} ${physPage}`,
+            L.page,
+            h2cBase
+          );
+          ctx.drawImage(headerCanvas, 0, 0);
+        }
 
-      if (single) {
-        // Render the live element directly to preserve its exact flex layout.
-        const canvas = await html2canvas(pageEl, {
-          ...h2cBase,
-          width: PAGE_W,
-          onclone: (doc: Document) => {
-            h2cBase.onclone(doc);
-            const cl = doc.querySelector<HTMLElement>(
-              `.pdf-page[data-pdf-index="${pageEl.dataset.pdfIndex}"]`
-            );
-            const hdr = cl?.querySelector<HTMLElement>(".pdf-header");
-            const node = hdr ? locatePageNumberNode(hdr, L.page) : null;
-            if (node) node.textContent = `${L.page} ${pageNum}`;
-          },
-        } as any);
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
-        continue;
-      }
+        // Content band [srcY, endY) copied from the section bitmap, placed right
+        // after the header. endY is a line boundary, so the cut never bisects a line.
+        const bandTop = Math.round((contentTop_css + srcY) * SCALE);
+        const bandH = Math.round((endY - srcY) * SCALE);
+        const destTop = Math.round(contentTop_css * SCALE);
+        if (bandH > 0) {
+          ctx.drawImage(fullCanvas, 0, bandTop, PAGE_W_PX, bandH, 0, destTop, PAGE_W_PX, bandH);
+        }
 
-      const { headerEl, footerEl, contentChildren } = measureGeometry(pageEl);
-      const { container, headerHost, win } = buildContainer(headerEl, footerEl);
-      try {
-        // Header was cloned inside buildContainer — stamp the running page number on it.
-        const node = locatePageNumberNode(headerHost, L.page);
-        if (node) node.textContent = `${L.page} ${pageNum}`;
-        renderSlice(win, contentChildren, srcY, endY);
-        await ensureAssetsReady(container);
+        // Footer copied from the section bitmap, placed just above the bottom padding.
+        if (footerRect) {
+          const fSrcTop = Math.round(footerSrcTop_css * SCALE);
+          const fH = Math.round(footerH_css * SCALE);
+          const fDestTop = Math.round(footerDestTop_css * SCALE);
+          ctx.drawImage(fullCanvas, 0, fSrcTop, PAGE_W_PX, fH, 0, fDestTop, PAGE_W_PX, fH);
+        }
 
-        const canvas = await html2canvas(container, {
-          ...h2cBase,
-          width: PAGE_W,
-          height: PAGE_H,
-        } as any);
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
-      } finally {
-        if (container.parentNode) document.body.removeChild(container);
+        pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
       }
     }
 
@@ -776,7 +764,7 @@ const OfertaPublica = () => {
           <span className="text-sm font-semibold text-gray-700">
             {quotation.code} — {quotation.client.company}
           </span>
-          <Button onClick={handleDownloadPDF} size="sm">
+          <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
             <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
           </Button>
         </div>
