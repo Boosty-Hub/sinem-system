@@ -339,8 +339,6 @@ const OfertaPublica = () => {
   const PDF_W_MM = 215.9;
   const PDF_H_MM = 279.4;
   const SCALE = 2;
-  const PAGE_W_PX = PAGE_W * SCALE;
-  const PAGE_H_PX = PAGE_H * SCALE;
 
   const handleDownloadPDF = async () => {
     if (!contentRef.current || !quotation) return;
@@ -357,134 +355,152 @@ const OfertaPublica = () => {
       compress: true,
     });
 
-    for (let i = 0; i < pageEls.length; i++) {
-      const pageEl = pageEls[i];
+    let isFirstPage = true;
 
-      // Measure header/footer boundaries in CSS px relative to page div top
+    const h2cBase = {
+      scale: SCALE,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: PAGE_W,
+      onclone: (doc: Document) => {
+        doc.querySelectorAll<HTMLElement>(
+          ".shadow-lg,.shadow-md,.shadow-sm,.shadow-xl"
+        ).forEach((n) => { n.style.boxShadow = "none"; });
+        doc.querySelectorAll<HTMLElement>(".pdf-page").forEach((n) => {
+          n.style.marginBottom = "0";
+        });
+      },
+    };
+
+    for (const pageEl of pageEls) {
       const pageRect  = pageEl.getBoundingClientRect();
       const headerEl  = pageEl.querySelector<HTMLElement>(".pdf-header");
       const footerEl  = pageEl.querySelector<HTMLElement>(".pdf-footer");
 
+      // All measurements in DOM pixels (layout coordinates, not canvas)
       const headerBottom_dom = headerEl
         ? headerEl.getBoundingClientRect().bottom - pageRect.top
         : PAD_H + HEADER_H;
       const footerTop_dom = footerEl
         ? footerEl.getBoundingClientRect().top - pageRect.top
         : pageEl.offsetHeight - FOOTER_H - PAD_B;
+      const footerH_dom   = pageEl.offsetHeight - footerTop_dom;
+      const contentH_dom  = footerTop_dom - headerBottom_dom;
+      const usable_dom    = PAGE_H - headerBottom_dom - footerH_dom;
 
-      // Convert to canvas pixels (scale=2)
-      const headerBottom_px = Math.round(headerBottom_dom * SCALE);
-      const footerTop_px    = Math.round(footerTop_dom    * SCALE);
-
-      // Render the full section (header + content + footer) to canvas
-      const canvas = await html2canvas(pageEl, {
-        scale: SCALE,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        scrollX: 0,
-        scrollY: 0,
-        width: PAGE_W,
-        windowWidth: PAGE_W,
-        onclone: (clonedDoc: Document) => {
-          clonedDoc.querySelectorAll<HTMLElement>(
-            ".shadow-lg,.shadow-md,.shadow-sm,.shadow-xl"
-          ).forEach((n) => { n.style.boxShadow = "none"; });
-          clonedDoc.querySelectorAll<HTMLElement>(".pdf-page").forEach((n) => {
-            n.style.marginBottom = "0";
-          });
-        },
-      } as any);
-
-      const totalH_px   = canvas.height;
-      const footerH_px  = totalH_px - footerTop_px;
-      const contentH_px = footerTop_px - headerBottom_px;
-      const usable_px   = PAGE_H_PX - headerBottom_px - footerH_px;
-
-      if (usable_px <= 0) {
-        // Degenerate — just add as-is
-        if (i > 0) pdf.addPage("letter", "portrait");
+      if (usable_dom <= 0 || contentH_dom <= usable_dom) {
+        // Single page: render the original element as-is
+        if (!isFirstPage) pdf.addPage("letter", "portrait");
+        isFirstPage = false;
+        const canvas = await html2canvas(pageEl, { ...h2cBase, width: PAGE_W } as any);
         pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
         continue;
       }
 
-      // ── Collect no-break zones (relative to content start = headerBottom_px) ──
-      // Only zones that fit on one page — zones taller than usable_px can't be kept intact anyway
+      // ── Compute break points in DOM pixels ──
       const noBreakEls = Array.from(pageEl.querySelectorAll<HTMLElement>(".pdf-no-break"));
       const noBreakZones = noBreakEls.map((el) => {
         const r = el.getBoundingClientRect();
         return {
-          top:    Math.round((r.top    - pageRect.top) * SCALE) - headerBottom_px,
-          bottom: Math.round((r.bottom - pageRect.top) * SCALE) - headerBottom_px,
+          top:    r.top    - pageRect.top - headerBottom_dom,
+          bottom: r.bottom - pageRect.top - headerBottom_dom,
         };
       }).filter((z) =>
         z.top >= 0 &&
-        z.top < contentH_px &&
-        (z.bottom - z.top) < usable_px
+        z.top < contentH_dom &&
+        (z.bottom - z.top) < usable_dom
       );
 
-      // Minimum content height to justify breaking early for a no-break zone.
-      // If a zone starts closer than this to the current y, cutting there would produce a
-      // near-blank page — so we cut naturally at usable_px instead.
-      const MIN_SLICE_PX = Math.floor(usable_px * 0.3);
-
-      // ── Compute break points ──
+      const MIN_BREAK = Math.floor(usable_dom * 0.3);
       const sliceStarts: number[] = [0];
       let y = 0;
-      while (y + usable_px < contentH_px) {
-        let proposed = y + usable_px;
+      while (y + usable_dom < contentH_dom) {
+        let proposed = y + usable_dom;
         const hit = noBreakZones.find((z) => z.top < proposed && z.bottom > proposed);
-        if (hit && hit.top > y && hit.top - y >= MIN_SLICE_PX) {
-          // Break before the zone — only when enough content precedes it on this page
-          proposed = hit.top;
-        }
-        // else: cut naturally (zone too tall, starts at y, or not enough preceding content)
+        if (hit && hit.top > y && hit.top - y >= MIN_BREAK) proposed = hit.top;
         sliceStarts.push(proposed);
         y = proposed;
       }
-
-      // Drop trailing micro-slice only when truly negligible (flex minHeight overflow artifact).
-      // Use a small fixed threshold — NOT MIN_SLICE_PX — to avoid creating an oversized final slice.
       if (sliceStarts.length > 1) {
-        const lastH = contentH_px - sliceStarts[sliceStarts.length - 1];
-        if (lastH < 40) sliceStarts.pop();
+        const lastH = contentH_dom - sliceStarts[sliceStarts.length - 1];
+        if (lastH < 2) sliceStarts.pop();
       }
 
-      // ── Build one composite PDF page per slice ──
-      const addCompositePage = (srcContentY: number, sliceH: number) => {
-        const comp = document.createElement("canvas");
-        comp.width  = PAGE_W_PX;
-        comp.height = PAGE_H_PX;
-        const ctx = comp.getContext("2d")!;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, PAGE_W_PX, PAGE_H_PX);
+      // Content children sit between header and footer inside the flex page
+      const allChildren = Array.from(pageEl.children);
+      const hIdx = headerEl ? allChildren.indexOf(headerEl) : -1;
+      const fIdx = footerEl ? allChildren.indexOf(footerEl) : allChildren.length;
+      const contentChildren = allChildren.slice(hIdx + 1, fIdx >= 0 ? fIdx : allChildren.length);
+
+      // ── Render each slice as an independent 816×1056 DOM element ──
+      for (let p = 0; p < sliceStarts.length; p++) {
+        if (!isFirstPage) pdf.addPage("letter", "portrait");
+        isFirstPage = false;
+
+        const srcY = sliceStarts[p];
+
+        // Off-screen container that mirrors the .pdf-page layout exactly
+        const container = document.createElement("div");
+        Object.assign(container.style, {
+          fontFamily:    "'Inter', Arial, sans-serif",
+          color:         "#1a1a1a",
+          fontSize:      "13px",
+          lineHeight:    "1.7",
+          width:         `${PAGE_W}px`,
+          height:        `${PAGE_H}px`,
+          padding:       `${PAD_H}px ${PAD_V}px ${PAD_B}px ${PAD_V}px`,
+          display:       "flex",
+          flexDirection: "column",
+          boxSizing:     "border-box",
+          overflow:      "hidden",
+          background:    "white",
+          position:      "fixed",
+          left:          `-${PAGE_W + 200}px`,
+          top:           "0",
+          pointerEvents: "none",
+        });
 
         // Header
-        ctx.drawImage(canvas, 0, 0, PAGE_W_PX, headerBottom_px, 0, 0, PAGE_W_PX, headerBottom_px);
+        if (headerEl) container.appendChild(headerEl.cloneNode(true));
 
-        // Content slice
-        const canvasSrcY = headerBottom_px + srcContentY;
-        if (sliceH > 0) {
-          ctx.drawImage(canvas, 0, canvasSrcY, PAGE_W_PX, sliceH, 0, headerBottom_px, PAGE_W_PX, sliceH);
+        // Content window: clips to the usable area via overflow:hidden
+        const win = document.createElement("div");
+        Object.assign(win.style, {
+          flex:      "1",
+          minHeight: "0",
+          overflow:  "hidden",
+          position:  "relative",
+        });
+
+        // Content holder: shifted up so the correct slice is visible through the window
+        const holder = document.createElement("div");
+        holder.style.position = "relative";
+        holder.style.top      = `-${srcY}px`;
+        contentChildren.forEach((ch) => holder.appendChild(ch.cloneNode(true)));
+        win.appendChild(holder);
+        container.appendChild(win);
+
+        // Footer (marginTop:auto is redundant when win has flex:1, but harmless)
+        if (footerEl) {
+          const fc = footerEl.cloneNode(true) as HTMLElement;
+          fc.style.marginTop = "0";
+          container.appendChild(fc);
         }
 
-        // Footer
-        ctx.drawImage(canvas, 0, footerTop_px, PAGE_W_PX, footerH_px, 0, PAGE_H_PX - footerH_px, PAGE_W_PX, footerH_px);
+        document.body.appendChild(container);
 
-        pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
-      };
+        const pageCanvas = await html2canvas(container, {
+          ...h2cBase,
+          width:  PAGE_W,
+          height: PAGE_H,
+        } as any);
 
-      if (sliceStarts.length === 1) {
-        // Whole content fits on one page
-        if (i > 0) pdf.addPage("letter", "portrait");
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
-      } else {
-        for (let p = 0; p < sliceStarts.length; p++) {
-          if (i > 0 || p > 0) pdf.addPage("letter", "portrait");
-          const start = sliceStarts[p];
-          const end   = p + 1 < sliceStarts.length ? sliceStarts[p + 1] : contentH_px;
-          addCompositePage(start, end - start);
-        }
+        document.body.removeChild(container);
+
+        pdf.addImage(pageCanvas.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
       }
     }
 
