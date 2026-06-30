@@ -838,9 +838,9 @@ const OfertaPublica = () => {
           {/* Items table */}
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", tableLayout: "fixed" }}>
             <colgroup>
-              <col style={{ width: "28px" }} />
+              <col style={{ width: "24px" }} />
               <col />
-              <col style={{ width: "40px" }} />
+              <col style={{ width: "32px" }} />
               <col style={{ width: "88px" }} />
               <col style={{ width: "88px" }} />
             </colgroup>
@@ -860,7 +860,7 @@ const OfertaPublica = () => {
                   return items.map((item, i) => (
                     <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
                       <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
-                      <td style={{ padding: "6px 10px", fontSize: "12px", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                      <td style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                       <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
@@ -907,7 +907,7 @@ const OfertaPublica = () => {
                     allRows.push(
                       <tr key={`r-${solo.item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: solo.globalIdx % 2 === 0 ? "#fafafa" : "white" }}>
                         <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{solo.globalIdx + 1}</td>
-                        <td style={{ padding: "6px 10px", fontSize: "12px", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
+                        <td style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
                         <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{solo.item.quantity}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(solo.item.unitPriceUSD)}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(solo.item.totalUSD)}</td>
@@ -920,7 +920,7 @@ const OfertaPublica = () => {
                       allRows.push(
                         <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #f0f0f0", backgroundColor: rowIdx % 2 === 0 ? "#fafafa" : "white" }}>
                           <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{rowIdx + 1}</td>
-                          <td style={{ padding: "6px 10px", fontSize: "12px", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                          <td style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                           <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
