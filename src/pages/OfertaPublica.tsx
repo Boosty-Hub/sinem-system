@@ -414,37 +414,6 @@ async function renderHeaderCanvas(
   }
 }
 
-// Render the footer on its own — at the page's real width and side padding — as a
-// 2× canvas. Copying the footer band out of the section bitmap is unsafe: font
-// drift can wrap the address to an extra line the DOM-measured height misses,
-// clipping the phone number. Rendering it standalone captures the full footer at
-// its true height, then the caller bottom-aligns it above the bottom padding.
-async function renderFooterCanvas(
-  footerEl: HTMLElement,
-  h2cOptions: Record<string, unknown>
-): Promise<HTMLCanvasElement> {
-  const cont = document.createElement("div");
-  Object.assign(cont.style, {
-    width: `${PAGE_W}px`,
-    padding: `0 ${PAD_V}px 0 ${PAD_V}px`,
-    boxSizing: "border-box",
-    background: "white",
-    fontFamily: "'Inter', Arial, sans-serif",
-    position: "fixed",
-    left: `-${PAGE_W + 200}px`,
-    top: "0",
-    pointerEvents: "none",
-  });
-  cont.appendChild(footerEl.cloneNode(true) as HTMLElement);
-  document.body.appendChild(cont);
-  try {
-    await ensureAssetsReady(cont);
-    return await html2canvas(cont, { ...h2cOptions, width: PAGE_W } as any);
-  } finally {
-    if (cont.parentNode) document.body.removeChild(cont);
-  }
-}
-
 // Locate the "Pág. N" node inside a cloned header (class first, then label, then last <p>).
 function locatePageNumberNode(headerClone: HTMLElement, pageLabel: string): HTMLElement | null {
   const byClass = headerClone.querySelector<HTMLElement>(".pdf-pagenum");
@@ -676,13 +645,16 @@ const OfertaPublica = () => {
       const { contentChildren, contentTop_abs, contentH } = measureGeometry(pageEl);
       const contentTop_css = contentTop_abs - pageRect.top;
 
-      // The footer is rendered standalone (full height, no drift-induced clipping)
-      // and reused on every physical page of this section, bottom-aligned above the
-      // bottom padding. Its true height drives where content must stop.
-      const footerCanvas = footerEl ? await renderFooterCanvas(footerEl, h2cBase) : null;
-      const footerH_px = footerCanvas ? footerCanvas.height : 0;
-      const footerDestTopPx = PAGE_H_PX - Math.round(PAD_B * SCALE) - footerH_px;
-      const footerDestTop_css = footerDestTopPx / SCALE;
+      // Footer band: copied out of the faithful section bitmap, from the footer's
+      // top all the way DOWN to the very bottom of the section (footer + bottom
+      // padding), then bottom-aligned to the page. Going to the section bottom means
+      // there is no height estimate that can undershoot and clip the phone line (the
+      // v5/v6 bug). Only the footer's TOP is DOM-measured; a small safety margin
+      // biases it into the whitespace above the footer so its top is never clipped.
+      const footerRect = footerEl ? footerEl.getBoundingClientRect() : null;
+      const footerReserve_css = footerRect ? footerRect.height + 16 : 0;
+      const footerSrcTop_css = footerRect ? footerRect.top - pageRect.top - 6 : 0;
+      const footerDestTop_css = PAGE_H - PAD_B - footerReserve_css;
 
       // Vertical space for content between the header and the footer.
       const usable_css = Math.max(0, footerDestTop_css - contentTop_css);
@@ -746,10 +718,16 @@ const OfertaPublica = () => {
           ctx.drawImage(fullCanvas, 0, bandTop, PAGE_W_PX, bandH, 0, destTop, PAGE_W_PX, bandH);
         }
 
-        // Standalone footer, bottom-aligned above the bottom padding — full height,
-        // so the phone line is never clipped.
-        if (footerCanvas) {
-          ctx.drawImage(footerCanvas, 0, footerDestTopPx);
+        // Footer band from the section bitmap: full height down to the section
+        // bottom, bottom-aligned so its bottom padding matches the page's. Because
+        // the band reaches the section bottom, the phone line is never clipped.
+        if (footerRect) {
+          const fSrcTop = Math.max(contentBottomPx, Math.round(footerSrcTop_css * SCALE));
+          const fSrcH = fullCanvas.height - fSrcTop;
+          if (fSrcH > 0) {
+            const fDestTop = PAGE_H_PX - fSrcH;
+            ctx.drawImage(fullCanvas, 0, fSrcTop, PAGE_W_PX, fSrcH, 0, fDestTop, PAGE_W_PX, fSrcH);
+          }
         }
 
         pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
@@ -887,7 +865,7 @@ const OfertaPublica = () => {
             {quotation.code} — {quotation.client.company}
           </span>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v6 · pixel</span>
+            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v7 · pixel</span>
             <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
               <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
             </Button>
