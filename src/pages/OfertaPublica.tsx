@@ -414,6 +414,37 @@ async function renderHeaderCanvas(
   }
 }
 
+// Render the footer on its own — at the page's real width and side padding — as a
+// 2× canvas. Copying the footer band out of the section bitmap is unsafe: font
+// drift can wrap the address to an extra line the DOM-measured height misses,
+// clipping the phone number. Rendering it standalone captures the full footer at
+// its true height, then the caller bottom-aligns it above the bottom padding.
+async function renderFooterCanvas(
+  footerEl: HTMLElement,
+  h2cOptions: Record<string, unknown>
+): Promise<HTMLCanvasElement> {
+  const cont = document.createElement("div");
+  Object.assign(cont.style, {
+    width: `${PAGE_W}px`,
+    padding: `0 ${PAD_V}px 0 ${PAD_V}px`,
+    boxSizing: "border-box",
+    background: "white",
+    fontFamily: "'Inter', Arial, sans-serif",
+    position: "fixed",
+    left: `-${PAGE_W + 200}px`,
+    top: "0",
+    pointerEvents: "none",
+  });
+  cont.appendChild(footerEl.cloneNode(true) as HTMLElement);
+  document.body.appendChild(cont);
+  try {
+    await ensureAssetsReady(cont);
+    return await html2canvas(cont, { ...h2cOptions, width: PAGE_W } as any);
+  } finally {
+    if (cont.parentNode) document.body.removeChild(cont);
+  }
+}
+
 // Locate the "Pág. N" node inside a cloned header (class first, then label, then last <p>).
 function locatePageNumberNode(headerClone: HTMLElement, pageLabel: string): HTMLElement | null {
   const byClass = headerClone.querySelector<HTMLElement>(".pdf-pagenum");
@@ -645,11 +676,13 @@ const OfertaPublica = () => {
       const { contentChildren, contentTop_abs, contentH } = measureGeometry(pageEl);
       const contentTop_css = contentTop_abs - pageRect.top;
 
-      const footerRect = footerEl ? footerEl.getBoundingClientRect() : null;
-      const footerH_css = footerRect ? footerRect.height : 0;
-      const footerSrcTop_css = footerRect ? footerRect.top - pageRect.top : 0;
-      // The footer sits just above the bottom padding on every physical page.
-      const footerDestTop_css = PAGE_H - PAD_B - footerH_css;
+      // The footer is rendered standalone (full height, no drift-induced clipping)
+      // and reused on every physical page of this section, bottom-aligned above the
+      // bottom padding. Its true height drives where content must stop.
+      const footerCanvas = footerEl ? await renderFooterCanvas(footerEl, h2cBase) : null;
+      const footerH_px = footerCanvas ? footerCanvas.height : 0;
+      const footerDestTopPx = PAGE_H_PX - Math.round(PAD_B * SCALE) - footerH_px;
+      const footerDestTop_css = footerDestTopPx / SCALE;
 
       // Vertical space for content between the header and the footer.
       const usable_css = Math.max(0, footerDestTop_css - contentTop_css);
@@ -713,12 +746,10 @@ const OfertaPublica = () => {
           ctx.drawImage(fullCanvas, 0, bandTop, PAGE_W_PX, bandH, 0, destTop, PAGE_W_PX, bandH);
         }
 
-        // Footer copied from the section bitmap, placed just above the bottom padding.
-        if (footerRect) {
-          const fSrcTop = Math.round(footerSrcTop_css * SCALE);
-          const fH = Math.round(footerH_css * SCALE);
-          const fDestTop = Math.round(footerDestTop_css * SCALE);
-          ctx.drawImage(fullCanvas, 0, fSrcTop, PAGE_W_PX, fH, 0, fDestTop, PAGE_W_PX, fH);
+        // Standalone footer, bottom-aligned above the bottom padding — full height,
+        // so the phone line is never clipped.
+        if (footerCanvas) {
+          ctx.drawImage(footerCanvas, 0, footerDestTopPx);
         }
 
         pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
@@ -856,7 +887,7 @@ const OfertaPublica = () => {
             {quotation.code} — {quotation.client.company}
           </span>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v5 · pixel</span>
+            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v6 · pixel</span>
             <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
               <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
             </Button>
