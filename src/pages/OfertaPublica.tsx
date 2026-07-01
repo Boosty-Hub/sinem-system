@@ -298,6 +298,84 @@ function computeSlices(safeBreaks: number[], contentH: number, winH: number): nu
   return starts;
 }
 
+// Pixel-based pagination. Scans the rendered section bitmap for horizontal
+// whitespace bands (rows with no ink) and places every page cut inside one — so
+// a cut can never bisect a glyph. Because it reads the REAL rendered pixels it is
+// immune to any layout drift between html2canvas and the live DOM (the failure
+// mode of the DOM-coordinate model: sub-pixel font/rounding differences that
+// accumulate and, deep into long content, cut through the middle of a line).
+//
+// It also prefers TALLER gaps (paragraph spacing) over thin line leading when one
+// sits near the page limit, so a paragraph close to the bottom is pushed whole to
+// the next page instead of being split — matching the requested behaviour.
+//
+// Returns absolute bitmap row indices partitioning [topPx, bottomPx]. May throw
+// if the canvas is tainted; the caller falls back to the DOM line model.
+function computePixelSliceRows(
+  canvas: HTMLCanvasElement,
+  topPx: number,
+  bottomPx: number,
+  usablePx: number
+): number[] {
+  const W = canvas.width;
+  const ctx = canvas.getContext("2d")!;
+  const total = bottomPx - topPx;
+  const img = ctx.getImageData(0, topPx, W, total).data;
+
+  const INK = 245; // luminance below this counts as ink (text/borders)
+  const empty = new Uint8Array(total);
+  for (let row = 0; row < total; row++) {
+    let clean = 1;
+    const base = row * W * 4;
+    for (let x = 0; x < W; x++) {
+      const p = base + x * 4;
+      if (img[p + 3] === 0) continue; // transparent → treated as white bg
+      const lum = 0.299 * img[p] + 0.587 * img[p + 1] + 0.114 * img[p + 2];
+      if (lum < INK) { clean = 0; break; }
+    }
+    empty[row] = clean;
+  }
+
+  // Runs of consecutive empty rows → candidate cut bands (centre + height).
+  const runs: { mid: number; h: number }[] = [];
+  let s = -1;
+  for (let row = 0; row <= total; row++) {
+    if (row < total && empty[row]) { if (s < 0) s = row; }
+    else if (s >= 0) { runs.push({ mid: (s + row) >> 1, h: row - s }); s = -1; }
+  }
+
+  // Distinguish paragraph gaps from thin line leading via the median run height.
+  const heights = runs.map((r) => r.h).sort((a, b) => a - b);
+  const median = heights.length ? heights[heights.length >> 1] : 0;
+  const bigGap = Math.max(median * 1.7, usablePx * 0.012);
+  const lookback = Math.round(usablePx * 0.1); // how far above the limit a para gap wins
+
+  const cuts = [topPx];
+  let y = topPx;
+  while (bottomPx - y > usablePx + 1) {
+    const limit = y + usablePx;
+    let linePick = -1;
+    let paraPick = -1;
+    for (const r of runs) {
+      const c = topPx + r.mid;
+      if (c <= y + 1) continue;
+      if (c > limit) break;
+      linePick = c;
+      if (r.h >= bigGap && c >= limit - lookback) paraPick = c;
+    }
+    let pick = paraPick > 0 ? paraPick : linePick;
+    if (pick <= y + 1) pick = limit; // dense block taller than a page: hard cut
+    cuts.push(pick);
+    y = pick;
+  }
+  cuts.push(bottomPx);
+  // Drop a trailing micro-slice.
+  if (cuts.length >= 3 && cuts[cuts.length - 1] - cuts[cuts.length - 2] < 4) {
+    cuts.splice(cuts.length - 2, 1);
+  }
+  return cuts;
+}
+
 // Render the page header on its own — at the page's real width and padding, with
 // the correct page number stamped — as a 2× canvas. The section bitmap is rendered
 // once, so its baked-in header number is wrong on continuation pages; this draws a
@@ -579,18 +657,30 @@ const OfertaPublica = () => {
       // One faithful bitmap of the entire section.
       const fullCanvas = await html2canvas(pageEl, { ...h2cBase, width: PAGE_W } as any);
 
-      // Line-aware slice starts (no mid-line cuts). One slice if it all fits.
-      let starts: number[];
+      // Page cuts as absolute bitmap rows. Primary path reads the real rendered
+      // pixels (immune to html2canvas↔DOM layout drift); it falls back to the DOM
+      // line model only if the canvas is tainted and getImageData throws.
+      const contentTopPx = Math.round(contentTop_css * SCALE);
+      const contentBottomPx = Math.round((contentTop_css + contentH) * SCALE);
+      const usablePx = Math.round(usable_css * SCALE);
+
+      let cutRows: number[];
       if (usable_css <= 0 || contentH <= usable_css || contentChildren.length === 0) {
-        starts = [0];
+        cutRows = [contentTopPx, contentBottomPx];
       } else {
-        const { safeBreaks } = collectBreakModel(contentChildren, contentTop_abs, usable_css);
-        starts = computeSlices(safeBreaks, contentH, usable_css);
+        try {
+          cutRows = computePixelSliceRows(fullCanvas, contentTopPx, contentBottomPx, usablePx);
+        } catch {
+          const { safeBreaks } = collectBreakModel(contentChildren, contentTop_abs, usable_css);
+          const starts = computeSlices(safeBreaks, contentH, usable_css);
+          cutRows = starts.map((st) => Math.round((contentTop_css + st) * SCALE));
+          cutRows.push(contentBottomPx);
+        }
       }
 
-      for (let si = 0; si < starts.length; si++) {
-        const srcY = starts[si];
-        const endY = si + 1 < starts.length ? starts[si + 1] : contentH;
+      for (let si = 0; si < cutRows.length - 1; si++) {
+        const srcRow = cutRows[si];
+        const endRow = cutRows[si + 1];
         physPage += 1;
         if (!isFirst) pdf.addPage("letter", "portrait");
         isFirst = false;
@@ -613,11 +703,12 @@ const OfertaPublica = () => {
           ctx.drawImage(headerCanvas, 0, 0);
         }
 
-        // Content band [srcY, endY) copied from the section bitmap, placed right
-        // after the header. endY is a line boundary, so the cut never bisects a line.
-        const bandTop = Math.round((contentTop_css + srcY) * SCALE);
-        const bandH = Math.round((endY - srcY) * SCALE);
-        const destTop = Math.round(contentTop_css * SCALE);
+        // Content band [srcRow, endRow) copied from the section bitmap, placed
+        // right after the header. Both rows land in inter-line whitespace, so the
+        // cut never bisects a glyph.
+        const bandTop = srcRow;
+        const bandH = endRow - srcRow;
+        const destTop = contentTopPx;
         if (bandH > 0) {
           ctx.drawImage(fullCanvas, 0, bandTop, PAGE_W_PX, bandH, 0, destTop, PAGE_W_PX, bandH);
         }
@@ -765,7 +856,7 @@ const OfertaPublica = () => {
             {quotation.code} — {quotation.client.company}
           </span>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v4 · bitmap</span>
+            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v5 · pixel</span>
             <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
               <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
             </Button>
