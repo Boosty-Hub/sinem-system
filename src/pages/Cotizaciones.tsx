@@ -150,7 +150,7 @@ const Cotizaciones = () => {
       validityDays: q.validity_days,
       notes: q.notes,
       status: q.status as any,
-      createdAt: ((q as any).updated_at ?? q.created_at)?.split("T")[0] ?? "",
+      createdAt: (q.created_at ?? (q as any).updated_at)?.split("T")[0] ?? "",
       createdBy: q.created_by ?? undefined,
       version: q.version,
       history: historyByQuotation.get(q.id) ?? [],
@@ -273,6 +273,11 @@ const Cotizaciones = () => {
       show_item_subtotals: updated.showItemSubtotals ?? false,
       language: updated.language ?? 'es',
       created_by: appUserId,
+      // Offer date the user picks in the form ("Fecha") — persisted so the document
+      // shows it instead of the row's auto timestamp. Normalized to a full timestamp.
+      created_at: updated.createdAt
+        ? (updated.createdAt.includes("T") ? updated.createdAt : `${updated.createdAt}T00:00:00Z`)
+        : undefined,
     };
 
     const exists = quotations.find((q) => q.id === updated.id);

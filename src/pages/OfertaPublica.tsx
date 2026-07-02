@@ -48,6 +48,8 @@ const LABELS = {
     subject: "Asunto:",
     from: "De:",
     to: "Para:",
+    attn: "Att.:",
+    rnc: "RNC:",
     offerNo: "No. de oferta:",
     dear: (gender: string) => gender === "Sr." ? "Estimado" : "Estimada",
     tableDescription: "Descripción",
@@ -91,6 +93,8 @@ const LABELS = {
     subject: "Subject:",
     from: "From:",
     to: "To:",
+    attn: "Attn.:",
+    rnc: "Tax ID:",
     offerNo: "Offer No.:",
     dear: (_gender: string) => "Dear",
     tableDescription: "Description",
@@ -491,7 +495,7 @@ const OfertaPublica = () => {
           specialConsiderations: (qRow as any).special_considerations ?? "",
           notes: qRow.notes,
           status: qRow.status as any,
-          createdAt: ((qRow as any).updated_at ?? qRow.created_at)?.split("T")[0] ?? "",
+          createdAt: (qRow.created_at ?? (qRow as any).updated_at)?.split("T")[0] ?? "",
           version: qRow.version,
           history: [],
           approvalStatus: qRow.approval_status as any,
@@ -891,8 +895,31 @@ const OfertaPublica = () => {
             <p style={{ margin: 0 }}>{formatDateLong(quotation.createdAt)}</p>
             <p style={{ margin: 0 }}>{L.subject} {quotation.subject}</p>
             <p style={{ margin: 0 }}>{L.from} {sigName}</p>
-            <p style={{ margin: 0 }}>{L.to} {quotation.client.attention}</p>
-            <p style={{ margin: 0 }}>{L.offerNo} {quotation.code}</p>
+            <div style={{ margin: "8px 0 0 0" }}>
+              <p style={{ margin: 0 }}>{L.to}</p>
+              {quotation.client.company && (
+                <p style={{ margin: 0, fontWeight: 600 }}>{quotation.client.company}</p>
+              )}
+              {quotation.client.attention && (
+                <p style={{ margin: 0 }}>
+                  {L.attn} {quotation.client.gender ? `${quotation.client.gender} ` : ""}{quotation.client.attention}
+                </p>
+              )}
+              {quotation.client.rnc && (
+                <p style={{ margin: 0 }}>{L.rnc} {quotation.client.rnc}</p>
+              )}
+              {quotation.client.address && (
+                <p style={{ margin: 0 }}>{quotation.client.address}</p>
+              )}
+              {(quotation.client.phone || quotation.client.email) && (
+                <p style={{ margin: 0 }}>
+                  {quotation.client.phone ? `${L.phone} ${quotation.client.phone}` : ""}
+                  {quotation.client.phone && quotation.client.email ? "  ·  " : ""}
+                  {quotation.client.email ?? ""}
+                </p>
+              )}
+            </div>
+            <p style={{ margin: "8px 0 0 0" }}>{L.offerNo} {quotation.code}</p>
           </div>
 
           <p style={{ margin: "0 0 28px 0", fontSize: "13px" }}>
