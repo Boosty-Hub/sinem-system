@@ -865,7 +865,7 @@ const OfertaPublica = () => {
             {quotation.code} — {quotation.client.company}
           </span>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v7 · pixel</span>
+            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v8 · pixel</span>
             <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
               <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
             </Button>
@@ -951,7 +951,7 @@ const OfertaPublica = () => {
                   return items.map((item, i) => (
                     <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: i % 2 === 0 ? "#fafafa" : "white" }}>
                       <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
-                      <td style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                      <td className="pdf-rich" style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                       <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
@@ -998,7 +998,7 @@ const OfertaPublica = () => {
                     allRows.push(
                       <tr key={`r-${solo.item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: solo.globalIdx % 2 === 0 ? "#fafafa" : "white" }}>
                         <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{solo.globalIdx + 1}</td>
-                        <td style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
+                        <td className="pdf-rich" style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
                         <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{solo.item.quantity}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(solo.item.unitPriceUSD)}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(solo.item.totalUSD)}</td>
@@ -1011,7 +1011,7 @@ const OfertaPublica = () => {
                       allRows.push(
                         <tr key={`r-${item.id}`} className="pdf-no-break" style={{ borderBottom: "1px solid #f0f0f0", backgroundColor: rowIdx % 2 === 0 ? "#fafafa" : "white" }}>
                           <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{rowIdx + 1}</td>
-                          <td style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
+                          <td className="pdf-rich" style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                           <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
@@ -1088,7 +1088,11 @@ const OfertaPublica = () => {
           {quotation.notes && (
             <div className="pdf-no-break" style={{ marginBottom: "18px", padding: "10px 14px", backgroundColor: "#f8f9fa", borderLeft: "3px solid #0097A7", borderRadius: "4px" }}>
               <p style={{ fontWeight: 600, fontSize: "11px", color: "#555", margin: "0 0 3px 0" }}>{L.notes}</p>
-              <p style={{ margin: 0, fontSize: "12px", whiteSpace: "pre-wrap" }}>{quotation.notes}</p>
+              <div style={{ fontSize: "12px" }}>
+                {quotation.notes.split("\n").map((line, i) => (
+                  <p key={i} style={{ margin: 0 }}>{line.length ? line : " "}</p>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1119,7 +1123,11 @@ const OfertaPublica = () => {
             {quotation.specialConsiderations && (
               <div className="pdf-no-break" style={{ marginTop: "10px" }}>
                 <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "4px" }}>{L.specialConsiderations}</p>
-                <p style={{ fontSize: "12px", whiteSpace: "pre-wrap", color: "#333", lineHeight: "1.6" }}>{quotation.specialConsiderations}</p>
+                <div style={{ fontSize: "12px", color: "#333", lineHeight: "1.6" }}>
+                  {quotation.specialConsiderations.split("\n").map((line, i) => (
+                    <p key={i} style={{ margin: 0 }}>{line.length ? line : " "}</p>
+                  ))}
+                </div>
               </div>
             )}
           </div>
