@@ -115,17 +115,49 @@ const ProspectCombobox = ({ prospects, value, onChange }: { prospects: Prospect[
 
 const DRAFT_KEY = "sinem:quotation-draft-v2";
 
-/** Per-unit distributed cost for a single item given a list of cost entries that may target specific items. */
-const computeItemUnitDist = (item: LineItem, items: LineItem[], costs: CostEntry[]): number => {
-  if (item.unitCostUSD <= 0) return 0;
+/** Currency the manual exchange rate is expressed against: "1 USD = exchangeRate <rateCurrency>".
+ *  When the quotation is billed in USD, the rate still expresses the USD↔DOP relation so DOP
+ *  item costs can be converted; for any other billing currency the rate targets that currency. */
+const rateCurrencyFor = (quotationCurrency: string): string =>
+  quotationCurrency === "USD" ? "DOP" : quotationCurrency;
+
+/** Convert a cost amount expressed in `costCurrency` into USD.
+ *  - USD costs pass through unchanged.
+ *  - Costs in the rate's currency are divided by the rate (1 USD = exchangeRate units).
+ *  - Costs in a currency we have no rate for pass through unconverted (best effort). */
+const convertCostToUSD = (
+  amount: number,
+  costCurrency: string | undefined,
+  quotationCurrency: string,
+  exchangeRate: number,
+): number => {
+  if (!amount || amount <= 0) return 0;
+  const cc = costCurrency || "USD";
+  if (cc === "USD") return amount;
+  if (cc === rateCurrencyFor(quotationCurrency) && exchangeRate > 0) return amount / exchangeRate;
+  return amount;
+};
+
+/** Per-unit distributed cost (in USD) for a single item, given cost entries that may target
+ *  specific items. Item costs are normalized to USD first so the distribution stays fair when
+ *  items mix cost currencies. */
+const computeItemUnitDist = (
+  item: LineItem,
+  items: LineItem[],
+  costs: CostEntry[],
+  quotationCurrency: string,
+  exchangeRate: number,
+): number => {
+  const itemCostUSD = convertCostToUSD(item.unitCostUSD, item.costCurrency, quotationCurrency, exchangeRate);
+  if (itemCostUSD <= 0) return 0;
   return costs.reduce((sum, cost) => {
     const applicable = cost.itemIds && cost.itemIds.length > 0
       ? items.filter(li => cost.itemIds!.includes(li.id))
       : items;
     if (!applicable.some(li => li.id === item.id)) return sum;
-    const w = applicable.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+    const w = applicable.reduce((s, li) => s + convertCostToUSD(li.unitCostUSD, li.costCurrency, quotationCurrency, exchangeRate) * (li.quantity || 0), 0);
     if (w <= 0) return sum;
-    return sum + cost.amountUSD * (item.unitCostUSD / w);
+    return sum + cost.amountUSD * (itemCostUSD / w);
   }, 0);
 };
 
@@ -566,8 +598,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const recalcPrices = (items: LineItem[], costs: CostEntry[]) => {
     return items.map((item) => {
       if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
-      const unitDist = computeItemUnitDist(item, items, costs);
-      const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
+      const unitDist = computeItemUnitDist(item, items, costs, currency, exchangeRate);
+      const costUSD = convertCostToUSD(item.unitCostUSD, item.costCurrency, currency, exchangeRate);
+      const effectiveUnitPrice = Math.round(((costUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
       return { ...item, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
     });
   };
@@ -586,12 +619,13 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
           updated.totalUSD = Math.round(updated.quantity * updated.unitPriceUSD * 100) / 100;
           if (updated.unitCostUSD > 0 && updated.unitPriceUSD > 0) {
             // Back-derive margin from effective price: price = (cost + unitDist) / (1 - margin)
-            const uDist = computeItemUnitDist(updated, prev, distributedCosts);
-            const effCost = updated.unitCostUSD + uDist;
+            // Cost is normalized to USD so the margin matches the USD price the user typed.
+            const uDist = computeItemUnitDist(updated, prev, distributedCosts, currency, exchangeRate);
+            const effCost = convertCostToUSD(updated.unitCostUSD, updated.costCurrency, currency, exchangeRate) + uDist;
             if (updated.unitPriceUSD > effCost) {
               updated.itemMarginPercent = Math.round((1 - effCost / updated.unitPriceUSD) * 10000) / 100;
             } else {
-              updated.itemMarginPercent = Math.round(((updated.unitPriceUSD - updated.unitCostUSD) / updated.unitPriceUSD) * 10000) / 100;
+              updated.itemMarginPercent = Math.round(((updated.unitPriceUSD - effCost) / updated.unitPriceUSD) * 10000) / 100;
             }
           }
         }
@@ -609,17 +643,19 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       return step1.map((item) => {
         if (field === "unitPriceUSD" && item.id === id) return item; // user set price manually
         if (item.itemMarginPercent === null || item.unitCostUSD <= 0 || item.itemMarginPercent >= 100) return item;
-        const unitDist = computeItemUnitDist(item, step1, distributedCosts);
-        const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
+        const unitDist = computeItemUnitDist(item, step1, distributedCosts, currency, exchangeRate);
+        const costUSD = convertCostToUSD(item.unitCostUSD, item.costCurrency, currency, exchangeRate);
+        const effectiveUnitPrice = Math.round(((costUSD + unitDist) / (1 - item.itemMarginPercent / 100)) * 100) / 100;
         return { ...item, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
       });
     });
   };
 
-  // Recalculate effective prices when distributed costs change
+  // Recalculate effective prices when distributed costs, billing currency, or exchange rate change
   useEffect(() => {
     setLineItems((prev) => recalcPrices(prev, distributedCosts));
-  }, [distributedCosts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distributedCosts, currency, exchangeRate]);
 
   const applyGeneralMargin = () => {
     if (generalMarginInput <= 0 || generalMarginInput >= 100) return;
@@ -628,8 +664,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
       if (!prev.some(li => li.unitCostUSD > 0)) return prev;
       return prev.map((item) => {
         if (!item.unitCostUSD) return item;
-        const unitDist = computeItemUnitDist(item, prev, distributedCosts);
-        const effectiveUnitPrice = Math.round(((item.unitCostUSD + unitDist) / (1 - m)) * 100) / 100;
+        const unitDist = computeItemUnitDist(item, prev, distributedCosts, currency, exchangeRate);
+        const costUSD = convertCostToUSD(item.unitCostUSD, item.costCurrency, currency, exchangeRate);
+        const effectiveUnitPrice = Math.round(((costUSD + unitDist) / (1 - m)) * 100) / 100;
         return { ...item, itemMarginPercent: generalMarginInput, unitPriceUSD: effectiveUnitPrice, totalUSD: Math.round(item.quantity * effectiveUnitPrice * 100) / 100 };
       });
     });
@@ -637,12 +674,18 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.totalUSD, 0);
 
-  // Cost breakdown (computed)
-  const itemsCostTotal = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+  // Cost breakdown (computed) — item costs normalized to USD via the exchange rate
+  const itemsCostTotal = lineItems.reduce((s, li) => s + convertCostToUSD(li.unitCostUSD, li.costCurrency, currency, exchangeRate) * li.quantity, 0);
   const distributedTotal = distributedCosts.reduce((s, c) => s + c.amountUSD, 0);
-  const totalWeightedCost = lineItems.reduce((s, li) => s + (li.unitCostUSD > 0 ? li.unitCostUSD * li.quantity : 0), 0);
+  const totalWeightedCost = itemsCostTotal;
   const hasDetailedCosts = itemsCostTotal > 0 || distributedTotal > 0;
   const effectiveCostUSD = hasDetailedCosts ? (itemsCostTotal + distributedTotal) : costUSD;
+
+  // The manual exchange rate ("1 USD = X <rateCurrency>") is needed whenever the quotation is
+  // billed in a non-USD currency, OR the quotation is in USD but some item cost is in DOP.
+  const rateCurrency = rateCurrencyFor(currency);
+  const hasRateBearingCost = lineItems.some((li) => (li.costCurrency ?? "USD") === rateCurrency && (li.unitCostUSD ?? 0) > 0);
+  const showExchangeRate = !isOriginalCurrency && (currency !== "USD" || hasRateBearingCost);
 
   const priceBase = Math.round(subtotal * 100) / 100;
   const itbisUSD = applyItbis ? Math.round(priceBase * itbisPercent) / 100 : 0;
@@ -1197,8 +1240,9 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                 </thead>
                 <tbody>
                   {lineItems.map((item, itemIdx) => {
-                    const unitDistCost = computeItemUnitDist(item, lineItems, distributedCosts);
-                    const costUnitTotal = (item.unitCostUSD + unitDistCost) * item.quantity;
+                    const unitDistCost = computeItemUnitDist(item, lineItems, distributedCosts, currency, exchangeRate);
+                    const itemCostUSD = convertCostToUSD(item.unitCostUSD, item.costCurrency, currency, exchangeRate);
+                    const costUnitTotal = (itemCostUSD + unitDistCost) * item.quantity;
                     const sym = "$";
                     return (
                       <tr key={item.id} className="border-b last:border-0">
@@ -1314,7 +1358,15 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
               <div>
                 <Label className="text-xs">Moneda de la Cotización</Label>
                 <div className="flex items-center gap-2 mt-1">
-                  <Select value={currency} onValueChange={(v) => { setCurrency(v as QuotationCurrency); if (v === "USD") { setExchangeRate(1); setIsOriginalCurrency(false); } }}>
+                  <Select value={currency} onValueChange={(v) => {
+                    setCurrency(v as QuotationCurrency);
+                    // Keep the DOP↔USD rate when switching to USD if some cost is still in DOP,
+                    // otherwise reset it to 1 (no conversion needed).
+                    if (v === "USD") {
+                      const keepsDopCost = lineItems.some((li) => (li.costCurrency ?? "USD") === "DOP" && (li.unitCostUSD ?? 0) > 0);
+                      if (!keepsDopCost) { setExchangeRate(1); setIsOriginalCurrency(false); }
+                    }
+                  }}>
                     <SelectTrigger className="w-44 h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {CURRENCIES.map((c) => (
@@ -1325,7 +1377,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                       ))}
                     </SelectContent>
                   </Select>
-                  {currency !== "USD" && !isOriginalCurrency && (
+                  {showExchangeRate && (
                     <div className="flex items-center gap-1.5">
                       <Label className="text-xs text-muted-foreground whitespace-nowrap">Tasa:</Label>
                       <Input
@@ -1338,7 +1390,7 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
                         placeholder="Ej: 58.50"
                       />
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                        1 USD = {exchangeRate} {currency}
+                        1 USD = {exchangeRate} {rateCurrency}
                       </span>
                     </div>
                   )}
