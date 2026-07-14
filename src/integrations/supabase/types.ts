@@ -979,6 +979,7 @@ export type Database = {
           client_rnc: string
           code: string
           contact_id: string | null
+          cost_exchange_rates: Json
           cost_usd: number
           created_at: string
           created_by: string | null
@@ -1020,6 +1021,7 @@ export type Database = {
           client_rnc?: string
           code: string
           contact_id?: string | null
+          cost_exchange_rates?: Json
           cost_usd?: number
           created_at?: string
           created_by?: string | null
@@ -1061,6 +1063,7 @@ export type Database = {
           client_rnc?: string
           code?: string
           contact_id?: string | null
+          cost_exchange_rates?: Json
           cost_usd?: number
           created_at?: string
           created_by?: string | null

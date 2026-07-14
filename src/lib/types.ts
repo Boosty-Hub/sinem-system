@@ -1,3 +1,5 @@
+import type { CostRates } from "./currency";
+
 export interface AppUser {
   id: string;
   authUserId?: string;
@@ -207,6 +209,9 @@ export interface Quotation {
   totalUSD: number;
   currency: QuotationCurrency;
   exchangeRate: number;
+  /** Manual rates per currency: "1 USD = value <key>". Source of truth for cost conversion.
+   *  `exchangeRate` stays the billing-currency rate, derived from this map. */
+  costRates?: CostRates;
   isOriginalCurrency?: boolean;
   partner: QuotationPartner;
   showPartnerText?: boolean;
@@ -260,6 +265,10 @@ export interface QuotationSnapshot {
   marginUSD: number;
   currency?: QuotationCurrency;
   exchangeRate?: number;
+  /** See `Quotation.costRates`. Not yet persisted on the `quotation_snapshots` table —
+   *  kept in-memory only so `seedRatesFromLegacy` can still recover the legacy single rate
+   *  when restoring an older snapshot. */
+  costRates?: CostRates;
   client?: QuotationClient;
   partner?: QuotationPartner;
   showPartnerText?: boolean;

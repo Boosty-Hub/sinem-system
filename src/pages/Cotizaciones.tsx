@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { QUOTATION_STATUSES, CURRENCIES, type Quotation } from "@/lib/types";
+import type { CostRates } from "@/lib/currency";
 import { Search, Plus, FileText, ExternalLink, ShieldCheck, Clock, XCircle, Trash2, Loader2, Download } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,7 @@ const Cotizaciones = () => {
         marginUSD: Number(s.margin_usd),
         currency: (s.currency ?? "USD") as any,
         exchangeRate: Number(s.exchange_rate ?? 1),
+        costRates: (s.cost_exchange_rates as CostRates) ?? undefined,
         client: s.client ?? undefined,
         partner: (s.partner ?? "Siemens") as any,
         showPartnerText: s.show_partner_text ?? true,
@@ -160,6 +162,7 @@ const Cotizaciones = () => {
       approvedAt: q.approved_at ?? undefined,
       currency: q.currency as any,
       exchangeRate: Number(q.exchange_rate),
+      costRates: (q.cost_exchange_rates as CostRates) ?? {},
       isOriginalCurrency: (q as any).is_original_currency ?? false,
       partner: (q as any).partner ?? "Siemens",
       showPartnerText: (q as any).show_partner_text ?? true,
@@ -263,6 +266,7 @@ const Cotizaciones = () => {
         : null,
       currency: updated.currency ?? "USD",
       exchange_rate: updated.exchangeRate ?? 1,
+      cost_exchange_rates: updated.costRates ?? {},
       is_original_currency: updated.isOriginalCurrency ?? false,
       partner: updated.partner ?? "Siemens",
       show_partner_text: updated.showPartnerText ?? true,
@@ -349,6 +353,7 @@ const Cotizaciones = () => {
           itbis_percent: snap.itbisPercent ?? 18,
           currency: snap.currency ?? "USD",
           exchange_rate: snap.exchangeRate ?? 1,
+          cost_exchange_rates: (snap.costRates ?? {}) as any,
           client: (snap.client ?? {}) as any,
           partner: snap.partner ?? "Siemens",
           show_partner_text: snap.showPartnerText ?? true,
