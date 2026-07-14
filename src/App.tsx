@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ProtectedModule from "./components/ProtectedModule";
 import AppLayout from "./components/AppLayout";
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
 import Dashboard from "./pages/Dashboard";
 import CRM from "./pages/CRM";
 import Projects from "./pages/Projects";
@@ -45,6 +46,7 @@ const App = () => (
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/oferta/:id" element={<OfertaPublica />} />
 

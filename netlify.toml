@@ -6,3 +6,8 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors 'self' https://boosty-projects-hub.netlify.app"
