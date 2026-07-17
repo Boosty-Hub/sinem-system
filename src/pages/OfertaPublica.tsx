@@ -376,6 +376,68 @@ function computePixelSliceRows(
   return cuts;
 }
 
+// Recover the TRUE bottom of the rendered content from the section bitmap.
+//
+// The DOM-measured content bottom can sit ABOVE the last rendered text line when
+// html2canvas renders a tall section a few percent taller than the live DOM
+// (sub-pixel line-height rounding that accumulates). Using that estimate as the
+// final slice bottom clips the last lines mid-glyph. This scans the bitmap from
+// just above the estimate downward, stops at the footer's top border (a
+// near-full-width continuous rule that body text never produces), and returns the
+// last inked row above it. It ONLY ever extends downward — never above the DOM
+// estimate — so it can only rescue clipped content, never remove any. Returns the
+// estimate unchanged if nothing conclusive is found. May throw if the canvas is
+// tainted (getImageData); the caller keeps the DOM estimate in that case.
+function findRenderedContentBottom(
+  canvas: HTMLCanvasElement,
+  estBottomPx: number,
+  footerTopPx: number
+): number {
+  const W = canvas.width;
+  const ctx = canvas.getContext("2d")!;
+  const start = Math.max(0, estBottomPx - 30);
+  // Scan far enough past the estimate to cover realistic drift and reach the
+  // footer, but never past the bitmap. The footer-border stop ends it earlier.
+  const end = Math.min(
+    canvas.height,
+    Math.max(estBottomPx, footerTopPx) + Math.round(canvas.height * 0.12) + 120
+  );
+  if (end - start < 2) return estBottomPx;
+
+  const INK = 245;
+  const rows = end - start;
+  const img = ctx.getImageData(0, start, W, rows).data;
+
+  // Footer top border = the first row (below the estimate) whose LONGEST run of
+  // consecutive inked columns spans a large fraction of the width. A solid rule
+  // does; text, broken by inter-word/inter-letter gaps, does not.
+  const borderRun = W * 0.5;
+  let footerRel = rows;
+  let lastInkRel = -1;
+  for (let r = 0; r < rows; r++) {
+    const base = r * W * 4;
+    let run = 0;
+    let maxRun = 0;
+    let anyInk = false;
+    for (let x = 0; x < W; x++) {
+      const p = base + x * 4;
+      let ink = false;
+      if (img[p + 3] !== 0) {
+        const lum = 0.299 * img[p] + 0.587 * img[p + 1] + 0.114 * img[p + 2];
+        if (lum < INK) ink = true;
+      }
+      if (ink) { anyInk = true; run++; if (run > maxRun) maxRun = run; }
+      else run = 0;
+    }
+    if (maxRun >= borderRun) { footerRel = r; break; }
+    if (anyInk) lastInkRel = r;
+  }
+
+  if (lastInkRel < 0) return estBottomPx;
+  const realBottom = start + lastInkRel + 2; // small pad below descenders
+  return Math.max(estBottomPx, Math.min(realBottom, canvas.height));
+}
+
 // Render the page header on its own — at the page's real width and padding, with
 // the correct page number stamped — as a 2× canvas. The section bitmap is rendered
 // once, so its baked-in header number is wrong on continuation pages; this draws a
@@ -669,17 +731,30 @@ const OfertaPublica = () => {
       const contentBottomPx = Math.round((contentTop_css + contentH) * SCALE);
       const usablePx = Math.round(usable_css * SCALE);
 
+      // html2canvas can render a tall section a few percent taller than the DOM
+      // measurement predicts (erratic sub-pixel line-height rounding that
+      // accumulates over the section). The cut points below are scanned from the
+      // real bitmap so they stay line-safe, but the final content bottom is
+      // DOM-derived — under this drift it lands ABOVE the last rendered lines and
+      // clips them (the "special considerations get cut mid-glyph" bug). Recover
+      // the TRUE content bottom from the bitmap; it only ever extends downward.
+      const footerTopPx = Math.round(footerSrcTop_css * SCALE);
+      let effectiveBottomPx = contentBottomPx;
+      try {
+        effectiveBottomPx = findRenderedContentBottom(fullCanvas, contentBottomPx, footerTopPx);
+      } catch { /* tainted canvas → keep the DOM estimate */ }
+
       let cutRows: number[];
       if (usable_css <= 0 || contentH <= usable_css || contentChildren.length === 0) {
-        cutRows = [contentTopPx, contentBottomPx];
+        cutRows = [contentTopPx, effectiveBottomPx];
       } else {
         try {
-          cutRows = computePixelSliceRows(fullCanvas, contentTopPx, contentBottomPx, usablePx);
+          cutRows = computePixelSliceRows(fullCanvas, contentTopPx, effectiveBottomPx, usablePx);
         } catch {
           const { safeBreaks } = collectBreakModel(contentChildren, contentTop_abs, usable_css);
           const starts = computeSlices(safeBreaks, contentH, usable_css);
           cutRows = starts.map((st) => Math.round((contentTop_css + st) * SCALE));
-          cutRows.push(contentBottomPx);
+          cutRows.push(effectiveBottomPx);
         }
       }
 
@@ -722,7 +797,7 @@ const OfertaPublica = () => {
         // bottom, bottom-aligned so its bottom padding matches the page's. Because
         // the band reaches the section bottom, the phone line is never clipped.
         if (footerRect) {
-          const fSrcTop = Math.max(contentBottomPx, Math.round(footerSrcTop_css * SCALE));
+          const fSrcTop = Math.max(effectiveBottomPx, Math.round(footerSrcTop_css * SCALE));
           const fSrcH = fullCanvas.height - fSrcTop;
           if (fSrcH > 0) {
             const fDestTop = PAGE_H_PX - fSrcH;
