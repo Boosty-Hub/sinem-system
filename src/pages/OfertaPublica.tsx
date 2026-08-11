@@ -500,6 +500,151 @@ function locatePageNumberNode(headerClone: HTMLElement, pageLabel: string): HTML
   return (byLabel as HTMLElement) ?? (ps[ps.length - 1] ?? null);
 }
 
+// ── Selectable text layer ────────────────────────────────────────────────────────────────
+// Each page is exported as a bitmap, which is what makes the layout pixel-faithful — and also
+// what left the PDF with no text at all: nothing to select, copy, or search. Every visible
+// line is therefore ALSO written as real text in PDF rendering mode 3 ("invisible"), the same
+// technique an OCR'd scan uses. The drawn pixels are untouched; the glyphs simply exist in the
+// content stream, positioned under the ones the reader sees.
+
+/** One line box of text as the browser actually laid it out, in CSS px relative to the
+ *  section's border box. A wrapped paragraph yields one fragment per rendered line. */
+type TextFragment = {
+  text: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  fontSizePx: number;
+  bold: boolean;
+  region: "header" | "footer" | "content";
+  isPageNum: boolean;
+};
+
+// CSS px are 1/96 in; PDF units here are mm. PAGE_W px maps exactly onto PDF_W_MM.
+const CSS_PX_TO_MM = 25.4 / 96;
+
+function fragmentsForTextNode(node: Text, pageRect: DOMRect): TextFragment[] {
+  const raw = node.nodeValue ?? "";
+  if (!raw.trim()) return [];
+
+  const parent = node.parentElement;
+  if (!parent) return [];
+  const cs = window.getComputedStyle(parent);
+  if (cs.visibility === "hidden" || cs.display === "none" || Number(cs.opacity) === 0) return [];
+
+  const fontSizePx = parseFloat(cs.fontSize) || 12;
+  const bold = (parseInt(cs.fontWeight, 10) || 400) >= 600;
+  const region: TextFragment["region"] = parent.closest(".pdf-header")
+    ? "header"
+    : parent.closest(".pdf-footer")
+      ? "footer"
+      : "content";
+  const isPageNum = !!parent.closest(".pdf-pagenum");
+
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  const lineBoxes = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+  if (lineBoxes.length === 0) return [];
+
+  const mk = (text: string, r: DOMRect): TextFragment | null => {
+    const t = text.replace(/\s+/g, " ").trim();
+    if (!t) return null;
+    return {
+      text: t,
+      left: r.left - pageRect.left,
+      top: r.top - pageRect.top,
+      width: r.width,
+      height: r.height,
+      fontSizePx,
+      bold,
+      region,
+      isPageNum,
+    };
+  };
+
+  // The overwhelmingly common case: the node sits on one line, so its own rect is the answer
+  // and no per-character work is needed.
+  if (lineBoxes.length === 1) {
+    const only = mk(raw, lineBoxes[0] as DOMRect);
+    return only ? [only] : [];
+  }
+
+  // Wrapped node: the browser owns the break points, so ask it where they are by walking
+  // characters and cutting whenever the line box top changes.
+  const out: TextFragment[] = [];
+  const sliceAt = (from: number, to: number) => {
+    range.setStart(node, from);
+    range.setEnd(node, to);
+    const f = mk(raw.slice(from, to), range.getBoundingClientRect());
+    if (f) out.push(f);
+  };
+
+  let lineStart = 0;
+  let lineTop: number | null = null;
+  for (let i = 0; i < raw.length; i++) {
+    range.setStart(node, i);
+    range.setEnd(node, i + 1);
+    const r = range.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue; // collapsed whitespace at a break
+    if (lineTop === null) {
+      lineTop = r.top;
+    } else if (Math.abs(r.top - lineTop) > 1) {
+      sliceAt(lineStart, i);
+      lineStart = i;
+      lineTop = r.top;
+    }
+  }
+  sliceAt(lineStart, raw.length);
+  return out;
+}
+
+/** Every rendered line of text in a section, measured on the live DOM — the same DOM the
+ *  bitmap was rendered from, so the coordinates line up by construction. */
+function collectTextFragments(pageEl: HTMLElement): TextFragment[] {
+  const pageRect = pageEl.getBoundingClientRect();
+  const walker = document.createTreeWalker(pageEl, NodeFilter.SHOW_TEXT);
+  const out: TextFragment[] = [];
+  let n: Node | null;
+  while ((n = walker.nextNode())) {
+    out.push(...fragmentsForTextNode(n as Text, pageRect));
+  }
+  return out;
+}
+
+/** Write one measured line as invisible text at `destTopCss` (CSS px from the page top).
+ *
+ *  The bitmap renders Inter; the invisible layer uses a PDF core font, so the natural widths
+ *  differ by a few percent. Letter spacing absorbs that difference, which keeps the selection
+ *  highlight sitting on the glyphs instead of drifting along the line. The correction is
+ *  clamped: a bad measurement should degrade selection accuracy, never smear a line across
+ *  the page. */
+function drawInvisibleText(pdf: jsPDF, f: TextFragment, destTopCss: number) {
+  pdf.setFont("helvetica", f.bold ? "bold" : "normal");
+  pdf.setFontSize(f.fontSizePx * 0.75); // 96 dpi px → 72 dpi pt
+
+  const opts: Record<string, unknown> = { baseline: "top", renderingMode: "invisible" };
+  if (f.text.length > 1) {
+    const natural = pdf.getTextWidth(f.text);
+    const target = f.width * CSS_PX_TO_MM;
+    if (natural > 0 && target > 0) {
+      const perChar = (target - natural) / (f.text.length - 1);
+      // Two core fonts differ by a few percent of the em, so a real correction is small.
+      // Anything past a third of an em means the measurement is suspect — a font that never
+      // loaded, a rect caught mid-reflow — and stretching would scatter the line rather than
+      // align it. Leave those at their natural width.
+      if (Math.abs(perChar) <= f.fontSizePx * CSS_PX_TO_MM * 0.3) opts.charSpace = perChar;
+    }
+  }
+
+  // `destTopCss` is the top of the LINE BOX; with line-height above 1 the glyphs start lower
+  // by half the leading. Sinking the em box by that much puts the selection on the text
+  // instead of in the gap above it.
+  const halfLeading = Math.max(0, (f.height - f.fontSizePx) / 2);
+
+  pdf.text(f.text, f.left * CSS_PX_TO_MM, (destTopCss + halfLeading) * CSS_PX_TO_MM, opts);
+}
+
 const OfertaPublica = () => {
   const { id } = useParams();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -722,6 +867,10 @@ const OfertaPublica = () => {
       const { contentChildren, contentTop_abs, contentH } = measureGeometry(pageEl);
       const contentTop_css = contentTop_abs - pageRect.top;
 
+      // Measured on the live DOM, before any bitmap work, so the text layer describes exactly
+      // the layout the bitmap is about to capture.
+      const fragments = collectTextFragments(pageEl);
+
       // Footer band: copied out of the faithful section bitmap, from the footer's
       // top all the way DOWN to the very bottom of the section (footer + bottom
       // padding), then bottom-aligned to the page. Going to the section bottom means
@@ -758,6 +907,12 @@ const OfertaPublica = () => {
       try {
         effectiveBottomPx = findRenderedContentBottom(fullCanvas, contentBottomPx, footerTopPx);
       } catch { /* tainted canvas → keep the DOM estimate */ }
+
+      // Footer band placement, shared by the bitmap composite and the text layer so both land
+      // on the same rows.
+      const fSrcTop = Math.max(effectiveBottomPx, footerTopPx);
+      const fSrcH = footerRect ? fullCanvas.height - fSrcTop : 0;
+      const fDestTop = PAGE_H_PX - fSrcH;
 
       let cutRows: number[];
       if (usable_css <= 0 || contentH <= usable_css || contentChildren.length === 0) {
@@ -811,16 +966,33 @@ const OfertaPublica = () => {
         // Footer band from the section bitmap: full height down to the section
         // bottom, bottom-aligned so its bottom padding matches the page's. Because
         // the band reaches the section bottom, the phone line is never clipped.
-        if (footerRect) {
-          const fSrcTop = Math.max(effectiveBottomPx, Math.round(footerSrcTop_css * SCALE));
-          const fSrcH = fullCanvas.height - fSrcTop;
-          if (fSrcH > 0) {
-            const fDestTop = PAGE_H_PX - fSrcH;
-            ctx.drawImage(fullCanvas, 0, fSrcTop, PAGE_W_PX, fSrcH, 0, fDestTop, PAGE_W_PX, fSrcH);
-          }
+        if (footerRect && fSrcH > 0) {
+          ctx.drawImage(fullCanvas, 0, fSrcTop, PAGE_W_PX, fSrcH, 0, fDestTop, PAGE_W_PX, fSrcH);
         }
 
         pdf.addImage(comp.toDataURL("image/jpeg", 0.97), "JPEG", 0, 0, PDF_W_MM, PDF_H_MM);
+
+        // Invisible text mirroring the three bands composited above. A line is placed by the
+        // vertical centre of its box, not its top: line boxes carry half-leading well above
+        // the glyphs, and the cuts are scanned from rendered pixels, so a top-edge test would
+        // hand a line to the previous page while its glyphs print on this one.
+        for (const f of fragments) {
+          const midRow = (f.top + f.height / 2) * SCALE;
+
+          if (f.region === "header") {
+            if (!headerEl) continue;
+            // The header is re-rendered per physical page, so its running number is the only
+            // text on the page that does not match the DOM it was measured from.
+            const running = f.isPageNum ? { ...f, text: `${L.page} ${physPage}` } : f;
+            drawInvisibleText(pdf, running, f.top);
+          } else if (f.region === "footer") {
+            if (!footerRect || fSrcH <= 0 || midRow < fSrcTop) continue;
+            drawInvisibleText(pdf, f, (fDestTop + f.top * SCALE - fSrcTop) / SCALE);
+          } else {
+            if (midRow < srcRow || midRow >= endRow) continue;
+            drawInvisibleText(pdf, f, (destTop + f.top * SCALE - bandTop) / SCALE);
+          }
+        }
       }
     }
 
@@ -955,7 +1127,7 @@ const OfertaPublica = () => {
             {quotation.code} — {quotation.client.company}
           </span>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v8 · pixel</span>
+            <span className="text-[10px] text-gray-400 select-none" title="PDF engine build">pdf v9 · pixel + texto</span>
             <Button onClick={() => handleDownloadPDF().catch((err) => console.error("PDF download failed:", err))} size="sm">
               <Download className="h-4 w-4 mr-2" /> {L.downloadPDF}
             </Button>
