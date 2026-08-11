@@ -29,6 +29,21 @@ const PAGE_STYLE: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
+// Items-table money columns. The table is `table-layout: fixed`, so a formatted amount that
+// is wider than its column spills outside the table border instead of resizing it. These
+// widths hold a 7-figure amount with its currency prefix (e.g. "RD$1,488,668.40" ≈ 111px at
+// 12px), and `overflowWrap: anywhere` keeps anything larger inside the cell.
+const COL_UNIT_PRICE_W = 118;
+const COL_TOTAL_W = 132;
+
+const MONEY_CELL: React.CSSProperties = {
+  padding: "6px 8px",
+  textAlign: "right",
+  fontSize: "12px",
+  overflowWrap: "anywhere",
+};
+const MONEY_CELL_BOLD: React.CSSProperties = { ...MONEY_CELL, fontWeight: 600 };
+
 const FOOTER_STYLE: React.CSSProperties = {
   marginTop: "auto",
   paddingTop: "8px",
@@ -1004,11 +1019,11 @@ const OfertaPublica = () => {
           {/* Items table */}
           <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", tableLayout: "fixed" }}>
             <colgroup>
-              <col style={{ width: "24px" }} />
+              <col style={{ width: "26px" }} />
               <col />
-              <col style={{ width: "32px" }} />
-              <col style={{ width: "88px" }} />
-              <col style={{ width: "88px" }} />
+              <col style={{ width: "40px" }} />
+              <col style={{ width: `${COL_UNIT_PRICE_W}px` }} />
+              <col style={{ width: `${COL_TOTAL_W}px` }} />
             </colgroup>
             <thead>
               <tr style={{ backgroundColor: "#0097A7", color: "white" }}>
@@ -1028,8 +1043,8 @@ const OfertaPublica = () => {
                       <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{i + 1}</td>
                       <td className="pdf-rich" style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                       <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                      <td style={MONEY_CELL}>{fmt(item.unitPriceUSD)}</td>
+                      <td style={MONEY_CELL_BOLD}>{fmt(item.totalUSD)}</td>
                     </tr>
                   ));
                 }
@@ -1075,8 +1090,8 @@ const OfertaPublica = () => {
                         <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{solo.globalIdx + 1}</td>
                         <td className="pdf-rich" style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: solo.item.description }} />
                         <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{solo.item.quantity}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(solo.item.unitPriceUSD)}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(solo.item.totalUSD)}</td>
+                        <td style={MONEY_CELL}>{fmt(solo.item.unitPriceUSD)}</td>
+                        <td style={MONEY_CELL_BOLD}>{fmt(solo.item.totalUSD)}</td>
                       </tr>
                     );
                   } else {
@@ -1088,8 +1103,8 @@ const OfertaPublica = () => {
                           <td style={{ padding: "6px 8px", textAlign: "center", fontSize: "12px" }}>{rowIdx + 1}</td>
                           <td className="pdf-rich" style={{ padding: "6px 8px", fontSize: "12px", lineHeight: "1.5", wordWrap: "break-word", overflowWrap: "break-word" }} dangerouslySetInnerHTML={{ __html: item.description }} />
                           <td style={{ padding: "6px 6px", textAlign: "center", fontSize: "12px" }}>{item.quantity}</td>
-                          <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px" }}>{fmt(item.unitPriceUSD)}</td>
-                          <td style={{ padding: "6px 8px", textAlign: "right", fontSize: "12px", fontWeight: 600 }}>{fmt(item.totalUSD)}</td>
+                          <td style={MONEY_CELL}>{fmt(item.unitPriceUSD)}</td>
+                          <td style={MONEY_CELL_BOLD}>{fmt(item.totalUSD)}</td>
                         </tr>
                       );
                     });
@@ -1103,7 +1118,7 @@ const OfertaPublica = () => {
                         <tr key={`sub-${r.grp}-${runIdx}`} style={{ backgroundColor: "#f0f7fa" }}>
                           <td colSpan={3} />
                           <td style={{ padding: "4px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>{L.subtotal}</td>
-                          <td style={{ padding: "4px 10px", fontSize: "11px", textAlign: "right", fontWeight: 600 }}>{fmt(groupSubtotal)}</td>
+                          <td style={{ padding: "4px 10px", fontSize: "11px", textAlign: "right", fontWeight: 600, overflowWrap: "anywhere" }}>{fmt(groupSubtotal)}</td>
                         </tr>
                       );
                       if (quotation.applyItbis) {
@@ -1111,15 +1126,15 @@ const OfertaPublica = () => {
                           <tr key={`itb-${r.grp}-${runIdx}`} style={{ backgroundColor: "#f0f7fa" }}>
                             <td colSpan={3} />
                             <td style={{ padding: "3px 10px", fontSize: "11px", color: "#555", textAlign: "right" }}>{L.itbis(quotation.itbisPercent)}</td>
-                            <td style={{ padding: "3px 10px", fontSize: "11px", textAlign: "right" }}>{fmt(groupItbis)}</td>
+                            <td style={{ padding: "3px 10px", fontSize: "11px", textAlign: "right", overflowWrap: "anywhere" }}>{fmt(groupItbis)}</td>
                           </tr>
                         );
                       }
                       allRows.push(
                         <tr key={`tot-${r.grp}-${runIdx}`} style={{ backgroundColor: "#dcedf3", borderBottom: "2px solid #aaccd8" }}>
                           <td colSpan={3} />
-                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{L.groupTotal}</td>
-                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right" }}>{fmt(groupTotal)}</td>
+                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right", overflowWrap: "anywhere" }}>{L.groupTotal}</td>
+                          <td style={{ padding: "5px 10px", fontSize: "11px", fontWeight: 700, color: "#005f70", textAlign: "right", overflowWrap: "anywhere" }}>{fmt(groupTotal)}</td>
                         </tr>
                       );
                       if (runIdx < runs.length - 1) {
