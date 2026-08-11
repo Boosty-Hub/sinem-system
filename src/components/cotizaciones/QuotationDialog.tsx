@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QUOTATION_STATUSES, DELIVERY_TERMS, CURRENCIES, type Quotation, type QuotationSnapshot, type QuotationLineItem, type CostEntry, type DeliveryTerm, type QuotationCurrency, type QuotationPartner, type GeneralSettings, type Prospect, type Client, type Contact, type ProposalSettings, type QuotationProposalTexts } from "@/lib/types";
-import { convertCostToUSD, requiredRateCurrencies, billingRate, seedRatesFromLegacy, type CostRates } from "@/lib/currency";
+import { convertCostToUSD, requiredRateCurrencies, billingRate, seedRatesFromLegacy, quotationMargin, type CostRates } from "@/lib/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { dbToProspect, dbToClient, dbToContact } from "@/lib/supabaseMappers";
 import { Plus, Trash2, History, ChevronDown, ChevronUp, ShieldCheck, XCircle, CheckCircle2, Clock, Download, Upload, ChevronsUpDown, Check, Search, RotateCcw, AlertTriangle, Globe } from "lucide-react";
@@ -674,8 +674,8 @@ const QuotationDialog = ({ open, onOpenChange, quotation, prefill, onSave }: Pro
   const priceBase = Math.round(subtotal * 100) / 100;
   const itbisUSD = applyItbis ? Math.round(priceBase * itbisPercent) / 100 : 0;
   const totalUSD = Math.round((priceBase + itbisUSD) * 100) / 100;
-  const marginUSD = Math.round((totalUSD - effectiveCostUSD) * 100) / 100;
-  const marginPercent = totalUSD > 0 ? Math.round((totalUSD - effectiveCostUSD) / totalUSD * 10000) / 100 : 0;
+  // Margin runs on the pre-tax price, never on totalUSD — see quotationMargin.
+  const { marginUSD, marginPercent } = quotationMargin(priceBase, effectiveCostUSD);
 
   const buildCurrentData = () => {
     const currentLineItems: QuotationLineItem[] = lineItems.map((li) => ({

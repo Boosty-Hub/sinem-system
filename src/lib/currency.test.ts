@@ -5,6 +5,7 @@ import {
   requiredRateCurrencies,
   billingRate,
   seedRatesFromLegacy,
+  quotationMargin,
   type CostRates,
 } from "./currency";
 
@@ -189,5 +190,49 @@ describe("regression: screenshot scenarios (quotation billed in USD, ITBIS 18%)"
     const itbis = round2(Math.round(subtotal * 18) / 100);
     const total = round2(subtotal + itbis);
     expect(total).toBeCloseTo(400.16, 2);
+  });
+});
+
+describe("quotationMargin", () => {
+  // Reported from production: a quote priced at a 30% margin displayed 40.68%.
+  // Subtotal 1705.34 + 18% ITBIS 306.96 = total 2012.30, against a cost of 1193.71.
+  // Measuring against the total gave 2012.30 - 1193.71 = 818.59 -> 40.68%.
+  it("measures margin against the pre-tax subtotal, not the ITBIS-inclusive total", () => {
+    const { marginUSD, marginPercent } = quotationMargin(1705.34, 1193.71);
+    expect(marginUSD).toBe(511.63);
+    expect(marginPercent).toBe(30);
+  });
+
+  it("does not reproduce the ITBIS-inflated figures for that quote", () => {
+    const { marginUSD, marginPercent } = quotationMargin(1705.34, 1193.71);
+    expect(marginUSD).not.toBe(818.59);
+    expect(marginPercent).not.toBe(40.68);
+  });
+
+  it("is unaffected by the ITBIS rate, since the tax never enters the base", () => {
+    const noTax = quotationMargin(1000, 700);
+    expect(noTax.marginPercent).toBe(30);
+    expect(noTax.marginUSD).toBe(300);
+  });
+
+  it("returns a zero-cost quote as a 100% margin", () => {
+    expect(quotationMargin(500, 0)).toEqual({ marginUSD: 500, marginPercent: 100 });
+  });
+
+  it("reports a negative margin when cost exceeds price", () => {
+    const { marginUSD, marginPercent } = quotationMargin(800, 1000);
+    expect(marginUSD).toBe(-200);
+    expect(marginPercent).toBe(-25);
+  });
+
+  it("yields 0% instead of dividing by zero on an empty quote", () => {
+    expect(quotationMargin(0, 0)).toEqual({ marginUSD: 0, marginPercent: 0 });
+    expect(quotationMargin(0, 150)).toEqual({ marginUSD: -150, marginPercent: 0 });
+  });
+
+  it("rounds both results to two decimals", () => {
+    const { marginUSD, marginPercent } = quotationMargin(3, 1);
+    expect(marginUSD).toBe(2);
+    expect(marginPercent).toBe(66.67);
   });
 });

@@ -64,6 +64,23 @@ export const billingRate = (quotationCurrency: string, rates: CostRates): number
   return Number.isFinite(rate) && rate > 0 ? rate : 1;
 };
 
+/** Margin on a quotation, measured against the PRE-TAX price.
+ *
+ *  ITBIS is collected on behalf of the tax authority and never belongs to the company, so
+ *  folding it into the base inflates both figures: a quote priced at a 30% margin was being
+ *  reported as 40.68% because the tax sat in the numerator and the denominator.
+ *
+ *  `priceBase` is the subtotal before ITBIS; `costUSD` is the total cost already normalized to
+ *  USD. A non-positive base yields 0% rather than dividing by zero. Both results are rounded
+ *  to two decimals, matching how they are displayed and persisted. */
+export const quotationMargin = (
+  priceBase: number,
+  costUSD: number,
+): { marginUSD: number; marginPercent: number } => ({
+  marginUSD: Math.round((priceBase - costUSD) * 100) / 100,
+  marginPercent: priceBase > 0 ? Math.round(((priceBase - costUSD) / priceBase) * 10000) / 100 : 0,
+});
+
 /** Backward compatibility: older quotations stored a single `exchange_rate` whose currency
  *  was implicit — the billing currency, or DOP when billed in USD. Seed the new per-currency
  *  map from that legacy value so old quotations keep converting costs correctly the first
