@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Prospect, PipelineStage } from "@/lib/types";
 import { dbToProspect, dbToStage } from "@/lib/supabaseMappers";
+import { isWonStatus, isDeadStatus, orderEntryContribution } from "@/lib/orderEntry";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,7 +45,7 @@ const BAR_INFO: Record<string, { label: string; description: string }> = {
   },
   forecast: {
     label: "Forecast",
-    description: "Suma del peso (weighted = priceUSD × probabilidad) de las oportunidades con Estimated OE del año en curso (prospecto, propuesta, seguimiento y ganado). Representa el valor esperado del pipeline para el año.",
+    description: "Proyección total de Order Entry del año en curso: las oportunidades ya cerradas (ganado y facturada) a su precio completo, más el pipeline abierto ponderado por probabilidad (priceUSD × probabilidad). Excluye perdidas y canceladas.",
   },
   budget: {
     label: "Budget",
@@ -159,27 +160,30 @@ const Analitica = () => {
   };
 
   // ── Order Entry data ──
-  // Filter won deals by estimatedOE year for "Current" (only current year)
-  const allWonDeals = prospects.filter((p) => p.status === "ganado" || p.status === "facturada" || p.status === "cerrados");
-  const wonDeals = allWonDeals.filter((p) => {
+  // Current: business already booked, filtered by estimatedOE year.
+  const wonDeals = prospects.filter((p) => {
+    if (!isWonStatus(p.status)) return false;
     const oeYear = getEstimatedOEYear(p.estimatedOE);
     return oeYear === currentYear;
   });
   const wonTotal = wonDeals.reduce((s, p) => s + p.priceUSD, 0);
-  
-  // Forecast: includes prospecto, propuesta, seguimiento, ganado (not perdido, not facturada)
-  // Filter by estimatedOE year = current year
+
+  // Forecast: everything still alive with an Estimated OE this year — booked business at
+  // full price plus open pipeline weighted by probability. Invoiced deals used to be
+  // dropped from this filter entirely, which understated the forecast by their full
+  // amount and let the Forecast bar fall BELOW the Current bar that does count them.
+  // Cancelled deals are excluded here for the same reason lost ones are: no order booked.
   const forecastProspects = prospects.filter((p) => {
-    if (p.status === "perdido" || p.status === "facturada" || p.status === "cerrados") return false;
+    if (isDeadStatus(p.status)) return false;
     const oeYear = getEstimatedOEYear(p.estimatedOE);
     return oeYear === currentYear;
   });
-  const forecastWeighted = forecastProspects.reduce((s, p) => s + p.weighted, 0);
+  const forecastWeighted = forecastProspects.reduce((s, p) => s + orderEntryContribution(p), 0);
 
   const orderEntryData = [
     { name: `${previousYear}`, label: `${previousYear}`, value: budget.previousYearWon, fill: BAR_COLORS.previousYear, description: BAR_INFO.previousYear.description, details: [] },
     { name: `${currentYear}`, label: `${currentYear}`, value: wonTotal, fill: BAR_COLORS.current, description: BAR_INFO.current.description, details: wonDeals.map((p) => ({ name: p.projectName, amount: p.priceUSD })) },
-    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: forecastWeighted, fill: BAR_COLORS.forecast, description: BAR_INFO.forecast.description, details: forecastProspects.sort((a, b) => b.weighted - a.weighted).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: p.weighted })) },
+    { name: `Forecast ${currentYear}`, label: `Forecast ${currentYear}`, value: forecastWeighted, fill: BAR_COLORS.forecast, description: BAR_INFO.forecast.description, details: [...forecastProspects].sort((a, b) => orderEntryContribution(b) - orderEntryContribution(a)).slice(0, 6).map((p) => ({ name: `${p.projectName} (${p.probability}%)`, amount: orderEntryContribution(p) })) },
     { name: `Budget ${currentYear}`, label: `Budget ${currentYear}`, value: budget.annualTarget, fill: BAR_COLORS.budget, description: BAR_INFO.budget.description, details: [] },
   ];
   const maxBarValue = Math.max(...orderEntryData.map((d) => d.value), 1);
