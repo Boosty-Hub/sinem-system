@@ -612,6 +612,25 @@ function collectTextFragments(pageEl: HTMLElement): TextFragment[] {
   return out;
 }
 
+/** Extra downward shift of the invisible layer, as a fraction of the font size, so the
+ *  reader's selection highlight lands ON the visible glyphs instead of riding above them.
+ *
+ *  The highlight is not traced around the glyphs. The reader builds it from the vertical
+ *  metrics of whatever font it resolves for the invisible layer, spanning ascent..descent
+ *  around the baseline — and those metrics reach far higher above the baseline than the
+ *  visible Inter text does. Readers substituting Arial-class metrics use ascent .905 /
+ *  descent .212; readers using Helvetica's own glyph box use .718 / .207. The visible text
+ *  only ever occupies cap height .727 down to descender .240. So putting the invisible
+ *  baseline exactly on the visible baseline — geometrically correct, and what this did
+ *  before — still paints a bar whose top edge floats in the whitespace above the line.
+ *
+ *  Centring the highlight band on the visible band instead calls for (ascent - descent) / 2
+ *  minus the visible band's own centre: .012 em under one metric set, .103 under the other.
+ *  Splitting the difference lands within .05 em of centred under either — well under a pixel
+ *  at these sizes — so the bar hugs the text in every reader rather than being right in one
+ *  and wrong in the rest. Raising this value lowers the bar; lowering it raises the bar. */
+const SELECTION_NUDGE_EM = 0.07;
+
 /** Write one measured line as invisible text at `destTopCss` (CSS px from the page top).
  *
  *  The bitmap renders Inter; the invisible layer uses a PDF core font, so the natural widths
@@ -641,8 +660,14 @@ function drawInvisibleText(pdf: jsPDF, f: TextFragment, destTopCss: number) {
   // by half the leading. Sinking the em box by that much puts the selection on the text
   // instead of in the gap above it.
   const halfLeading = Math.max(0, (f.height - f.fontSizePx) / 2);
+  const nudge = f.fontSizePx * SELECTION_NUDGE_EM;
 
-  pdf.text(f.text, f.left * CSS_PX_TO_MM, (destTopCss + halfLeading) * CSS_PX_TO_MM, opts);
+  pdf.text(
+    f.text,
+    f.left * CSS_PX_TO_MM,
+    (destTopCss + halfLeading + nudge) * CSS_PX_TO_MM,
+    opts
+  );
 }
 
 const OfertaPublica = () => {
