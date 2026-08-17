@@ -612,24 +612,43 @@ function collectTextFragments(pageEl: HTMLElement): TextFragment[] {
   return out;
 }
 
-/** Extra downward shift of the invisible layer, as a fraction of the font size, so the
- *  reader's selection highlight lands ON the visible glyphs instead of riding above them.
+// Downward correction of the invisible layer, as a fraction of the font size, so the reader's
+// selection highlight lands on the visible glyphs instead of riding above them. Two independent
+// terms, kept apart because one is derived and the other is measured.
+
+/** Drift between the invisible baseline and the rasterised one.
  *
- *  The highlight is not traced around the glyphs. The reader builds it from the vertical
- *  metrics of whatever font it resolves for the invisible layer, spanning ascent..descent
- *  around the baseline — and those metrics reach far higher above the baseline than the
- *  visible Inter text does. Readers substituting Arial-class metrics use ascent .905 /
- *  descent .212; readers using Helvetica's own glyph box use .718 / .207. The visible text
- *  only ever occupies cap height .727 down to descender .240. So putting the invisible
- *  baseline exactly on the visible baseline — geometrically correct, and what this did
- *  before — still paints a bar whose top edge floats in the whitespace above the line.
+ *  Both are supposed to come from the same DOM measurement, so in theory this is zero — and the
+ *  arithmetic says so: jsPDF's `baseline: "top"` was checked against its own output and shifts
+ *  by exactly .85 em, PAGE_W/PAGE_H map onto Letter exactly (816 * 25.4/96 = 215.9mm,
+ *  1056 -> 279.4mm), so there is no scale error between the bitmap and the text layer. In
+ *  practice the invisible line still lands high, and the gap is far too large to be a metric
+ *  subtlety. Measured off a downloaded PDF, over three clean lines carrying both capitals and
+ *  descenders, the highlight band sat .455 em above where the glyphs were — consistently, and
+ *  without growing down the page.
  *
- *  Centring the highlight band on the visible band instead calls for (ascent - descent) / 2
- *  minus the visible band's own centre: .012 em under one metric set, .103 under the other.
- *  Splitting the difference lands within .05 em of centred under either — well under a pixel
- *  at these sizes — so the bar hugs the text in every reader rather than being right in one
- *  and wrong in the rest. Raising this value lowers the bar; lowering it raises the bar. */
-const SELECTION_NUDGE_EM = 0.07;
+ *  This compensates for that. It does not explain it: pinning the cause needs the pipeline run
+ *  in a real browser, since the suspect is what `range.getClientRects()` reports for `top` and
+ *  `height` versus where html2canvas actually rasterises the line — drift this file already
+ *  documents for the section height (see findRenderedContentBottom). */
+const SELECTION_DRIFT_EM = 0.53;
+
+/** Centring of the highlight band on the visible band, which is geometry rather than guesswork.
+ *
+ *  The reader does not trace the highlight around the glyphs; it builds it from the vertical
+ *  metrics of whatever font it resolves for the invisible layer, spanning ascent..descent about
+ *  the baseline. Those metrics reach higher above the baseline than the visible Inter text ever
+ *  does, so a perfectly placed baseline still paints a bar whose top edge floats above the line.
+ *
+ *  The same measurement identifies the metrics: the band came out 15px tall against glyphs
+ *  spanning 13px, which matches Arial-class ascent .905 / descent .212 (1.117 em) against
+ *  Inter's cap height .727 down to descender .240 (.967 em) and rules out Helvetica's own
+ *  tighter glyph box (.925 em). Centring one band on the other is then the difference between
+ *  their midpoints. */
+const SELECTION_CENTRING_EM = 0.1;
+
+/** Raising this lowers the highlight bar; lowering it raises the bar. */
+const SELECTION_NUDGE_EM = SELECTION_DRIFT_EM + SELECTION_CENTRING_EM;
 
 /** Write one measured line as invisible text at `destTopCss` (CSS px from the page top).
  *
